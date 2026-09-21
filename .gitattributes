@@ -1,0 +1,24 @@
+# Chuẩn hoá line-ending: tránh conflict giả giữa Windows / macOS
+* text=auto eol=lf
+
+# File Windows bắt buộc CRLF
+*.sln   text eol=crlf
+*.csproj text eol=crlf
+*.props text eol=crlf
+*.targets text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# File nhị phân - không đụng tới
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.xlsx  binary
+*.docx  binary
+*.zip   binary
+
+# Diff gọn hơn cho file lock
+package-lock.json linguist-generated=true -diff

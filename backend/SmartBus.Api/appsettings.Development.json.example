@@ -1,0 +1,25 @@
+{
+  "//": "Copy file này thành appsettings.Development.json rồi điền giá trị thật. File đó đã bị .gitignore chặn, KHÔNG commit lên GitHub.",
+
+  "ConnectionStrings": {
+    "Default": "Host=localhost;Port=5432;Database=smartbus;Username=postgres;Password=DIEN_MAT_KHAU_VAO_DAY"
+  },
+
+  "Jwt": {
+    "Issuer": "SmartBus",
+    "Audience": "SmartBusClient",
+    "Key": "DIEN_CHUOI_BI_MAT_TOI_THIEU_32_KY_TU_VAO_DAY",
+    "AccessTokenMinutes": 30,
+    "RefreshTokenDays": 7
+  },
+
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Information"
+    }
+  },
+
+  "AllowedHosts": "*"
+}
