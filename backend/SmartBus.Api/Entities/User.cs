@@ -21,9 +21,13 @@ public class User
     /// <summary>Tài khoản bị khóa thì không đăng nhập được.</summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Vai trò chính — dùng để phát claim role trong JWT.</summary>
     public Guid RoleId { get; set; }
 
     public Role? Role { get; set; }
+
+    /// <summary>Toàn bộ vai trò tài khoản được gán (bảng nối UserRoles) — phục vụ RBAC nhiều vai trò.</summary>
+    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

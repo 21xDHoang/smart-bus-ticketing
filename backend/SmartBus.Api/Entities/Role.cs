@@ -13,5 +13,9 @@ public class Role
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Tài khoản lấy vai trò này làm vai trò chính.</summary>
     public ICollection<User> Users { get; set; } = new List<User>();
+
+    /// <summary>Các lượt gán vai trò này cho tài khoản (bảng nối UserRoles).</summary>
+    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }
