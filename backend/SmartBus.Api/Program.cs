@@ -1,7 +1,27 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SmartBus.Api.Data;
+using SmartBus.Api.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+
+// Trả lỗi validate theo cấu trúc thống nhất { message, errors } của dự án
+// thay vì ProblemDetails mặc định — xem docs/01-kien-truc.md.
+builder.Services.Configure<ApiBehaviorOptions>(o => o.SuppressModelStateInvalidFilter = true);
+
 builder.Services.AddOpenApi();
+
+// CSDL PostgreSQL (Supabase). Chuỗi kết nối nằm ở appsettings.Development.json — không commit.
+builder.Services.AddDbContext<AppDbContext>(o =>
+    o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
+// Cấu hình JWT — xem appsettings.Development.json.example
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Khung xác thực — Hiếu/Dăm cắm JWT Bearer vào đây ở task story 22
 builder.Services.AddAuthentication();
