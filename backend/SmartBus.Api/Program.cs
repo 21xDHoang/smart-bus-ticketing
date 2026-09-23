@@ -23,8 +23,8 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-// Khung xác thực — Hiếu/Dăm cắm JWT Bearer vào đây ở task story 22
-builder.Services.AddAuthentication();
+// Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
+builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();
 
 // Cho phép frontend React (localhost:5173) gọi API khi chạy local
@@ -49,3 +49,9 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+/// <summary>
+/// Khai báo tường minh để project test dùng được <c>WebApplicationFactory&lt;Program&gt;</c> —
+/// top-level statements mặc định sinh ra class Program ở mức internal.
+/// </summary>
+public partial class Program;
