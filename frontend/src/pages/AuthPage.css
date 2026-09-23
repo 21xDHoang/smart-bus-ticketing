@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.auth-container {
+  min-height: 100vh;
+  width: 100vw;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #311042 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background floating glow effects */
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: 1;
+}
+
+.circle-1 {
+  width: 350px;
+  height: 350px;
+  background: #4cc9f0;
+  top: 10%;
+  left: 15%;
+  opacity: 0.4;
+}
+
+.circle-2 {
+  width: 400px;
+  height: 400px;
+  background: #f72585;
+  bottom: 10%;
+  right: 15%;
+  opacity: 0.35;
+}
+
+/* Glassmorphism Card Style */
+.auth-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px);
+  border-radius: 24px !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
+  padding: 10px 15px;
+  margin: 20px;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.logo-icon {
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 8px;
+  display: inline-block;
+  background: rgba(67, 97, 238, 0.1);
+  padding: 12px;
+  border-radius: 20px;
+}
+
+.auth-header h2 {
+  margin: 5px 0;
+  font-size: 26px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #4361ee, #f72585);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-header p {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Tabs Styling */
+.auth-tabs .ant-tabs-nav-list {
+  width: 100%;
+  display: flex;
+}
+
+.auth-tabs .ant-tabs-tab {
+  flex: 1;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.auth-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #4361ee !important;
+}
+
+.auth-tabs .ant-tabs-ink-bar {
+  background: linear-gradient(90deg, #4361ee, #f72585) !important;
+  height: 3px !important;
+  border-radius: 3px;
+}
+
+/* Antd Form Inputs custom styling */
+.ant-input-affix-wrapper {
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  transition: all 0.3s ease;
+}
+
+.ant-input-affix-wrapper:hover, 
+.ant-input-affix-wrapper-focused {
+  border-color: #4361ee !important;
+  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15) !important;
+}
+
+.ant-btn-primary:active {
+  transform: scale(0.98);
+}
