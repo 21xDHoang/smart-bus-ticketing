@@ -27,6 +27,10 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 // Task story 22 — Nguyễn Duy Kiên. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 
+// Bảng giá vé theo tuyến và theo đối tượng ưu đãi: /routes/{routeId}/fares.
+// Task story 12 — Phùng Duy Hoàng (file này cũng của Hoàng).
+builder.Services.AddScoped<IFareService, FareService>();
+
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
