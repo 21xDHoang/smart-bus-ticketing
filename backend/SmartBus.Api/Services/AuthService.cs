@@ -18,6 +18,10 @@ public class AuthService : IAuthService
 
     private const string InvalidRefreshToken = "Refresh token không hợp lệ hoặc đã hết hạn";
 
+    private const string PhoneExists = "Số điện thoại đã được đăng ký";
+
+    private const string EmailExists = "Email đã được sử dụng";
+
     private readonly AppDbContext _db;
     private readonly ITokenService _tokenService;
 
@@ -25,6 +29,52 @@ public class AuthService : IAuthService
     {
         _db = db;
         _tokenService = tokenService;
+    }
+
+    public async Task<AuthResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
+    {
+        var fullName = request.FullName.Trim();
+        var email = request.Email.Trim();
+        var phoneNumber = request.PhoneNumber.Trim();
+
+        // Kiểm tra trùng TRƯỚC khi băm mật khẩu (BCrypt tốn CPU) để request trùng không tốn tài nguyên.
+        if (await _db.Users.AnyAsync(u => u.PhoneNumber == phoneNumber, cancellationToken))
+        {
+            return AuthResult.Fail(PhoneExists, new Dictionary<string, string[]> { ["phoneNumber"] = [PhoneExists] });
+        }
+
+        // Email không có ràng buộc unique ở CSDL nên so khớp không phân biệt hoa thường ngay tại đây.
+        var lowerEmail = email.ToLowerInvariant();
+        if (await _db.Users.AnyAsync(u => u.Email != null && u.Email.ToLower() == lowerEmail, cancellationToken))
+        {
+            return AuthResult.Fail(EmailExists, new Dictionary<string, string[]> { ["email"] = [EmailExists] });
+        }
+
+        // Tài khoản mới luôn là Hành khách; bảng nối UserRoles cũng ghi một dòng để
+        // các màn hình quản lý vai trò nhìn thấy đủ, không cần xử lý riêng loại tài khoản này.
+        var user = new User
+        {
+            FullName = fullName,
+            Email = email,
+            PhoneNumber = phoneNumber,
+            PasswordHash = PasswordService.HashPassword(request.Password),
+            RoleId = RoleIds.Passenger,
+            UserRoles = new List<UserRole> { new() { RoleId = RoleIds.Passenger } },
+        };
+
+        _db.Users.Add(user);
+
+        try
+        {
+            // IssueTokensAsync tự SaveChanges — user, dòng UserRoles và refresh token được ghi cùng một lượt.
+            return AuthResult.Ok(await IssueTokensAsync(user, cancellationToken));
+        }
+        catch (DbUpdateException)
+        {
+            // Hai request cùng SĐT gửi đồng thời lọt qua được bước kiểm tra ở trên,
+            // ràng buộc unique trong CSDL là lớp bảo vệ cuối cùng.
+            return AuthResult.Fail(PhoneExists, new Dictionary<string, string[]> { ["phoneNumber"] = [PhoneExists] });
+        }
     }
 
     public async Task<AuthResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
