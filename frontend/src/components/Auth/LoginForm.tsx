@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Form, Input, Button, Checkbox, message } from 'antd';
 import { PhoneOutlined, LockOutlined } from '@ant-design/icons';
-import authApi, { decodeAccessToken } from '../../api/authApi';
+import { useAuth } from '../../contexts';
 import type { DecodedUser } from '../../api/authApi';
 import type { AppError } from '../../api/axiosClient';
 
@@ -18,26 +18,20 @@ interface LoginFormProps {
 const LoginForm = ({ onSuccess }: LoginFormProps) => {
   const [form] = Form.useForm<LoginFormValues>();
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
 
   const onFinish = async (values: LoginFormValues) => {
     setLoading(true);
     try {
-      // Backend yêu cầu đăng nhập bằng Số điện thoại + Mật khẩu.
-      const response = await authApi.login({
+      // AuthContext lo việc gọi API, lưu token và cập nhật trạng thái đăng nhập.
+      const user = await login({
         phoneNumber: values.phoneNumber,
         password: values.password,
       });
 
-      // Lưu cặp token vào localStorage.
-      localStorage.setItem('access_token', response.accessToken);
-      localStorage.setItem('refresh_token', response.refreshToken);
-
-      // Thông tin người dùng nằm trong payload JWT (backend chưa có API profile).
-      const user = decodeAccessToken(response.accessToken);
-
       message.success('Đăng nhập thành công! Chào mừng bạn trở lại.');
 
-      if (onSuccess && user) onSuccess(user);
+      onSuccess?.(user);
     } catch (err) {
       const appError = err as AppError;
 
