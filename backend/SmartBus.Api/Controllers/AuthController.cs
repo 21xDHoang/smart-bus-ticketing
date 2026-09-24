@@ -6,18 +6,61 @@ using SmartBus.Api.Services;
 namespace SmartBus.Api.Controllers;
 
 /// <summary>
-/// Xác thực: đăng nhập, làm mới token, đăng xuất.
-/// Story 22 — Phùng Duy Hoàng.
+/// Xác thực: đăng ký, đăng nhập, làm mới token, đăng xuất.
+/// Story 22 — đăng ký: Trần Trung Hiếu · đăng nhập/token: Phùng Duy Hoàng.
 /// </summary>
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly IAuthService _authService;
+    /// <summary>Hạn mức chống spam đăng ký: tối đa 5 lần mỗi phút cho mỗi địa chỉ IP.</summary>
+    private const int RegisterMaxRequestsPerMinute = 5;
 
-    public AuthController(IAuthService authService)
+    private static readonly TimeSpan RegisterWindow = TimeSpan.FromMinutes(1);
+
+    private readonly IAuthService _authService;
+    private readonly IRateLimitService _rateLimitService;
+
+    public AuthController(IAuthService authService, IRateLimitService rateLimitService)
     {
         _authService = authService;
+        _rateLimitService = rateLimitService;
+    }
+
+    /// <summary>
+    /// Đăng ký tài khoản Hành khách. Dữ liệu hợp lệ thì trả luôn cặp access/refresh token —
+    /// người dùng được vào hệ thống ngay sau khi đăng ký, không cần đăng nhập lại.
+    /// </summary>
+    [HttpPost("register")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
+    {
+        // Kiểm tra hạn mức TRƯỚC khi validate dữ liệu: request thiếu/sai trường vẫn bị đếm,
+        // kẻ tấn công không lách được bằng cách gửi payload rác.
+        var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        if (!_rateLimitService.TryAcquire(clientIp, RegisterMaxRequestsPerMinute, RegisterWindow))
+        {
+            Response.Headers.RetryAfter = "60";
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = "Quá nhiều lần đăng ký từ thiết bị này. Vui lòng thử lại sau 1 phút.",
+            });
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationError();
+        }
+
+        var result = await _authService.RegisterAsync(request, cancellationToken);
+
+        return result.Success
+            ? StatusCode(StatusCodes.Status201Created, result.Data)
+            : Conflict(new { message = result.Error, errors = result.Errors });
     }
 
     /// <summary>Đăng nhập bằng số điện thoại + mật khẩu, cấp access token và refresh token.</summary>

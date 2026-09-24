@@ -2,9 +2,16 @@ using SmartBus.Api.Dtos.Auth;
 
 namespace SmartBus.Api.Services;
 
-/// <summary>Nghiệp vụ xác thực: đăng nhập, làm mới token, đăng xuất.</summary>
+/// <summary>Nghiệp vụ xác thực: đăng ký, đăng nhập, làm mới token, đăng xuất.</summary>
 public interface IAuthService
 {
+    /// <summary>
+    /// Tạo tài khoản Hành khách mới (mã hóa mật khẩu bằng BCrypt), đăng ký xong
+    /// vào thẳng hệ thống — trả về cặp access/refresh token như đăng nhập.
+    /// Trùng SĐT/email trả lỗi kèm tên trường để frontend gắn vào ô input.
+    /// </summary>
+    Task<AuthResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default);
+
     /// <summary>Kiểm tra số điện thoại + mật khẩu, cấp cặp access/refresh token.</summary>
     Task<AuthResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
 
