@@ -676,15 +676,49 @@ public class AdminUserApiTests
     /// <summary>Tạo client đã đăng nhập bằng tài khoản có vai trò chính là <paramref name="roleCode"/>.</summary>
     private static async Task<HttpClient> SignInAsync(TestAppFactory factory, Guid roleId, string roleCode)
     {
+        await EnsureAllRolesAsync(factory);
         var user = await SeedUserAsync(factory, roleId, roleCode);
         return ClientWith(factory, factory.CreateTokenFor(user));
     }
 
     private static async Task<(HttpClient Client, UserEntity Admin)> SignInAsAdminAsync(TestAppFactory factory)
     {
+        await EnsureAllRolesAsync(factory);
         var admin = await SeedUserAsync(factory, RoleIds.Admin, RoleCodes.Admin);
         return (ClientWith(factory, factory.CreateTokenFor(admin)), admin);
     }
+
+    /// <summary>
+    /// Dựng đúng nền dữ liệu mà migration tạo sẵn ở production: 4 vai trò chuẩn.
+    ///
+    /// Provider InMemory KHÔNG chạy <c>HasData</c> — <see cref="TestAppFactory"/> không gọi
+    /// <c>EnsureCreated</c>/<c>Migrate</c> nên phần seed trong model không bao giờ được ghi.
+    /// Thiếu bước này, CSDL test chỉ có những vai trò mà <see cref="SeedUserAsync"/> tình cờ
+    /// đụng tới, còn vai trò nhắc trong BODY request (<c>roleCode</c>, <c>roleCodes</c>) thì
+    /// không có — POST/PUT sẽ trả 400 "Vai trò không tồn tại" dù production chạy tốt.
+    /// </summary>
+    private static async Task EnsureAllRolesAsync(TestAppFactory factory)
+    {
+        await factory.SeedAsync(db =>
+        {
+            foreach (var (id, code) in CanonicalRoles)
+            {
+                if (!db.Roles.Any(r => r.Id == id || r.Code == code))
+                {
+                    db.Roles.Add(new Role { Id = id, Code = code, Name = code });
+                }
+            }
+        });
+    }
+
+    /// <summary>Bốn vai trò migration seed sẵn — khớp <c>AppDbContext.UserRoles.cs</c>.</summary>
+    private static readonly (Guid Id, string Code)[] CanonicalRoles =
+    [
+        (RoleIds.Admin, RoleCodes.Admin),
+        (RoleIds.Manager, RoleCodes.Manager),
+        (RoleIds.Driver, RoleCodes.Driver),
+        (RoleIds.Passenger, RoleCodes.Passenger),
+    ];
 
     private static HttpClient ClientWith(TestAppFactory factory, string accessToken)
     {
@@ -695,9 +729,8 @@ public class AdminUserApiTests
 
     /// <summary>
     /// Bảo đảm vai trò có trong CSDL test để tài khoản trỏ tới được.
-    /// Migration seed sẵn 4 vai trò bằng <c>HasData</c>; với provider InMemory việc seed có thể
-    /// chưa chạy nên phải chịu được cả hai trường hợp — vì vậy luôn dùng Guid cố định ở
-    /// <see cref="RoleIds"/>, dù seed hay không thì khoá ngoại vẫn trỏ đúng một vai trò.
+    /// Luôn dùng Guid cố định ở <see cref="RoleIds"/> — trùng với vai trò migration seed sẵn
+    /// ở production, nên tài khoản test trỏ đúng vai trò thật chứ không phải một bản sao.
     /// </summary>
     private static async Task EnsureRoleAsync(TestAppFactory factory, Guid id, string code)
     {
@@ -740,7 +773,11 @@ public class AdminUserApiTests
         return user;
     }
 
-    private static string RandomPhoneNumber() => "09" + Guid.NewGuid().ToString("N")[..8];
+    /// <summary>
+    /// SĐT hợp lệ theo ràng buộc của API. Cố ý KHÔNG lấy từ <c>Guid.ToString("N")</c>:
+    /// chuỗi đó là hệ 16 nên chứa cả chữ a-f, ghép ra "09a3f2b1c4" — sai định dạng SĐT.
+    /// </summary>
+    private static string RandomPhoneNumber() => "09" + Random.Shared.Next(10_000_000, 99_999_999);
 
     private static Guid RoleIdsFor(string roleCode) => roleCode switch
     {
