@@ -29,7 +29,9 @@ builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
-builder.Services.AddAuthorization();
+
+// Phân quyền theo vai trò + trả 403 dạng JSON — cấu hình nằm ở Services/RbacMiddleware.cs
+builder.Services.AddRbacAuthorization();
 
 // Cho phép frontend React (localhost:5173) gọi API khi chạy local
 const string DevCors = "DevCors";
