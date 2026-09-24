@@ -234,7 +234,107 @@ không phụ thuộc vào việc frontend có ẩn nút hay không.
 hoặc thu hồi vai trò có hiệu lực ngay với access token đang dùng — không phải chờ token hết hạn
 (mặc định 30 phút) và không cần thu hồi refresh token.
 
+## Bảng giá vé — `/routes/{routeId}/fares`
+
+> ✅ Backend đã có (`FaresController` — Phùng Duy Hoàng, story 12).
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập nhưng
+> không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Giá vé gắn với **tuyến** và **đối tượng hành khách**: mỗi cặp (tuyến, đối tượng) có đúng một giá —
+ràng buộc unique `(RouteId, PassengerType)` ở CSDL, xem quy ước A6.
+
+### Entity `Fare`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `routeId` | `string` (GUID) | Tuyến mà dòng giá này thuộc về |
+| `passengerType` | `string` | Đối tượng áp dụng — xem bảng mã bên dưới |
+| `price` | `number` | Giá vé (VND), tối đa 2 chữ số thập phân |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
+| `updatedAt` | `string \| null` | `null` khi chưa sửa lần nào |
+
+Mã `passengerType` hợp lệ — đúng **5** giá trị, khớp enum `PassengerType` của backend:
+
+| Mã | Nghĩa |
+|---|---|
+| `Standard` | Người lớn — giá phổ thông, giá gốc của tuyến |
+| `Student` | Học sinh, sinh viên (đối tượng ưu đãi — US 17) |
+| `Senior` | Người cao tuổi (đối tượng ưu đãi — US 17) |
+| `Child` | Trẻ em |
+| `Disabled` | Người khuyết tật |
+
+> Trả về **chuỗi** chứ không phải số: `"Student"` đọc là hiểu, còn `1` thì phải tra code —
+> cùng lý do quy ước A3 bắt cột trạng thái lưu dạng chuỗi.
+
+```json
+// Ví dụ Fare
+{
+  "id": "8c1d4e77-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "passengerType": "Student",
+  "price": 5000.00,
+  "createdAt": "2026-09-25T03:15:00Z",
+  "updatedAt": null
+}
+```
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes/{routeId}/fares` | Bảng giá của tuyến | — | `Fare[]` |
+| GET | `/routes/{routeId}/fares/{id}` | Một dòng giá | — | `Fare` |
+| POST | `/routes/{routeId}/fares` | Thêm giá cho một đối tượng | `CreateFare` | `Fare` (201) |
+| PUT | `/routes/{routeId}/fares/{id}` | Sửa **giá** | `UpdateFare` | `Fare` |
+| DELETE | `/routes/{routeId}/fares/{id}` | Xoá một dòng giá | — | 204 No Content |
+
+#### `GET /routes/{routeId}/fares`
+
+Sắp xếp theo `passengerType` **đúng thứ tự khai báo trong enum** (Standard → Student → Senior →
+Child → Disabled), không theo alphabet — đây là thứ tự hiển thị của bảng giá trên màn hình.
+
+- Tuyến chưa cấu hình giá nào → mảng rỗng, **không** phải 404.
+- Tuyến không tồn tại → **404**.
+
+#### `POST /routes/{routeId}/fares`
+
+```json
+{ "passengerType": "Student", "price": 5000 }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `passengerType` | ✅ | Một trong 5 mã ở bảng trên |
+| `price` | ✅ | Lớn hơn 0, tối đa `9999999999.99` |
+
+Lỗi thường gặp: tuyến không tồn tại → **404** · `passengerType` ngoài 5 mã → **400**
+`errors.passengerType` · `price` ≤ 0 hoặc vượt giới hạn → **400** `errors.price` ·
+tuyến đã có giá cho đối tượng đó → **409**.
+
+> **Vì sao trùng trả 409 mà không phải 400?** Đây không phải dữ liệu sai định dạng mà là xung đột
+> với dữ liệu đang có — cùng loại với trùng ghế ở mục D2. Muốn đổi giá thì sửa dòng đã có.
+
+#### `PUT /routes/{routeId}/fares/{id}`
+
+Body **chỉ gồm `price`**. Cố ý không cho đổi `passengerType`: đổi đối tượng tại chỗ có thể đâm vào
+ràng buộc unique của đối tượng kia, mà cách xử lý (báo 409? gộp dòng?) lại tuỳ ngữ cảnh. Muốn đổi
+đối tượng thì xoá dòng cũ rồi tạo dòng mới — hai thao tác đều đã có endpoint riêng.
+
+#### `DELETE /routes/{routeId}/fares/{id}`
+
+Xoá cứng. `Fare` không có cột trạng thái và không bảng nào tham chiếu tới nó, nên không cần xoá
+mềm — khác `Routes` (A4 chỉ cho dùng cột trạng thái sẵn có, mà `Fare` không có cột nào như vậy).
+
+#### `routeId` phải khớp
+
+`GET`/`PUT`/`DELETE` trên `/routes/{routeId}/fares/{id}` đều kiểm tra dòng giá có **thuộc đúng**
+tuyến đó không. Dòng giá của tuyến khác → **404**, không phải 200.
+
 ## Đang chờ bổ sung (nhóm khác)
 
 - `/routes` — CRUD tuyến đường (Hiếu).
 - `/routes/{id}/stops` — gán trạm vào tuyến + sắp xếp thứ tự (Kiên).
+
+> `/routes/{routeId}/fares` ở trên **không** chờ `/routes` xong: nó chỉ cần một `routeId` có thật
+> trong CSDL. Khi `/routes` chưa có, tạo tuyến bằng seed script hoặc gọi thẳng vào CSDL vẫn dùng được.
