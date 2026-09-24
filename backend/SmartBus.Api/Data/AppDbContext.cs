@@ -17,9 +17,12 @@ public partial class AppDbContext : DbContext
         base.OnModelCreating(modelBuilder);
         ConfigureAuth(modelBuilder);
         ConfigureUserRoles(modelBuilder);
+        ConfigureRoute(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
 
     partial void ConfigureUserRoles(ModelBuilder modelBuilder);
+
+    partial void ConfigureRoute(ModelBuilder modelBuilder);
 }
