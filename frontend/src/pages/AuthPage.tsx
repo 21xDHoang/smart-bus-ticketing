@@ -6,7 +6,9 @@ import type { DecodedUser } from '../api/authApi';
 import './AuthPage.css';
 
 interface AuthPageProps {
-  onLoginSuccess: (user: DecodedUser) => void;
+  // Không còn bắt buộc: trạng thái đăng nhập nay do AuthProvider giữ, component cha
+  // không cần nhận callback nữa. Giữ optional để không phá vỡ chỗ gọi cũ.
+  onLoginSuccess?: (user: DecodedUser) => void;
 }
 
 const AuthPage = ({ onLoginSuccess }: AuthPageProps) => {

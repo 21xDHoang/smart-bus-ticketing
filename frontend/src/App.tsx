@@ -1,46 +1,19 @@
-import { useState } from 'react';
 import { ConfigProvider, Layout, Button, Avatar, Dropdown, message } from 'antd';
 import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import AuthPage from './pages/AuthPage';
-import authApi, { decodeAccessToken } from './api/authApi';
-import type { DecodedUser } from './api/authApi';
+import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
 
 const { Header, Content, Footer } = Layout;
 
-// Đọc phiên đăng nhập từ localStorage ngay khi khởi tạo (đồng bộ, không cần effect).
-function readStoredUser(): DecodedUser | null {
-  const token = localStorage.getItem('access_token');
-  if (!token) return null;
-
-  const user = decodeAccessToken(token);
-  if (user) return user;
-
-  // Token hỏng hoặc không giải mã được → dọn dẹp phiên cũ.
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  return null;
-}
-
 function App() {
-  const [user, setUser] = useState<DecodedUser | null>(readStoredUser);
+  // Trạng thái đăng nhập do AuthProvider giữ; App chỉ đọc ra để hiển thị.
+  const { user, logout } = useAuth();
 
   // Xử lý Đăng xuất
   const handleLogout = async () => {
-    const refreshToken = localStorage.getItem('refresh_token');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    setUser(null);
+    await logout();
     message.info('Đã đăng xuất tài khoản.');
-
-    // Thu hồi refresh token phía server (best-effort, không chặn người dùng).
-    if (refreshToken) {
-      try {
-        await authApi.logout(refreshToken);
-      } catch {
-        // Bỏ qua lỗi khi đăng xuất — phiên phía client đã được xoá.
-      }
-    }
   };
 
   // Menu Dropdown cho Avatar người dùng khi đã đăng nhập
@@ -79,7 +52,7 @@ function App() {
     >
       {!user ? (
         // NẾU CHƯA ĐĂNG NHẬP: Hiển thị Màn hình Auth (Login / Register)
-        <AuthPage onLoginSuccess={(userData) => setUser(userData)} />
+        <AuthPage />
       ) : (
         // NẾU ĐÃ ĐĂNG NHẬP: Hiển thị Màn hình chính
         <Layout style={{ minHeight: '100vh' }}>
