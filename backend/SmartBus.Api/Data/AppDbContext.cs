@@ -18,6 +18,7 @@ public partial class AppDbContext : DbContext
         ConfigureAuth(modelBuilder);
         ConfigureUserRoles(modelBuilder);
         ConfigureRoute(modelBuilder);
+        ConfigureAuditLog(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -25,4 +26,6 @@ public partial class AppDbContext : DbContext
     partial void ConfigureUserRoles(ModelBuilder modelBuilder);
 
     partial void ConfigureRoute(ModelBuilder modelBuilder);
+
+    partial void ConfigureAuditLog(ModelBuilder modelBuilder);
 }
