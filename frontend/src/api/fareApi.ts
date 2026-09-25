@@ -71,11 +71,6 @@ export const PASSENGER_TYPE_OPTIONS: { value: PassengerType; label: string }[] =
   ['Standard', 'Student', 'Senior', 'Child', 'Disabled'] as PassengerType[]
 ).map((value) => ({ value, label: PASSENGER_TYPE_META[value].label }));
 
-/** Nhãn an toàn cho mã lạ (backend có thể thêm đối tượng sau này). */
-export function getPassengerTypeLabel(code: string): string {
-  return PASSENGER_TYPE_META[code as PassengerType]?.label ?? (code || 'Không xác định');
-}
-
 export interface FareApi {
   /** Danh sách tuyến cho ô chọn — mock tới khi /routes có endpoint thật. */
   listRoutes: () => Promise<RouteOption[]>;
