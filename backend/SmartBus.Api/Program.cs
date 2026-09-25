@@ -31,6 +31,10 @@ builder.Services.AddScoped<IAdminUserService, AdminUserService>();
 // Task story 12 — Phùng Duy Hoàng (file này cũng của Hoàng).
 builder.Services.AddScoped<IFareService, FareService>();
 
+// Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
+// Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
@@ -59,6 +63,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Ghi nhật ký hoạt động — cấu hình ở Services/AuditLogMiddleware.cs.
+// Đặt sau UseAuthentication để có sẵn người thực hiện trong HttpContext.Items,
+// và trước MapControllers để bọc được lời gọi controller.
+app.UseAuditLog();
 
 app.MapControllers();
 
