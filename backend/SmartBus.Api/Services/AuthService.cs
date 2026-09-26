@@ -83,19 +83,28 @@ public class AuthService : IAuthService
             .Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber, cancellationToken);
 
-        if (user is null || !BCryptHasher.Verify(request.Password, user.PasswordHash))
+        // Tách ba nhánh thất bại để Controller có được người thực hiện khi ghi nhật ký (US 23, B28):
+        // SĐT không tồn tại thì UserId để NULL, còn sai mật khẩu / tài khoản bị khoá thì
+        // đã tra ra tài khoản. Thông báo trả về vẫn dùng chung một câu (xem InvalidCredentials)
+        // để người ngoài không dò được số điện thoại nào đã đăng ký.
+        if (user is null)
         {
             return AuthResult.Fail(InvalidCredentials);
+        }
+
+        if (!BCryptHasher.Verify(request.Password, user.PasswordHash))
+        {
+            return AuthResult.Fail(InvalidCredentials, user.Id);
         }
 
         // Kiểm tra khóa sau khi đã xác thực mật khẩu — lúc này người gọi đã chứng minh
         // sở hữu tài khoản, nên báo rõ "bị khóa" không làm lộ thông tin gì thêm.
         if (!user.IsActive)
         {
-            return AuthResult.Fail(AccountLocked);
+            return AuthResult.Fail(AccountLocked, user.Id);
         }
 
-        return AuthResult.Ok(await IssueTokensAsync(user, cancellationToken));
+        return AuthResult.Ok(await IssueTokensAsync(user, cancellationToken), user.Id);
     }
 
     public async Task<AuthResult> RefreshTokenAsync(string rawRefreshToken, CancellationToken cancellationToken = default)
@@ -123,7 +132,7 @@ public class AuthService : IAuthService
         return AuthResult.Ok(await IssueTokensAsync(stored.User, cancellationToken));
     }
 
-    public async Task LogoutAsync(string rawRefreshToken, CancellationToken cancellationToken = default)
+    public async Task<Guid?> LogoutAsync(string rawRefreshToken, CancellationToken cancellationToken = default)
     {
         var tokenHash = _tokenService.HashRefreshToken(rawRefreshToken);
 
@@ -132,13 +141,17 @@ public class AuthService : IAuthService
 
         // Không tìm thấy hoặc đã thu hồi rồi → coi như đăng xuất thành công.
         // Đăng xuất phải idempotent: gọi lại lần hai không được báo lỗi.
+        // Trả NULL để Controller biết không có phiên nào kết thúc — nhật ký đăng xuất
+        // chỉ ghi khi token thực sự bị thu hồi (có dữ liệu thay đổi).
         if (stored is null || stored.RevokedAt is not null)
         {
-            return;
+            return null;
         }
 
         stored.RevokedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(cancellationToken);
+
+        return stored.UserId;
     }
 
     /// <summary>Cấp cặp access token + refresh token mới và lưu refresh token đã băm.</summary>

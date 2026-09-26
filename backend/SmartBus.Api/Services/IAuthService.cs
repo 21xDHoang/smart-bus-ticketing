@@ -21,6 +21,11 @@ public interface IAuthService
     /// </summary>
     Task<AuthResult> RefreshTokenAsync(string rawRefreshToken, CancellationToken cancellationToken = default);
 
-    /// <summary>Thu hồi refresh token — kết thúc phiên đăng nhập. Gọi lại nhiều lần vẫn an toàn.</summary>
-    Task LogoutAsync(string rawRefreshToken, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Thu hồi refresh token — kết thúc phiên đăng nhập. Gọi lại nhiều lần vẫn an toàn.
+    /// Trả về id người dùng sở hữu token để Controller ghi nhật ký đăng xuất (US 23, task B28);
+    /// NULL khi token không tra được hoặc đã thu hồi từ trước — lúc đó không có phiên nào
+    /// kết thúc và không có dữ liệu nào thay đổi.
+    /// </summary>
+    Task<Guid?> LogoutAsync(string rawRefreshToken, CancellationToken cancellationToken = default);
 }

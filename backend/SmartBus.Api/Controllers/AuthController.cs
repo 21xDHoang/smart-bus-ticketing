@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using SmartBus.Api.Dtos.Auth;
+using SmartBus.Api.Entities;
 using SmartBus.Api.Services;
 
 namespace SmartBus.Api.Controllers;
@@ -8,6 +9,7 @@ namespace SmartBus.Api.Controllers;
 /// <summary>
 /// Xác thực: đăng ký, đăng nhập, làm mới token, đăng xuất.
 /// Story 22 — đăng ký: Trần Trung Hiếu · đăng nhập/token: Phùng Duy Hoàng.
+/// Ghi nhật ký đăng nhập / đăng xuất / đăng nhập thất bại (story 23, task B28): Trần Trung Hiếu.
 /// </summary>
 [ApiController]
 [Route("api/auth")]
@@ -20,11 +22,13 @@ public class AuthController : ControllerBase
 
     private readonly IAuthService _authService;
     private readonly IRateLimitService _rateLimitService;
+    private readonly IAuditLogService _auditLogService;
 
-    public AuthController(IAuthService authService, IRateLimitService rateLimitService)
+    public AuthController(IAuthService authService, IRateLimitService rateLimitService, IAuditLogService auditLogService)
     {
         _authService = authService;
         _rateLimitService = rateLimitService;
+        _auditLogService = auditLogService;
     }
 
     /// <summary>
@@ -63,7 +67,11 @@ public class AuthController : ControllerBase
             : Conflict(new { message = result.Error, errors = result.Errors });
     }
 
-    /// <summary>Đăng nhập bằng số điện thoại + mật khẩu, cấp access token và refresh token.</summary>
+    /// <summary>
+    /// Đăng nhập bằng số điện thoại + mật khẩu, cấp access token và refresh token.
+    /// Kết quả thành công hay thất bại đều được ghi vào nhật ký hoạt động (US 23, task B28):
+    /// đăng nhập thất bại là dấu vết chính để phát hiện dò mật khẩu.
+    /// </summary>
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -76,6 +84,15 @@ public class AuthController : ControllerBase
         }
 
         var result = await _authService.LoginAsync(request, cancellationToken);
+
+        // Thất bại do dữ liệu đầu vào sai đã bị chặn ở trên — tới đây là lần đăng nhập thật sự.
+        // UserId của nhật ký lấy từ kết quả nghiệp vụ: NULL khi SĐT không tồn tại
+        // (không tra ra tài khoản nào), còn sai mật khẩu / tài khoản bị khoá thì đã có.
+        await _auditLogService.RecordAsync(
+            result.Success ? AuditAction.Login : AuditAction.LoginFailed,
+            result.UserId,
+            target: null,
+            ClientIpAddress());
 
         return result.Success
             ? Ok(result.Data)
@@ -107,6 +124,7 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Đăng xuất — thu hồi refresh token, kết thúc phiên.
     /// Access token đã cấp vẫn dùng được tới khi hết hạn (mặc định 30 phút) vì JWT là stateless.
+    /// Kết quả được ghi vào nhật ký hoạt động (US 23, task B28) khi token thực sự bị thu hồi.
     /// </summary>
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -118,9 +136,42 @@ public class AuthController : ControllerBase
             return ValidationError();
         }
 
-        await _authService.LogoutAsync(request.RefreshToken, cancellationToken);
+        var userId = await _authService.LogoutAsync(request.RefreshToken, cancellationToken);
+
+        // Chỉ ghi khi userId khác NULL, tức là token thực sự bị thu hồi và có một phiên kết thúc.
+        // Token không tồn tại / đã thu hồi thì không có dữ liệu nào thay đổi — nhất quán với
+        // AuditLogMiddleware: thao tác không làm gì thay đổi thì không ghi nhật ký.
+        if (userId is not null)
+        {
+            await _auditLogService.RecordAsync(AuditAction.Logout, userId, target: null, ClientIpAddress());
+        }
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// IP người gọi — cùng cách chuẩn hoá với AuditLogMiddleware:
+    /// IPv4 ẩn trong IPv6 (::ffff:1.2.3.4) được đổi về dạng IPv4 cho nhật ký dễ đọc.
+    /// NULL khi không lấy được.
+    ///
+    /// Cố ý KHÔNG đọc header X-Forwarded-For: header do client gửi nên giả mạo được —
+    /// ghi một IP giả vào nhật ký kiểm toán còn tệ hơn để trống.
+    /// </summary>
+    private string? ClientIpAddress()
+    {
+        var ip = HttpContext.Connection.RemoteIpAddress;
+
+        if (ip is null)
+        {
+            return null;
+        }
+
+        if (ip.IsIPv4MappedToIPv6)
+        {
+            ip = ip.MapToIPv4();
+        }
+
+        return ip.ToString();
     }
 
     /// <summary>Cấu trúc lỗi thống nhất của cả dự án — xem docs/01-kien-truc.md.</summary>
