@@ -3,6 +3,7 @@ import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-de
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import StopManagePage from './pages/StopManagePage';
+import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
 
@@ -46,12 +47,12 @@ function App() {
     { key: '3', label: 'Đăng xuất', icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
   ];
 
-  // Các mục điều hướng chính. Route guard (chặn chưa đăng nhập theo vai trò) là task
-  // của Thịnh — ở đây chỉ dựng khung điều hướng để các màn hình có chỗ "sống".
+  // Các mục điều hướng chính. Mục có `roles` chỉ hiện với vai trò tương ứng — ẩn đi
+  // thay vì để người dùng bấm vào rồi nhận trang 403.
   const navItems = [
-    { to: '/', label: 'Trang chủ' },
-    { to: '/stops', label: 'Trạm dừng' },
-  ];
+    { to: '/', label: 'Trang chủ', roles: [] as string[] },
+    { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
+  ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
     <ConfigProvider
@@ -139,7 +140,16 @@ function App() {
             >
               <Routes>
                 <Route path="/" element={<HomeContent />} />
-                <Route path="/stops" element={<StopManagePage />} />
+                {/* /stops là màn hình quản trị — chỉ Admin và Manager vào được
+                    (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/stops"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <StopManagePage />
+                    </RouteGuard>
+                  }
+                />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
