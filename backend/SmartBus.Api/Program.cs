@@ -50,6 +50,12 @@ builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 // Cố ý tách khỏi IAuditLogService ở trên: API truy vấn danh sách là việc của Kiên.
 builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
 
+// Truy vấn danh sách nhật ký kiểm toán: GET /api/audit-logs (lọc + phân trang).
+// Task story 23 — Nguyễn Duy Kiên. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cùng tiền tố với IAuditLogExportService ở trên nhưng khác controller — template đầy đủ khác
+// nhau nên hai đường dẫn không đụng nhau (đoạn literal "export" thắng đoạn tham số).
+builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
+
 
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
