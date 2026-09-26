@@ -15,14 +15,16 @@ public class RouteStopResponse
 {
     /// <summary>
     /// Khoá chính của DÒNG BẢNG NỐI. KHÁC <see cref="StopId"/> — xem chú thích ở đó.
+    /// Đây mới là giá trị mà DELETE /routes/{routeId}/stops/{id} nhận.
     /// </summary>
     public Guid Id { get; set; }
 
     public Guid RouteId { get; set; }
 
     /// <summary>
-    /// Khoá của trạm. Đây mới là giá trị dùng cho DELETE /routes/{routeId}/stops/{stopId},
-    /// KHÔNG phải <see cref="Id"/> — gửi nhầm là 404.
+    /// Khoá của TRẠM. Dùng cho POST /routes/{routeId}/stops và PUT /routes/{routeId}/stops/order
+    /// (hai endpoint này nhận <c>stopId</c>), KHÔNG dùng cho DELETE — DELETE nhận
+    /// <see cref="Id"/> của dòng bảng nối. Gửi nhầm giá trị này vào DELETE là 404.
     /// </summary>
     public Guid StopId { get; set; }
 
