@@ -147,6 +147,27 @@ public class AuditLogTests
     }
 
     [Fact]
+    public async Task Doan_cuoi_la_hanh_dong_thi_ghi_ten_tai_nguyen_khong_phai_ten_hanh_dong()
+    {
+        using var factory = new TestAppFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.PutAsync(
+            $"/api/_test/audit/routes/{Guid.NewGuid()}/widgets/order",
+            content: null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Cùng họ với ca trên, nhưng khó hơn: đường dẫn có tham số cha mà KHÔNG có {id}, đoạn cuối
+        // lại là tên hành động. Lấy đoạn tĩnh cuối cùng sẽ ra Target là "Order" — không ứng với
+        // bảng nào, và vì không có {id} nên mất luôn id đối tượng; dòng nhật ký chỉ còn "có người
+        // đã sửa một thứ gì đó". Đây là ca thật của dự án:
+        // PUT /api/routes/{routeId}/stops/order.
+        var log = Assert.Single(await LogsAsync(factory));
+        Assert.Equal(AuditAction.Update, log.Action);
+        Assert.Equal("Widgets", log.Target);
+    }
+
+    [Fact]
     public async Task Post_vao_api_auth_khong_bi_ghi_lan_hai()
     {
         using var factory = new TestAppFactory();

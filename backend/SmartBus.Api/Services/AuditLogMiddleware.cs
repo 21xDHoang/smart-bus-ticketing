@@ -200,19 +200,19 @@ public sealed class AuditLogMiddleware
     /// không lấy đoạn đầu tiên.
     ///
     /// Vì sao: <c>/api/routes/{routeId}/fares/{id}</c> tác động lên bảng Fares chứ không phải Routes —
-    /// lấy đoạn đầu sẽ ghi sai bảng. Route không có <c>{id}</c> (POST tạo mới) thì lấy đoạn tĩnh cuối.
+    /// lấy đoạn đầu sẽ ghi sai bảng. Route không có <c>{id}</c> thì xem <see cref="ResourceSegmentIndex"/>.
     ///
     /// Ví dụ: api/routes/{routeId:guid}/fares/{id:guid} → "Fares"
     ///        api/admin/users/{id:guid}               → "Users"
-    ///        api/routes/{id:guid}/stops              → "Routes"
+    ///        api/admin/users/{id:guid}/roles         → "Users"
+    ///        api/routes/{routeId:guid}/stops/order   → "Stops"
     ///        api/monthly-passes                      → "MonthlyPasses"
     ///
-    /// ⚠️ Giới hạn đã biết: route KHÔNG có <c>{id}</c> mà đoạn cuối là một hành động
-    /// (ví dụ <c>POST /api/tickets/validate</c> ở Sprint 4) sẽ ra tên bảng là "Validate".
-    /// Không có cách phân biệt bằng cú pháp: <c>api/admin/users</c> cần lấy đoạn cuối, còn
-    /// <c>api/tickets/validate</c> lại cần lấy đoạn trước nó. Chấp nhận được vì bản ghi vẫn có
-    /// id đối tượng trong Target nên tra ngược được — endpoint nào cần chính xác thì đặt id
-    /// lên đường dẫn.
+    /// ⚠️ Giới hạn CÒN LẠI: route không có tham số nào VÀ đoạn cuối là một hành động
+    /// (ví dụ <c>POST /api/tickets/validate</c> ở Sprint 4) vẫn ra tên bảng là "Validate".
+    /// Không phân biệt được bằng cú pháp vì <c>api/admin/users</c> cần lấy đoạn cuối còn
+    /// <c>api/tickets/validate</c> lại cần lấy đoạn trước nó. Endpoint nào cần chính xác thì đặt
+    /// tham số lên đường dẫn — <c>api/routes/{routeId}/stops/order</c> đã xử lý theo cách đó.
     /// </summary>
     private static string? ResolveTableName(HttpContext context)
     {
@@ -230,7 +230,7 @@ public sealed class AuditLogMiddleware
 
         var nameIndex = idIndex > 0
             ? idIndex - 1
-            : Array.FindLastIndex(segments, segment => !IsParameter(segment));
+            : ResourceSegmentIndex(segments);
 
         if (nameIndex < 0)
         {
@@ -242,6 +242,42 @@ public sealed class AuditLogMiddleware
         // Đoạn trước {id} lại là một tham số (route lồng nhau không có đoạn tĩnh nào ở giữa)
         // thì không có tên tài nguyên để suy ra.
         return IsParameter(name) ? null : ToPascalCase(name);
+    }
+
+    /// <summary>
+    /// Vị trí đoạn mang tên tài nguyên khi route KHÔNG có tham số <c>{id}</c>.
+    ///
+    /// Có tham số khác trên đường dẫn (ví dụ <c>{routeId}</c>) thì tài nguyên là đoạn tĩnh ĐẦU TIÊN
+    /// đứng sau tham số cuối, không phải đoạn tĩnh cuối cùng.
+    ///
+    /// Vì sao: <c>api/routes/{routeId}/stops/order</c> tác động lên nhóm trạm của tuyến, còn
+    /// "order" chỉ là tên hành động. Lấy đoạn cuối sẽ ra Target là <c>"Order"</c> — một cái tên
+    /// không ứng với bảng nào, và vì route không có <c>{id}</c> nên mất luôn id đối tượng; dòng
+    /// nhật ký chỉ còn "có người đã sửa một thứ gì đó". Đoạn tĩnh đầu tiên sau tham số cuối
+    /// ("stops") mới là tài nguyên, và nó cũng khớp tên bảng mà hai endpoint anh em
+    /// <c>POST</c>/<c>DELETE .../stops</c> đang ghi.
+    ///
+    /// Không có tham số nào (<c>api/stops</c>, <c>api/monthly-passes</c>) thì đoạn tĩnh cuối vẫn là
+    /// tài nguyên — giữ nguyên lối cũ.
+    /// </summary>
+    private static int ResourceSegmentIndex(string[] segments)
+    {
+        var lastParameterIndex = Array.FindLastIndex(segments, IsParameter);
+
+        if (lastParameterIndex >= 0)
+        {
+            var afterLastParameter = Array.FindIndex(
+                segments,
+                lastParameterIndex + 1,
+                segment => !IsParameter(segment));
+
+            if (afterLastParameter >= 0)
+            {
+                return afterLastParameter;
+            }
+        }
+
+        return Array.FindLastIndex(segments, segment => !IsParameter(segment));
     }
 
     private static bool IsIdParameter(string segment)
