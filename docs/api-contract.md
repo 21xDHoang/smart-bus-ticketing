@@ -7,7 +7,9 @@
 
 - Base URL (dev): `http://localhost:5080/api` — frontend đọc qua `VITE_API_URL`.
 - Định dạng: JSON, mọi tên thuộc tính dùng **camelCase** (do .NET `System.Text.Json`
-  với `PropertyNamingPolicy = CamelCase`).
+  với `PropertyNamingPolicy = CamelCase`). **Một ngoại lệ duy nhất:** `GET /audit-logs/export`
+  trả file `.xlsx` nhị phân — xem mục "Nhật ký kiểm toán". Riêng đường **lỗi** của endpoint
+  đó vẫn theo đúng định dạng JSON bên dưới.
 - Xác thực: gửi header `Authorization: Bearer <accessToken>` cho mọi endpoint, trừ
   `/auth/login` và `/auth/register`.
 - Lỗi trả về thống nhất:
@@ -635,3 +637,111 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 > chỉ unique trên `(RouteId, StopId)`, không unique trên `(RouteId, StopOrder)`. Hệ quả duy nhất
 > là hai trạm cùng thứ tự; `GET` xếp tiếp theo `id` nên thứ tự hiển thị vẫn ổn định, và gọi
 > `PUT /stops/order` một lần là về đúng thứ tự. Thêm unique index cần migration — việc của chủ CSDL.
+
+## Nhật ký kiểm toán — `/audit-logs`
+
+> ✅ Backend đã có phần **xuất Excel** (`AuditLogExportController` — Phùng Duy Hoàng, story 23).
+> Phần **truy vấn danh sách** (`GET /audit-logs`) chưa làm — xem ghi chú ở cuối mục.
+> **Endpoint xuất chỉ dành cho vai trò `Admin`.** Người đã đăng nhập nhưng không đủ quyền nhận
+> **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Bảng `AuditLogs` là nhật ký **chỉ ghi thêm**: `AuditLogMiddleware` tự ghi mọi thao tác thay đổi dữ
+liệu thành công, còn `AuthController` ghi riêng đăng nhập / đăng xuất / đăng nhập thất bại. Không
+có endpoint nào sửa hay xoá bản ghi — sửa được nhật ký thì nhật ký mất giá trị kiểm toán.
+
+### Entity `AuditLog`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `userId` | `string \| null` | Người thao tác. `null` khi không xác định được — đăng nhập thất bại với SĐT không tồn tại, hoặc hành động do hệ thống tự làm |
+| `action` | `string` | Một trong 6 mã bên dưới |
+| `target` | `string \| null` | Đối tượng bị tác động, dạng `<Tên bảng>:<Id>` — ví dụ `"Routes:3f2a1b0c-…"`. `null` với đăng nhập / đăng xuất |
+| `ipAddress` | `string \| null` | Địa chỉ IP của người gọi. `null` khi không lấy được |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm hành động xảy ra |
+
+Mã `action` hợp lệ — đúng **6** giá trị, khớp enum `AuditAction` của backend:
+
+| Mã | Nghĩa |
+|---|---|
+| `Login` | Đăng nhập thành công |
+| `Logout` | Đăng xuất |
+| `LoginFailed` | Đăng nhập thất bại |
+| `Create` | Tạo bản ghi mới |
+| `Update` | Sửa bản ghi đã có |
+| `Delete` | Xoá bản ghi |
+
+Middleware suy `Create` / `Update` / `Delete` từ HTTP verb, nên màn hình mới không cần thêm mã —
+chi tiết nằm ở `target`.
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/audit-logs/export` | Tải nhật ký ra file Excel | — | file `.xlsx` (nhị phân) |
+
+#### `GET /audit-logs/export`
+
+Trả về **file `.xlsx`**, không phải JSON — đây là endpoint nhị phân duy nhất của hệ thống. File
+chứa toàn bộ bản ghi khớp bộ lọc, **mới nhất trước**.
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `from` | `string` (`yyyy-MM-dd`) | 29 ngày trước hôm nay | Ngày bắt đầu, theo **UTC**, tính **trọn ngày** |
+| `to` | `string` (`yyyy-MM-dd`) | hôm nay (UTC) | Ngày kết thúc, theo **UTC**, tính **trọn ngày** |
+| `userId` | `string` (GUID) | — | Chỉ lấy thao tác của một người |
+| `action` | `string` | — | Chỉ lấy một loại hành động — một trong 6 mã ở bảng trên |
+
+Bỏ trống cả `from` lẫn `to` → lấy **30 ngày gần nhất** tính cả hôm nay. Cả hai đầu mút được tính
+**trọn ngày**: `to=2026-09-26` bao gồm mọi bản ghi tới hết `2026-09-26T23:59:59.9999999Z`.
+
+**Nội dung file** — hàng 1 tiêu đề tài liệu, hàng 2 ghi khoảng thời gian / số dòng / thời điểm
+xuất / người xuất, hàng 3 trống, **hàng 4 là tiêu đề cột**, dữ liệu từ hàng 5:
+
+| # | Cột | Ghi chú |
+|---|---|---|
+| 1 | `Thời gian (UTC)` | Ô kiểu ngày thật, sắp và lọc được theo thời gian |
+| 2 | `Người thao tác` | Họ tên; `(không xác định)` khi `userId` là `null` |
+| 3 | `Số điện thoại` | Để trống khi không xác định được |
+| 4 | `Hành động` | Một trong 6 mã trên |
+| 5 | `Đối tượng` | Giá trị `target` |
+| 6 | `Địa chỉ IP` | Để trống khi không lấy được |
+| 7 | `Mã người dùng` | GUID — khoá ổn định để tra ngược, vì SĐT đổi được và họ tên trùng được |
+
+Khoảng lọc không có bản ghi nào → **200** kèm file chỉ có tiêu đề, **không** phải 404.
+
+Giới hạn **10.000 dòng mỗi lần xuất**. Vượt → **400** `errors.from` và `errors.to` kèm gợi ý thu
+hẹp khoảng — **không bao giờ trả về file thiếu dòng**, vì một chứng từ cụt mà trông như thành công
+còn tệ hơn một dòng báo lỗi.
+
+Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin` → **403** · `to` sớm hơn `from` →
+**400** `errors.to` · `userId` sai định dạng GUID → **400** `errors.userId` · vượt 10.000 dòng →
+**400** `errors.from`, `errors.to`.
+
+> **Vì sao trả 200 + file rỗng mà không phải 404?** Câu hỏi kiểm toán hay gặp nhất là *"tuần đó có
+> ai xoá gì không?"* — và "không" là một **câu trả lời**, không phải một lỗi. Trả 404 thì trình duyệt
+> tải về một file JSON lỗi đội tên `.xlsx`, người kiểm toán mở ra thấy rác. Cùng lối "tuyến chưa
+> cấu hình giá → mảng rỗng" ở mục Bảng giá vé.
+
+> **Vì sao `action` gõ sai trả file rỗng, còn `userId` gõ sai trả 400?** `action` là **mã** — một
+> mã lạ có thể là giá trị hợp lệ trong tương lai, nên trả rỗng là hợp lý, cùng lối `status` của
+> `GET /routes`. `userId` là **định danh**: GUID sai định dạng là request hỏng chứ không phải "bộ
+> lọc không khớp gì", và trả file rỗng cho một GUID gõ sai là che mất lỗi.
+
+> **Vì sao giữ UTC mà không đổi sang giờ Việt Nam?** Bộ lọc `from`/`to` và cột `Thời gian` trong
+> file dùng **cùng một khung giờ**, nên file và bộ lọc không bao giờ nói hai chuyện khác nhau —
+> tính chất quan trọng nhất với một chứng từ kiểm toán. Đánh đổi đã biết: chọn ngày theo giờ Việt
+> Nam sẽ lệch tối đa 7 giờ ở hai đầu mút. Nhãn cột ghi rõ `(UTC)` để không ai phải đoán.
+
+> **Vì sao file chứa số điện thoại?** Endpoint chỉ dành cho `Admin`, và Admin vốn xem được họ tên
+> lẫn SĐT qua `GET /admin/users`. Bản xuất chỉ còn GUID thì người ngồi đọc không tra được gì —
+> mất đúng mục đích của story.
+
+⚠️ **Cho người viết frontend:** đây là endpoint nhị phân đầu tiên nên phải gọi với
+`responseType: 'blob'`. Khi đó body lỗi cũng về dưới dạng `Blob`, khiến `error.response.data.message`
+trong `axiosClient.ts` là `undefined` và người dùng chỉ thấy câu thông báo chung. Màn hình tải file
+cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc được `message`.
+
+> 📌 **Ghi chú cho `GET /audit-logs` (API truy vấn danh sách — Nguyễn Duy Kiên, chưa làm):** dùng
+> đúng bốn tên tham số `from`, `to`, `userId`, `action` như trên để frontend không phải nói hai thứ
+> tiếng. Bốn tên này đã chốt.
