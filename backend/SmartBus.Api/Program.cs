@@ -45,6 +45,11 @@ builder.Services.AddScoped<IRouteStopService, RouteStopService>();
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
+// Xuất nhật ký kiểm toán ra Excel: GET /api/audit-logs/export.
+// Task story 23 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Cố ý tách khỏi IAuditLogService ở trên: API truy vấn danh sách là việc của Kiên.
+builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
+
 
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
