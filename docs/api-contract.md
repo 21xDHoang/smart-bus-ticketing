@@ -640,10 +640,15 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 
 ## Nhật ký kiểm toán — `/audit-logs`
 
-> ✅ Backend đã có phần **xuất Excel** (`AuditLogExportController` — Phùng Duy Hoàng, story 23).
-> Phần **truy vấn danh sách** (`GET /audit-logs`) chưa làm — xem ghi chú ở cuối mục.
-> **Endpoint xuất chỉ dành cho vai trò `Admin`.** Người đã đăng nhập nhưng không đủ quyền nhận
+> ✅ Backend đã đủ cả hai phần của story 23: **truy vấn danh sách** (`AuditLogsController` —
+> Nguyễn Duy Kiên) và **xuất Excel** (`AuditLogExportController` — Phùng Duy Hoàng). Hai API dùng
+> chung tiền tố `api/audit-logs` nhưng nằm ở hai controller khác nhau; đoạn literal `export` thắng
+> đoạn tham số nên chúng không nuốt lẫn nhau.
+> **Cả hai endpoint chỉ dành cho vai trò `Admin`.** Người đã đăng nhập nhưng không đủ quyền nhận
 > **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+>
+> Hai API dùng **chung bốn tên tham số lọc** `from`, `to`, `userId`, `action` — frontend không phải
+> nói hai thứ tiếng.
 
 Bảng `AuditLogs` là nhật ký **chỉ ghi thêm**: `AuditLogMiddleware` tự ghi mọi thao tác thay đổi dữ
 liệu thành công, còn `AuthController` ghi riêng đăng nhập / đăng xuất / đăng nhập thất bại. Không
@@ -678,7 +683,83 @@ chi tiết nằm ở `target`.
 
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
+| GET | `/audit-logs` | Truy vấn danh sách nhật ký — lọc theo người dùng, hành động, khoảng thời gian | — | JSON `{ items, total, page, pageSize }` |
 | GET | `/audit-logs/export` | Tải nhật ký ra file Excel | — | file `.xlsx` (nhị phân) |
+
+#### `GET /audit-logs`
+
+Danh sách bản ghi khớp bộ lọc, **mới nhất trước**, có phân trang.
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `from` | `string` (`yyyy-MM-dd`) | 29 ngày trước hôm nay | Ngày bắt đầu, theo **UTC**, tính **trọn ngày** |
+| `to` | `string` (`yyyy-MM-dd`) | hôm nay (UTC) | Ngày kết thúc, theo **UTC**, tính **trọn ngày** |
+| `userId` | `string` (GUID) | — | Chỉ lấy thao tác của một người |
+| `action` | `string` | — | Chỉ lấy một loại hành động — một trong 6 mã ở bảng trên |
+| `page` | `số nguyên` ≥ 1 | `1` | Trang hiện tại |
+| `pageSize` | `số nguyên` 1..100 | `10` | Số dòng mỗi trang |
+
+Bỏ trống cả `from` lẫn `to` → lấy **30 ngày gần nhất** tính cả hôm nay, y hệt `GET /audit-logs/export`.
+Cả hai đầu mút được tính **trọn ngày** theo UTC: `to=2026-09-26` bao gồm mọi bản ghi tới hết
+`2026-09-26T23:59:59.9999999Z`.
+
+**Kết quả** — JSON, không phải file:
+
+```json
+{
+  "items": [
+    {
+      "id": "9c1f8a44-…",
+      "userId": "3f2a1b0c-…",
+      "userFullName": "Nguyễn Văn A",
+      "userPhoneNumber": "0912345678",
+      "action": "Update",
+      "target": "Routes:3f2a1b0c-…",
+      "ipAddress": "203.0.113.5",
+      "createdAt": "2026-09-26T03:12:44.123Z"
+    }
+  ],
+  "total": 137,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+`items` là trang hiện tại, `total` là **tổng số dòng khớp bộ lọc** (không phải số dòng trong trang) —
+frontend dùng `total` để vẽ phân trang của AntD Table. Cùng khuôn với `GET /routes` và
+`GET /admin/users`.
+
+`userFullName` và `userPhoneNumber` là hai trường **chỉ để hiển thị**, ghép từ bảng `Users`. Cả hai
+là `null` khi `userId` là `null`.
+
+Bộ lọc không khớp bản ghi nào → **200** kèm `items: []` và `total: 0`, **không** phải 404 — cùng
+lối với file Excel rỗng ở mục dưới.
+
+Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin` → **403** · `to` sớm hơn `from` →
+**400** `errors.to` · `userId` sai định dạng GUID → **400** `errors.userId` · `page` nhỏ hơn 1 hoặc
+`pageSize` ngoài khoảng 1..100 → **400** `errors.page` / `errors.pageSize`.
+
+> **Vì sao `action` gõ sai trả danh sách rỗng, còn `userId` gõ sai trả 400?** Cùng lý do đã ghi ở
+> mục xuất file bên dưới: `action` là **mã** — một mã lạ có thể là giá trị hợp lệ trong tương lai;
+> `userId` là **định danh** — GUID gõ sai là request hỏng, trả danh sách rỗng cho nó là che mất lỗi.
+
+> **Vì sao trả kèm họ tên và số điện thoại?** Endpoint chỉ dành cho `Admin`, và Admin vốn xem được
+> cả hai qua `GET /admin/users`. Không kèm thì bảng nhật ký chỉ có GUID trần, mà `GET /admin/users`
+> **có phân trang** nên frontend không thể tự ghép tên cho mọi bản ghi trong trang. File Excel xuất
+> ra cũng kèm đúng hai trường này — hai đường xem nhật ký cho ra cùng một thông tin.
+
+> **Vì sao không có lọc theo `target` hay ô tìm kiếm tự do?** Phạm vi story 23 chốt ba bộ lọc: người
+> dùng, hành động, khoảng thời gian. Thêm tham số sau này là thay đổi **cộng thêm**, không phá hợp
+> đồng hiện tại.
+
+> ⚠️ **Bản ghi có `userId` là `null` không lọc được theo `userId`.** Đó là các ca đăng nhập thất bại
+> với số điện thoại không tồn tại, hoặc hành động do hệ thống tự làm. Muốn xem chúng thì để trống bộ
+> lọc người dùng — đây không phải dữ liệu bị thiếu.
+
+> 📌 **Chưa có `GET /audit-logs/{id}`.** Màn hình chi tiết
+> (`frontend/src/components/AuditLogDetailModal.tsx`) nhận nguyên bản ghi từ danh sách qua prop nên
+> không cần endpoint riêng — danh sách đã trả đủ mọi trường màn hình hiển thị. Nếu sau này thêm thì
+> **bắt buộc** đặt tham số là `{id:guid}`, để không nuốt mất đường dẫn `/audit-logs/export`.
 
 #### `GET /audit-logs/export`
 
@@ -741,7 +822,3 @@ Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin`
 `responseType: 'blob'`. Khi đó body lỗi cũng về dưới dạng `Blob`, khiến `error.response.data.message`
 trong `axiosClient.ts` là `undefined` và người dùng chỉ thấy câu thông báo chung. Màn hình tải file
 cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc được `message`.
-
-> 📌 **Ghi chú cho `GET /audit-logs` (API truy vấn danh sách — Nguyễn Duy Kiên, chưa làm):** dùng
-> đúng bốn tên tham số `from`, `to`, `userId`, `action` như trên để frontend không phải nói hai thứ
-> tiếng. Bốn tên này đã chốt.
