@@ -4,6 +4,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import StopManagePage from './pages/StopManagePage';
 import RouteListPage from './pages/RouteListPage';
+import RouteStopsPage from './pages/RouteStopsPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -54,6 +55,7 @@ function App() {
     { to: '/', label: 'Trang chủ', roles: [] as string[] },
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
+    { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
@@ -159,6 +161,16 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <RouteListPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /route-stops cũng là màn hình quản trị — chỉ Admin và Manager vào được
+                    (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/route-stops"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <RouteStopsPage />
                     </RouteGuard>
                   }
                 />
