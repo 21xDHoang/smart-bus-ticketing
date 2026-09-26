@@ -1,7 +1,8 @@
 import axiosClient from './axiosClient';
+import { fetchRoutes } from './routeApi';
 
 // -----------------------------------------------------------------------------
-// API bảng giá vé — nối với FaresController (task story 12 của Hoàng).
+// API bảng giá vé — nối với FaresController (story 12).
 //
 // Hợp đồng endpoint — xem docs/api-contract.md mục "Bảng giá vé":
 //   GET    /routes/{routeId}/fares          → Fare[]
@@ -10,10 +11,8 @@ import axiosClient from './axiosClient';
 //   PUT    /routes/{routeId}/fares/{id}     → { price } → Fare
 //   DELETE /routes/{routeId}/fares/{id}     → 204 No Content
 //
-// Backend /routes/{routeId}/fares ĐÃ có (FaresController). Riêng danh sách tuyến
-// (/routes) CHƯA có endpoint trong api-contract.md — còn "đang chờ bổ sung" (Hiếu).
-// Vì vậy màn hình chạy bằng dữ liệu giả cho tới khi /routes xong; đổi USE_MOCK = false
-// là phần giá vé tự nối API thật.
+// Cả FaresController lẫn RoutesController (nguồn cho ô chọn tuyến) đều đã có thật,
+// nên file này KHÔNG có nhánh dữ liệu giả như stopApi.ts / adminUserApi.ts: gọi thẳng API.
 // -----------------------------------------------------------------------------
 
 /** Mã đối tượng hành khách — khớp enum PassengerType của backend, đúng thứ tự khai báo. */
@@ -40,7 +39,7 @@ export interface UpdateFarePayload {
   price: number;
 }
 
-/** Tuyến cho ô chọn — mock cho tới khi /routes có endpoint thật. */
+/** Một dòng trong ô chọn tuyến — rút gọn từ Route của routeApi, chỉ đủ để hiển thị. */
 export interface RouteOption {
   id: string;
   /** Mã tuyến hiển thị cho hành khách, ví dụ "01", "B10". */
@@ -72,7 +71,7 @@ export const PASSENGER_TYPE_OPTIONS: { value: PassengerType; label: string }[] =
 ).map((value) => ({ value, label: PASSENGER_TYPE_META[value].label }));
 
 export interface FareApi {
-  /** Danh sách tuyến cho ô chọn — mock tới khi /routes có endpoint thật. */
+  /** Danh sách tuyến cho ô chọn — lấy từ GET /routes. */
   listRoutes: () => Promise<RouteOption[]>;
   list: (routeId: string) => Promise<Fare[]>;
   create: (routeId: string, payload: FarePayload) => Promise<Fare>;
@@ -81,10 +80,10 @@ export interface FareApi {
 }
 
 // ---------------------------------------------------------------------------
-// Backend /routes/{routeId}/fares ĐÃ có (FaresController). Nhưng màn hình còn cần
-// ô chọn tuyến mà /routes chưa có — nên tạm chạy toàn bộ bằng dữ liệu giả cho tới khi
-// /routes xong (xem docs/01-kien-truc.md: "API xong chỉ đổi chỗ gọi").
-const USE_MOCK = true;
+// Cả FaresController lẫn RoutesController ĐÃ có nên màn hình gọi API thật.
+// Khối dữ liệu giả bên dưới giữ lại làm đường lùi khi cần dựng giao diện lúc mất mạng;
+// đổi cờ này thành true là quay lại được.
+const USE_MOCK = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -124,11 +123,31 @@ function sortFares(fares: Fare[]): Fare[] {
   );
 }
 
+/**
+ * Trần `pageSize` của GET /routes là 100 — `[Range(1, 100)]` trong ListRoutesRequest,
+ * xem docs/api-contract.md. Đây là số lớn nhất lấy được trong một lượt gọi.
+ */
+const ROUTE_PICKER_PAGE_SIZE = 100;
+
 // -------- Gọi API thật (dùng khi USE_MOCK = false) --------
 const api: FareApi = {
-  // /routes CHƯA có endpoint thật — xem ghi chú đầu file.
+  // GET /routes — lấy hết tuyến cho ô chọn ở đầu trang, cả tuyến ngừng khai thác
+  // (vẫn có thể cần xem/sửa bảng giá đã cấu hình trước đó).
   listRoutes: async () => {
-    throw new Error('Danh sách tuyến chưa có endpoint /routes — cần backend (Hiếu).');
+    const routes: RouteOption[] = [];
+
+    // Lặp theo trang cho tới khi đủ `total`: một trang tối đa 100 tuyến, nếu chỉ lấy
+    // một trang thì tuyến thứ 101 trở đi âm thầm biến mất khỏi ô chọn mà không báo lỗi.
+    for (let page = 1; ; page += 1) {
+      const { items, total } = await fetchRoutes({ page, pageSize: ROUTE_PICKER_PAGE_SIZE });
+
+      routes.push(...items.map(({ id, code, name }) => ({ id, code, name })));
+
+      // `items.length === 0` là chốt chặn để không lặp vô hạn nếu `total` sai.
+      if (routes.length >= total || items.length === 0) break;
+    }
+
+    return routes;
   },
 
   // GET /api/routes/{routeId}/fares
@@ -199,7 +218,6 @@ const mock: FareApi = {
   },
 };
 
-// Chỉ cần đổi USE_MOCK ở trên để chuyển giữa dữ liệu giả và API thật.
 const fareApi: FareApi = USE_MOCK ? mock : api;
 
 export default fareApi;
