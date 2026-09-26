@@ -45,6 +45,14 @@ public class TestAuditController : ControllerBase
     public IActionResult CreateFailing()
         => BadRequest(new { message = "Dữ liệu đầu vào không hợp lệ" });
 
+    /// <summary>
+    /// Sửa cả nhóm con: đường dẫn lồng có tham số cha nhưng KHÔNG có <c>{id}</c>, đoạn cuối là tên
+    /// hành động — đúng hình dạng của <c>PUT /api/routes/{routeId}/stops/order</c> thật. Tài nguyên
+    /// bị tác động là Widgets; "order" chỉ là hành động, không phải tên bảng.
+    /// </summary>
+    [HttpPut("~/api/_test/audit/routes/{routeId:guid}/widgets/order")]
+    public IActionResult ReorderGroup(Guid routeId) => Ok(new { routeId });
+
     [HttpPut("{id:guid}")]
     public IActionResult Update(Guid id) => Ok(new { id, name = "Widget đã sửa" });
 
