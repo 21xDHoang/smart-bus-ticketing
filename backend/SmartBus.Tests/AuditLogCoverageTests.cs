@@ -437,16 +437,18 @@ public class AuditLogCoverageTests
 
         var log = await AssertMotBanGhiAsync(factory, AuditAction.Update, target: null, admin);
 
-        // ⚠️ GHI NHẬN — đây là hạn chế nặng nhất trong ba endpoint RouteStops, và nó KHÁC hai
-        // ca kia: Target ở đây hoàn toàn không có tên bảng lẫn id, chỉ còn chữ "Order".
+        // Tài nguyên bị tác động là NHÓM TRẠM của tuyến, không phải hành động "order".
         //
-        // Nguyên nhân: route không có tham số {id} nên middleware lấy đoạn tĩnh cuối cùng, mà
-        // đoạn cuối là động từ "order". Doc-comment của ResolveTableName có nêu giới hạn này và
-        // tự trấn an rằng "bản ghi vẫn có id đối tượng trong Target nên tra ngược được" — với
-        // endpoint này lời trấn an đó KHÔNG đúng: routeId có trên đường dẫn nhưng tên là
-        // {routeId} chứ không phải {id}, nên RouteId() không đọc được, và PUT không đệm body
-        // nên cũng không có id nào khác. Kết quả: mất trắng cả bảng lẫn đối tượng.
-        Assert.Equal("Order", log.Target);
+        // Đây từng là ca hỏng nặng nhất trong ba endpoint RouteStops: middleware lấy đoạn tĩnh
+        // cuối cùng làm tên bảng nên ra "Order" — không ứng với bảng nào; và vì route không có
+        // tham số {id} nên Target mất luôn id đối tượng, dòng nhật ký chỉ còn "có người đã sửa
+        // một thứ gì đó". Doc-comment của ResolveTableName khi đó tự trấn an rằng "bản ghi vẫn có
+        // id đối tượng trong Target nên tra ngược được" — lời trấn an đó không đúng ở đây.
+        //
+        // Đã sửa ở AuditLogMiddleware.ResourceSegmentIndex: route có tham số thì tài nguyên là
+        // đoạn tĩnh ĐẦU TIÊN đứng sau tham số cuối, không phải đoạn tĩnh cuối cùng. "Stops" cũng
+        // khớp tên bảng mà hai endpoint anh em POST/DELETE .../stops đang ghi.
+        Assert.Equal("Stops", log.Target);
     }
 
     [Fact]
