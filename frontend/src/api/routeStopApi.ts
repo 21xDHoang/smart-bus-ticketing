@@ -19,13 +19,10 @@ export interface RouteStop {
    * Khoá chính của DÒNG bảng nối. Đây là giá trị dùng cho
    * `DELETE /routes/{routeId}/stops/{id}` — KHÔNG phải `stopId`.
    *
-   * ⚠️ Chú thích ở `RouteStopResponse.cs` (backend) nói ngược lại: nó bảo gửi `stopId`.
-   * Chú thích đó SAI. Ba nguồn đúng đều xác nhận dùng `id`:
-   *   1. docs/api-contract.md, mục `DELETE /routes/{routeId}/stops/{id}` — ghi rõ
-   *      "`{id}` là `id` của DÒNG `RouteStop`, KHÔNG phải `stopId`";
-   *   2. chú thích tham số `id` ở `RouteStopsController.Remove`;
-   *   3. chính câu truy vấn của `RouteStopService.RemoveAsync`:
-   *      `rs => rs.RouteId == routeId && rs.Id == id`.
+   * Ba nguồn xác nhận: `docs/api-contract.md` mục
+   * `DELETE /routes/{routeId}/stops/{id}`, chú thích tham số `id` ở
+   * `RouteStopsController.Remove`, và câu truy vấn của `RouteStopService.RemoveAsync`:
+   * `rs => rs.RouteId == routeId && rs.Id == id`.
    * Gửi nhầm `stopId` vào DELETE sẽ ăn 404 ở mọi lần gỡ trạm.
    */
   id: string;
@@ -33,8 +30,9 @@ export interface RouteStop {
   routeId: string;
 
   /**
-   * Khoá của TRẠM. Dùng cho `PUT /order` (server nhận danh sách `stopId`) và để đối
-   * chiếu trạm nào đã nằm trên tuyến. KHÔNG dùng cho DELETE — xem chú thích ở `id`.
+   * Khoá của TRẠM. Dùng cho `POST /routes/{routeId}/stops` và `PUT /routes/{routeId}/stops/order`
+   * (hai endpoint này nhận `stopId`), và để đối chiếu trạm nào đã nằm trên tuyến.
+   * KHÔNG dùng cho DELETE — xem chú thích ở `id`.
    */
   stopId: string;
 
