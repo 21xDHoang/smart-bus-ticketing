@@ -3,6 +3,7 @@ import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-de
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import StopManagePage from './pages/StopManagePage';
+import RouteListPage from './pages/RouteListPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -51,6 +52,7 @@ function App() {
   // thay vì để người dùng bấm vào rồi nhận trang 403.
   const navItems = [
     { to: '/', label: 'Trang chủ', roles: [] as string[] },
+    { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
@@ -147,6 +149,16 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <StopManagePage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /routes cũng là màn hình quản trị — chỉ Admin và Manager vào được
+                    (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/routes"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <RouteListPage />
                     </RouteGuard>
                   }
                 />
