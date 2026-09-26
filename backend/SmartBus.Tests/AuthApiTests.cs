@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -122,7 +124,16 @@ public class AuthApiTests
 
         // Refresh token là thứ chiếm được phiên đăng nhập, nên CSDL chỉ giữ bản băm —
         // rò rỉ CSDL không dùng lại được token.
+        //
+        // Vế thứ hai cố ý tính lại SHA256 ngay tại đây thay vì gọi TokenService.HashRefreshToken:
+        // mượn chính hàm của production làm vật chuẩn thì test không còn kiểm được hàm đó nữa.
+        // Assert.NotEqual một mình là CHƯA đủ — nó đúng với mọi giá trị khác token thô, kể cả một
+        // hằng số, nên mới chỉ chứng minh được "không lưu thô" chứ chưa chứng minh "có băm".
+        var expectedHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(auth.RefreshToken)));
+
         Assert.NotEqual(auth.RefreshToken, stored.TokenHash);
+        Assert.Equal(expectedHash, stored.TokenHash);
         Assert.Null(stored.RevokedAt);
         Assert.True(stored.ExpiresAt > DateTime.UtcNow);
     }
