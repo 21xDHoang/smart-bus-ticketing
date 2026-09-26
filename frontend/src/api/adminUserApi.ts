@@ -1,14 +1,11 @@
 import axiosClient from './axiosClient';
 
 // -----------------------------------------------------------------------------
-// API quản trị người dùng — nối với AdminUserController (task của Hiếu + Kiên).
+// API quản trị người dùng — nối với AdminUserController (story 22).
 //
-// Hợp đồng endpoint (đề xuất, cần khớp với api-contract.md / backend khi xong):
-//   GET /admin/users?search=&role=&isActive=&page=&pageSize=
+// Hợp đồng endpoint — xem docs/api-contract.md mục "Quản trị người dùng":
+//   GET /api/admin/users?search=&role=&isActive=&page=&pageSize=
 //     → { items: AdminUser[], total, page, pageSize }
-//
-// Backend CHƯA có controller này. Theo hướng dẫn Sprint 1, nhóm C dựng giao diện
-// bằng dữ liệu giả trước; khi API xong chỉ cần đổi USE_MOCK = false.
 // -----------------------------------------------------------------------------
 
 /** Mã vai trò — khớp với Role.Code và claim role trong JWT (TokenService.cs). */
@@ -76,8 +73,11 @@ export function getRoleMeta(code: string): RoleMeta {
 // DỮ LIỆU GIẢ (MOCK)
 // -----------------------------------------------------------------------------
 
-/** Đổi thành false khi AdminUserController đã có để gọi API thật. */
-const USE_MOCK = true;
+/**
+ * AdminUserController ĐÃ có (Nguyễn Duy Kiên, story 22) nên màn hình gọi API thật.
+ * Khối dữ liệu giả bên dưới giữ lại làm đường lùi; đổi cờ thành true là quay lại được.
+ */
+const USE_MOCK = false;
 
 const MOCK_NAMES = [
   'Nguyễn Văn An', 'Trần Thị Bích Ngọc', 'Lê Hoàng Cường', 'Phạm Minh Đức',

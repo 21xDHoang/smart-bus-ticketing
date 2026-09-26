@@ -22,10 +22,10 @@ export interface StopApi {
 }
 
 // ---------------------------------------------------------------------------
-// Backend /stops CHƯA xong (task của Hiếu). Nhóm C (Băng) dựng giao diện bằng
-// DỮ LIỆU GIẢ trước — xem docs/01-kien-truc.md: "API xong chỉ đổi chỗ gọi".
-// Khi backend có endpoint thật, đổi USE_MOCK_DATA = false là màn hình tự nối API.
-const USE_MOCK_DATA = true;
+// Backend /stops ĐÃ xong (StopsController — Trần Trung Hiếu, story 12) nên màn hình
+// chạy thẳng API thật. Khối dữ liệu giả bên dưới giữ lại làm đường lùi khi cần dựng
+// giao diện lúc mất mạng; đổi cờ này thành true là quay lại được.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -88,7 +88,6 @@ const mock: StopApi = {
   },
 };
 
-// Chỉ cần đổi USE_MOCK_DATA ở trên để chuyển giữa dữ liệu giả và API thật.
 const stopApi: StopApi = USE_MOCK_DATA ? mock : api;
 
 export default stopApi;
