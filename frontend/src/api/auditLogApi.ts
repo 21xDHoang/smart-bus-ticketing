@@ -1,8 +1,8 @@
 // Hợp đồng API /audit-logs — xem docs/api-contract.md (mục "Nhật ký kiểm toán").
 // Backend hiện mới chỉ có GET /audit-logs/export; GET /audit-logs (truy vấn danh sách)
-// là task của Kiên, chưa có trong contract. Vì vậy file này CHỈ khai báo kiểu dữ liệu
-// và bảng nhãn/màu hành động để modal chi tiết (và sau này màn hình danh sách của Hạnh)
-// dùng chung — chưa có hàm gọi API nào.
+// là task của Kiên, chưa có trong contract. Vì vậy file này khai báo kiểu dữ liệu, bảng
+// nhãn/màu hành động (dùng chung cho modal chi tiết và màn hình danh sách) và hàm lấy
+// nhật ký đăng nhập gần nhất — nhưng chưa gọi endpoint /audit-logs thật nào.
 
 import type { TagProps } from 'antd';
 
@@ -49,4 +49,32 @@ export const AUDIT_ACTION_META: Record<AuditAction, AuditActionMeta> = {
 // được: trả về đúng mã đó kèm màu mặc định thay vì crash.
 export function getAuditActionMeta(action: string): AuditActionMeta {
   return AUDIT_ACTION_META[action as AuditAction] ?? { label: action, color: 'default' };
+}
+
+// -----------------------------------------------------------------------------
+// NHẬT KÝ ĐĂNG NHẬP GẦN NHẤT (trang cá nhân)
+// -----------------------------------------------------------------------------
+
+// Backend GET /audit-logs (truy vấn danh sách) là task của Kiên, CHƯA có trong
+// api-contract.md — mới chỉ có GET /audit-logs/export. Vì vậy hàm dưới tạm trả dữ liệu
+// giả để trang cá nhân dựng được giao diện. Khi endpoint có thật và hình dạng response
+// được chốt vào contract, thay toàn bộ thân hàm bằng lời gọi axiosClient.get thật.
+
+/**
+ * Lấy các bản ghi đăng nhập / đăng xuất gần nhất của một người dùng, mới nhất trước.
+ * Tạm trả dữ liệu giả — xem ghi chú ngay phía trên.
+ */
+export async function fetchMyLoginActivity(userId: string): Promise<AuditLog[]> {
+  // Giả lập độ trễ mạng nhẹ để trải nghiệm loading gần với API thật.
+  await new Promise((resolve) => setTimeout(resolve, 350));
+
+  const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
+
+  // Mọi bản ghi giả đều gắn userId của người đang xem để "thuộc về" họ.
+  return [
+    { id: 'log-1', userId, action: 'Login', target: null, ipAddress: '203.113.188.5', createdAt: hoursAgo(2) },
+    { id: 'log-2', userId, action: 'Logout', target: null, ipAddress: '203.113.188.5', createdAt: hoursAgo(5) },
+    { id: 'log-3', userId, action: 'Login', target: null, ipAddress: '113.161.72.12', createdAt: hoursAgo(24) },
+    { id: 'log-4', userId, action: 'LoginFailed', target: null, ipAddress: '113.161.72.12', createdAt: hoursAgo(48) },
+  ];
 }

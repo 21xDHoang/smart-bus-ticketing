@@ -1,10 +1,11 @@
 import { ConfigProvider, Layout, Avatar, Dropdown, message } from 'antd';
 import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import StopManagePage from './pages/StopManagePage';
 import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
+import ProfilePage from './pages/ProfilePage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -34,6 +35,7 @@ function HomeContent() {
 function App() {
   // Trạng thái đăng nhập do AuthProvider giữ; App chỉ đọc ra để hiển thị.
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   // Xử lý Đăng xuất
   const handleLogout = async () => {
@@ -43,7 +45,7 @@ function App() {
 
   // Menu Dropdown cho Avatar người dùng khi đã đăng nhập
   const userMenuItems = [
-    { key: '1', label: 'Hồ sơ cá nhân', icon: <UserOutlined /> },
+    { key: '1', label: 'Hồ sơ cá nhân', icon: <UserOutlined />, onClick: () => navigate('/profile') },
     { key: '2', label: 'Vé của tôi', icon: <SafetyCertificateOutlined /> },
     { type: 'divider' as const },
     { key: '3', label: 'Đăng xuất', icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
@@ -144,6 +146,9 @@ function App() {
             >
               <Routes>
                 <Route path="/" element={<HomeContent />} />
+                {/* /profile là trang cá nhân — ai đã đăng nhập đều vào được, không cần
+                    giới hạn vai trò như các màn hình quản trị phía dưới. */}
+                <Route path="/profile" element={<ProfilePage />} />
                 {/* /stops là màn hình quản trị — chỉ Admin và Manager vào được
                     (docs/api-contract.md). Vai trò khác nhận trang 403. */}
                 <Route
