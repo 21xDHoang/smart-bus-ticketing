@@ -40,8 +40,11 @@
 
 ## Trạm dừng — `/stops`
 
-> ⏳ Backend đang làm (Trần Trung Hiếu). Frontend (Băng) dùng **dữ liệu giả** cho tới khi
-> endpoint có thật — bật/tắt qua `USE_MOCK_DATA` trong `frontend/src/api/stopApi.ts`.
+> ✅ Backend đã có (`StopsController` — Trần Trung Hiếu, story 12). Frontend đổi
+> `USE_MOCK_DATA = false` trong `frontend/src/api/stopApi.ts` là chạy được thật.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
+> nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
 
 ### Entity `Stop`
 
@@ -73,6 +76,154 @@
 | POST | `/stops` | Thêm trạm | `{ name, address, latitude, longitude }` | `Stop` (201) |
 | PUT | `/stops/{id}` | Sửa trạm | `{ name, address, latitude, longitude }` | `Stop` |
 | DELETE | `/stops/{id}` | Xoá trạm | — | 204 No Content |
+
+#### Ràng buộc dữ liệu đầu vào — POST và PUT dùng cùng bộ trường
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `name` | ✅ | 2–200 ký tự |
+| `address` | ✅ | Tối đa 300 ký tự |
+| `latitude` | ✅ | Từ **-90** đến **90** |
+| `longitude` | ✅ | Từ **-180** đến **180** |
+
+Vi phạm ràng buộc trên → **400** với `errors.<tên trường>`.
+
+#### `DELETE /stops/{id}` — khi nào bị chặn
+
+Trạm đang nằm trên ít nhất một tuyến (`RouteStops` tham chiếu tới) → **409**:
+
+```json
+{ "message": "Trạm đang nằm trên tuyến đường nên không thể xóa. Gỡ trạm khỏi tuyến trước." }
+```
+
+Trạm không nằm trên tuyến nào → xoá hẳn khỏi CSDL, trả 204. `Stop` không có cột trạng thái
+nên không thể xoá mềm như `Routes` — quy ước A4 chỉ cho dùng cột trạng thái sẵn có.
+
+## Tuyến đường — `/routes`
+
+> ✅ Backend đã có (`RoutesController` — Trần Trung Hiếu, story 12).
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
+> nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+### Entity `Route`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `code` | `string` | Mã tuyến hiển thị cho hành khách — "01", "B10"… Duy nhất toàn hệ thống |
+| `name` | `string` | Tên tuyến, ví dụ "Bến Thành — Chợ Lớn" |
+| `origin` | `string` | Điểm đầu của tuyến — tên địa danh, không phải khoá ngoại tới Stops |
+| `destination` | `string` | Điểm cuối của tuyến |
+| `distanceKm` | `number` | Tổng chiều dài tuyến (km), tối đa 2 chữ số thập phân |
+| `status` | `string` | `Active` = đang khai thác · `Inactive` = ngừng khai thác (lưu dạng chuỗi — quy ước A3) |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
+| `updatedAt` | `string \| null` | `null` khi chưa sửa lần nào |
+
+```json
+// Ví dụ Route
+{
+  "id": "3f2a1b0c-0000-0000-0000-000000000000",
+  "code": "01",
+  "name": "Bến Thành — Chợ Lớn",
+  "origin": "Bến Thành",
+  "destination": "Chợ Lớn",
+  "distanceKm": 12.5,
+  "status": "Active",
+  "createdAt": "2026-09-25T03:15:00Z",
+  "updatedAt": null
+}
+```
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes` | Danh sách + tìm kiếm + lọc trạng thái + phân trang | — | `RouteListResponse` |
+| GET | `/routes/{id}` | Chi tiết một tuyến | — | `Route` |
+| POST | `/routes` | Thêm tuyến | `CreateRoute` | `Route` (201) |
+| PUT | `/routes/{id}` | Sửa tuyến | `UpdateRoute` | `Route` |
+| DELETE | `/routes/{id}` | **Xoá mềm** — ngừng khai thác | — | `Route` |
+
+#### `GET /routes`
+
+Tham số query (đều không bắt buộc):
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `search` | `string` | — | Tìm theo mã, tên, điểm đầu hoặc điểm cuối — **không phân biệt hoa thường** |
+| `status` | `string` | — | Lọc theo trạng thái: `Active` hoặc `Inactive`. Bỏ trống = lấy cả hai |
+| `page` | `number` | `1` | Trang, tính từ 1 |
+| `pageSize` | `number` | `10` | Số dòng mỗi trang, tối đa **100** |
+
+```json
+// RouteListResponse — ví dụ GET /routes?page=1&pageSize=10&status=Active
+{
+  "items": [ /* Route[] của trang hiện tại */ ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+- `total` là tổng số dòng khớp bộ lọc (không phải số dòng trong `items`) — dùng để vẽ phân trang.
+- Thứ tự sắp xếp: `createdAt` giảm dần, tuyến tạo cùng lúc xếp theo `id` để phân trang ổn định.
+- `page` hoặc `pageSize` ngoài khoảng hợp lệ → **400**.
+- `status` không khớp `Active`/`Inactive` → danh sách rỗng (không báo lỗi — cùng lối bộ lọc
+  `role` của `/admin/users`).
+
+#### `POST /routes`
+
+```json
+// CreateRoute — body
+{
+  "code": "01",
+  "name": "Bến Thành — Chợ Lớn",
+  "origin": "Bến Thành",
+  "destination": "Chợ Lớn",
+  "distanceKm": 12.5
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `code` | ✅ | 2–20 ký tự, duy nhất toàn hệ thống |
+| `name` | ✅ | 2–200 ký tự |
+| `origin` | ✅ | 2–200 ký tự |
+| `destination` | ✅ | 2–200 ký tự |
+| `distanceKm` | — | Từ 0 đến `9999.99` — trần của cột numeric(6,2). Bỏ trống = 0 |
+
+Lỗi thường gặp: trùng mã tuyến → **400** `errors.code` · `distanceKm` âm hoặc vượt trần →
+**400** `errors.distanceKm`.
+
+> **Vì sao trùng mã tuyến trả 400 mà không phải 409?** Mã tuyến là khoá nghiệp vụ do quản lý
+> nhập tay vào ô form — cùng lý do trùng SĐT trả 400 `errors.phoneNumber`: frontend gắn thẳng
+> lỗi vào ô input. (Trùng giá vé trả 409 vì đối tượng được chọn trong danh sách có sẵn, không
+> phải gõ tay.)
+
+#### `PUT /routes/{id}`
+
+Body gồm đủ 5 trường của `CreateRoute` **cộng thêm `status`**:
+
+```json
+{ "code": "01", "name": "…", "origin": "…", "destination": "…", "distanceKm": 12.5, "status": "Active" }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `code`, `name`, `origin`, `destination` | ✅ | Như POST |
+| `distanceKm` | — | Như POST |
+| `status` | — | `Active` hoặc `Inactive`. Bỏ trống = giữ nguyên trạng thái hiện tại |
+
+- `status` ngoài hai mã trên → **400** `errors.status`.
+- Đây cũng là cách **mở lại tuyến đã ngừng khai thác**: PUT với `status: "Active"`.
+
+#### `DELETE /routes/{id}` — xoá mềm
+
+Chuyển tuyến về `Inactive`, **không xoá dữ liệu** khỏi CSDL — còn chuyến và vé cũ tham chiếu
+tới, và quy ước A4 cấm thêm cột `IsDeleted`, nên dùng đúng cột trạng thái sẵn có.
+
+Trả **200** kèm `Route` đã ngừng khai thác — giống `DELETE /admin/users/{id}` trả về tài khoản
+đã khóa. Tuyến đã `Inactive` gọi lại → **200** không báo lỗi (idempotent).
 
 ## Quản trị người dùng — `/admin/users`
 
@@ -333,8 +484,4 @@ tuyến đó không. Dòng giá của tuyến khác → **404**, không phải 2
 
 ## Đang chờ bổ sung (nhóm khác)
 
-- `/routes` — CRUD tuyến đường (Hiếu).
 - `/routes/{id}/stops` — gán trạm vào tuyến + sắp xếp thứ tự (Kiên).
-
-> `/routes/{routeId}/fares` ở trên **không** chờ `/routes` xong: nó chỉ cần một `routeId` có thật
-> trong CSDL. Khi `/routes` chưa có, tạo tuyến bằng seed script hoặc gọi thẳng vào CSDL vẫn dùng được.
