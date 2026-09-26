@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Card, Input, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
+import { PlusOutlined } from '@ant-design/icons';
 import { fetchRoutes, ROUTE_STATUS_META, ROUTE_STATUS_OPTIONS } from '../api/routeApi';
 import type { Route, RouteStatus } from '../api/routeApi';
+import routeCrudApi from '../api/routeCrudApi';
+import type { RoutePayload, UpdateRoutePayload } from '../api/routeCrudApi';
 import type { AppError } from '../api/axiosClient';
+import RouteFormModal from '../components/RouteFormModal';
 
-// Màn hình chỉ ĐỌC: bảng + tìm kiếm + lọc trạng thái + phân trang (story 12).
-// Nút Thêm/Sửa và xác nhận xoá thuộc task "Form Thêm/Sửa tuyến đường + xác nhận xoá"
-// của Dương Thị Hạnh — chưa gắn vào đây để hai task không giẫm lên nhau.
-const columns: TableProps<Route>['columns'] = [
+// Màn hình danh sách tuyến (story 12): bảng + tìm kiếm + lọc trạng thái + phân trang.
+// Phần Thêm/Sửa tuyến + xác nhận xoá (nút, modal, popconfirm) là task "Form Thêm/Sửa
+// tuyến đường + xác nhận xoá" của Dương Thị Hạnh, gắn vào đây dùng chung một trang.
+const BASE_COLUMNS: TableProps<Route>['columns'] = [
   {
     title: 'Mã tuyến',
     dataIndex: 'code',
@@ -66,6 +70,90 @@ const RouteListPage = () => {
   const [data, setData] = useState<Route[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Tăng giá trị để tải lại danh sách sau khi thêm/sửa/xoá thành công.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Route | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const openCreate = () => {
+    setEditing(null);
+    setModalOpen(true);
+  };
+
+  const openEdit = (route: Route) => {
+    setEditing(route);
+    setModalOpen(true);
+  };
+
+  const handleSubmit = async (payload: RoutePayload | UpdateRoutePayload, id?: string) => {
+    setSubmitting(true);
+    try {
+      if (id) {
+        await routeCrudApi.update(id, payload as UpdateRoutePayload);
+        message.success('Đã cập nhật tuyến đường.');
+      } else {
+        await routeCrudApi.create(payload);
+        message.success('Đã thêm tuyến đường.');
+      }
+      setModalOpen(false);
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      const appError = error as AppError;
+      // Có lỗi theo từng trường thì để modal gắn vào ô input; ngược lại mới hiện toast.
+      if (!appError.errors) {
+        message.error(appError.customMessage || 'Thao tác thất bại.');
+      }
+      throw error;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await routeCrudApi.remove(id);
+      message.success('Đã ngừng khai thác tuyến đường.');
+      // Xoá dòng cuối của trang cuối thì lùi về trang trước — tránh đứng ở trang rỗng (400).
+      if (data.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        setReloadKey((key) => key + 1);
+      }
+    } catch (error) {
+      message.error((error as AppError).customMessage || 'Thao tác thất bại.');
+    }
+  };
+
+  // Cột "Hành động" cần gọi openEdit/handleDelete nên ghép ở đây, không để ở module.
+  const columns: TableProps<Route>['columns'] = [
+    ...BASE_COLUMNS,
+    {
+      title: 'Hành động',
+      key: 'actions',
+      width: 140,
+      render: (_, route) => (
+        <Space>
+          <Button type="link" size="small" onClick={() => openEdit(route)}>
+            Sửa
+          </Button>
+          <Popconfirm
+            title="Ngừng khai thác tuyến?"
+            description={`Tuyến “${route.name}” sẽ chuyển sang trạng thái ngừng khai thác.`}
+            okText="Ngừng"
+            cancelText="Huỷ"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(route.id)}
+          >
+            <Button type="link" size="small" danger>
+              Xoá
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +180,7 @@ const RouteListPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [search, status, page, pageSize]);
+  }, [search, status, page, pageSize, reloadKey]);
 
   return (
     <div>
@@ -137,6 +225,10 @@ const RouteListPage = () => {
               setPage(1);
             }}
           />
+
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            Thêm tuyến
+          </Button>
         </Space>
 
         <Table<Route>
@@ -162,6 +254,14 @@ const RouteListPage = () => {
           }}
         />
       </Card>
+
+      <RouteFormModal
+        open={modalOpen}
+        editing={editing}
+        submitting={submitting}
+        onCancel={() => setModalOpen(false)}
+        onSubmit={handleSubmit}
+      />
     </div>
   );
 };
