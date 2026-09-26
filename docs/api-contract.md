@@ -482,6 +482,156 @@ mềm — khác `Routes` (A4 chỉ cho dùng cột trạng thái sẵn có, mà 
 `GET`/`PUT`/`DELETE` trên `/routes/{routeId}/fares/{id}` đều kiểm tra dòng giá có **thuộc đúng**
 tuyến đó không. Dòng giá của tuyến khác → **404**, không phải 200.
 
-## Đang chờ bổ sung (nhóm khác)
+## Trạm trên tuyến — `/routes/{routeId}/stops`
 
-- `/routes/{id}/stops` — gán trạm vào tuyến + sắp xếp thứ tự (Kiên).
+> ✅ Backend đã có (`RouteStopsController` — Nguyễn Duy Kiên, story 12). Frontend chưa có module
+> gọi API này: màn hình gán trạm bằng kéo-thả là task riêng của Hoàng Văn Thịnh, dựng theo khuôn
+> `frontend/src/api/fareApi.ts`.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập nhưng
+> không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Bảng `RouteStops` là bảng nối `Routes` ↔ `Stops`, kiêm **thứ tự trạm trên tuyến**. Một trạm không
+xuất hiện hai lần trên cùng một tuyến — ràng buộc unique `(RouteId, StopId)` ở CSDL (quy ước A6).
+Cùng một trạm **được** nằm trên nhiều tuyến khác nhau: ràng buộc là theo *cặp*, không phải theo trạm.
+
+Thứ tự trạm là thứ tự xe chạy thật, và là thứ duy nhất xác định chiều của tuyến — xe đi và xe về
+trên cùng tuyến trùng toạ độ, nên không phân biệt được bằng khoảng cách (quy ước A8.6).
+
+### Entity `RouteStop`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính của dòng bảng nối |
+| `routeId` | `string` (GUID) | Tuyến |
+| `stopId` | `string` (GUID) | Trạm |
+| `stopName` | `string` | Tên trạm — kèm sẵn để màn hình kéo-thả hiển thị mà không phải gọi thêm `/stops` |
+| `stopAddress` | `string` | Địa chỉ trạm |
+| `latitude` | `number` | Vĩ độ trạm |
+| `longitude` | `number` | Kinh độ trạm |
+| `stopOrder` | `number` | Thứ tự trạm trên tuyến, tính từ **1** và liên tục |
+| `distanceKm` | `number` | Khoảng cách từ trạm liền trước tới trạm này (km), tối đa 2 chữ số thập phân. Trạm đầu tiên = 0 |
+
+```json
+// Ví dụ RouteStop
+{
+  "id": "b7e4c9a1-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "stopId": "9d2f5c33-0000-0000-0000-000000000000",
+  "stopName": "Trạm Cầu Giấy",
+  "stopAddress": "Số 1 Cầu Giấy, Hà Nội",
+  "latitude": 21.0307,
+  "longitude": 105.8034,
+  "stopOrder": 2,
+  "distanceKm": 1.8
+}
+```
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes/{routeId}/stops` | Danh sách trạm của tuyến, xếp theo `stopOrder` | — | `RouteStop[]` |
+| POST | `/routes/{routeId}/stops` | Gán một trạm vào tuyến, nối vào **cuối** | `{ stopId, distanceKm? }` | `RouteStop` (201) |
+| PUT | `/routes/{routeId}/stops/order` | Sắp xếp lại thứ tự **toàn bộ** trạm của tuyến | `{ items: [{ stopId, distanceKm }] }` | `RouteStop[]` |
+| DELETE | `/routes/{routeId}/stops/{id}` | Gỡ một trạm khỏi tuyến | — | 204 No Content |
+
+#### `GET /routes/{routeId}/stops`
+
+- Thứ tự: `stopOrder` tăng dần; hai dòng cùng `stopOrder` (xem ghi chú bên dưới) xếp tiếp theo
+  `id` để thứ tự hiển thị luôn ổn định.
+- Tuyến chưa gán trạm nào → mảng rỗng, **không** phải 404.
+- Tuyến không tồn tại → **404**.
+
+#### `POST /routes/{routeId}/stops`
+
+```json
+{ "stopId": "9d2f5c33-0000-0000-0000-000000000000", "distanceKm": 1.8 }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `stopId` | ✅ | GUID của trạm có thật |
+| `distanceKm` | — | Từ 0 đến `9999.99` — trần của cột numeric(6,2). Bỏ trống = 0 |
+
+Trạm mới luôn nối vào **cuối** tuyến. Muốn chèn vào giữa thì gán xong rồi gọi
+`PUT /routes/{routeId}/stops/order` — hai thao tác đều đã có endpoint riêng, không cần thêm tham
+số vị trí cho POST.
+
+Trả **201** kèm `RouteStop` vừa tạo. Header `Location` trỏ về chính danh sách trạm của tuyến
+(`/api/routes/{routeId}/stops`) — không có endpoint xem riêng một dòng, và cũng không mở thêm chỉ
+để có chỗ cho `Location`.
+
+Lỗi thường gặp: tuyến không tồn tại → **404** · trạm không tồn tại → **404** · trạm đã nằm trên
+tuyến này → **409** · `distanceKm` âm hoặc vượt trần → **400** `errors.distanceKm`.
+
+> **Vì sao trùng trạm trả 409 mà không phải 400?** Trạm được chọn từ danh sách có sẵn chứ không gõ
+> tay, và đây là xung đột với dữ liệu đang có — cùng loại với trùng giá vé ở mục trên.
+
+#### `PUT /routes/{routeId}/stops/order`
+
+Thay thế **toàn phần**: gửi lên đủ và đúng danh sách trạm hiện có của tuyến, theo thứ tự mới.
+`stopOrder` **không** nhận từ client — server suy ra từ vị trí trong mảng (phần tử đầu = 1), nhờ
+vậy không thể tồn tại hai trạm cùng thứ tự do client gửi lên.
+
+```json
+{
+  "items": [
+    { "stopId": "…c1", "distanceKm": 0 },
+    { "stopId": "…a2", "distanceKm": 1.8 },
+    { "stopId": "…f3", "distanceKm": 2.5 }
+  ]
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `items` | ✅ | Ít nhất 1 phần tử |
+| `items[].stopId` | ✅ | Tập `stopId` gửi lên phải **đúng bằng** tập trạm hiện có của tuyến — thiếu hay thừa đều bị chặn |
+| `items[].distanceKm` | — | Như POST, nhưng bỏ trống = **giữ nguyên** giá trị đang có (không phải gán 0) |
+
+Lỗi: tuyến không tồn tại → **404** · mảng rỗng · trùng `stopId` trong mảng · tập `stopId` không
+khớp tập trạm hiện có → **400** `errors.items`.
+
+> **Vì sao chặn khi thiếu/thừa trạm?** Đây là lưới an toàn cho thao tác kéo-thả: màn hình gửi thiếu
+> một dòng mà server cứ ghi đè thì trạm đó bị gỡ khỏi tuyến mà không ai chủ ý. Muốn gỡ trạm thì
+> gọi `DELETE` — một thao tác nói rõ ý định.
+
+> **Vì sao bỏ trống `distanceKm` là giữ nguyên?** Đây là thao tác "sắp xếp lại thứ tự", không phải
+> "viết lại khoảng cách". Nếu bỏ trống mà hiểu là 0 thì một lần kéo-thả sẽ xoá sạch khoảng cách
+> quản lý đã nhập — cùng lối `status` bỏ trống ở `PUT /routes/{id}` là giữ nguyên trạng thái.
+> Muốn đặt lại về 0 thì gửi thẳng `"distanceKm": 0`.
+
+Trả về danh sách trạm **sau khi** sắp xếp, cùng hình dạng với `GET`.
+
+#### `DELETE /routes/{routeId}/stops/{id}`
+
+Gỡ trạm khỏi tuyến rồi **dồn số** các trạm còn lại thành 1..N liên tục, nên `stopOrder` không bao
+giờ có lỗ hổng. Trả **204 No Content**.
+
+⚠️ **`{id}` là `id` của DÒNG `RouteStop`, KHÔNG phải `stopId`.** Mỗi dòng có hai GUID: `id` (khoá
+của dòng bảng nối) và `stopId` (khoá của trạm). Endpoint này nhận **`id`** — đúng giá trị `id` mà
+`GET`/`POST`/`PUT` trả về cho từng dòng, nên màn hình kéo-thả gửi thẳng `item.id` là xong. Gửi
+`stopId` vào đây sẽ ra **404**.
+
+> **Vì sao không nhận thẳng `stopId` cho tiện?** Vì `{id}` phải là khoá của chính bản ghi bị tác
+> động, và `AuditLogMiddleware` dựa vào đúng tên tham số `id` để ghi `Target` của nhật ký hoạt động
+> (`Services/AuditLogMiddleware.cs`, hàm `ResolveTableName`) — đặt tên khác thì dòng nhật ký mất hẳn
+> id đối tượng, còn lại mỗi chữ "Stops" không nói được đã gỡ trạm nào. Cùng lối
+> `DELETE /routes/{routeId}/fares/{id}`, nơi `{id}` là khoá của dòng giá.
+
+`stopOrder` và `distanceKm` là thuộc tính của dòng bảng nối, còn tên, địa chỉ, toạ độ trạm là của
+`Stop`: muốn sửa trạm thì gọi `PUT /stops/{id}` của `StopsController`, không sửa qua đường dẫn này.
+
+Tuyến không tồn tại → **404** · trạm không nằm trên tuyến này → **404** (không phải 204 — gỡ một
+thứ không có sẵn không phải là thành công).
+
+#### `routeId` phải khớp
+
+Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó không. Trạm của tuyến khác → **404**.
+
+> ⚠️ **Vì sao `stopOrder` không có ràng buộc unique ở CSDL?** Hai request `POST` chạy song song có
+> thể cùng đọc "tuyến đang có N trạm" rồi cùng ghi `N + 1`. CSDL không chặn được vì `RouteStops`
+> chỉ unique trên `(RouteId, StopId)`, không unique trên `(RouteId, StopOrder)`. Hệ quả duy nhất
+> là hai trạm cùng thứ tự; `GET` xếp tiếp theo `id` nên thứ tự hiển thị vẫn ổn định, và gọi
+> `PUT /stops/order` một lần là về đúng thứ tự. Thêm unique index cần migration — việc của chủ CSDL.
