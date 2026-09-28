@@ -39,9 +39,16 @@ export interface RegisterPayload {
 export function decodeAccessToken(token: string): DecodedUser | null {
   try {
     const payload = token.split('.')[1];
-    const decoded = JSON.parse(
+
+    // `atob` trả về chuỗi NHỊ PHÂN — mỗi ký tự là một byte, không phải văn bản Unicode.
+    // Payload JWT là JSON mã hoá UTF-8, nên đưa thẳng chuỗi đó cho `JSON.parse` thì tên
+    // tiếng Việt bị đọc nhầm theo Latin-1: "Phùng Duy Hoàng" thành "PhÃ¹ng Duy HoÃ ng".
+    // Phải dựng lại mảng byte rồi giải mã UTF-8 bằng `TextDecoder`.
+    const bytes = Uint8Array.from(
       atob(payload.replace(/-/g, '+').replace(/_/g, '/')),
-    ) as Record<string, unknown>;
+      (char) => char.charCodeAt(0),
+    );
+    const decoded = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
 
     return {
       id: (decoded.sub as string) ?? null,
