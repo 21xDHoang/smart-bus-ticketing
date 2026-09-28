@@ -67,10 +67,14 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 // Phân quyền theo vai trò + trả 403 dạng JSON — cấu hình nằm ở Services/RbacMiddleware.cs
 builder.Services.AddRbacAuthorization();
 
-// Cho phép frontend React (localhost:5173) gọi API khi chạy local
-const string DevCors = "DevCors";
-builder.Services.AddCors(o => o.AddPolicy(DevCors, p => p
-    .WithOrigins("http://localhost:5173")
+// Cho phép frontend gọi API. Origin đọc từ cấu hình (Cors:Origins, nhiều origin cách
+// nhau bằng dấu phẩy): lúc chạy local là http://localhost:5173, khi deploy là domain
+// thật của frontend — đặt qua biến môi trường Cors__Origins, không phải sửa code.
+const string AppCors = "AppCors";
+var corsOrigins = (builder.Configuration["Cors:Origins"] ?? "http://localhost:5173")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+builder.Services.AddCors(o => o.AddPolicy(AppCors, p => p
+    .WithOrigins(corsOrigins)
     .AllowAnyHeader()
     .AllowAnyMethod()
     .AllowCredentials()));
@@ -80,8 +84,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.UseCors(DevCors);
 }
+
+// Đăng ký vô điều kiện. Trước đây lời gọi này nằm trong khối IsDevelopment() nên khi
+// chạy Production (Render) middleware CORS không được gắn vào pipeline, trình duyệt
+// chặn mọi lời gọi API dù API vẫn trả 200 khi gọi bằng curl.
+app.UseCors(AppCors);
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,0 +1,9 @@
+# Không đưa thư mục build của máy vào build context — vừa nặng vừa dễ gây lỗi
+# kiểu DLL cũ đè lên bản mới trong image.
+**/bin
+**/obj
+
+# File cấu hình thật chứa chuỗi kết nối và khoá JWT — tuyệt đối không vào image.
+# Trên Render các giá trị này truyền qua Environment Variables.
+**/appsettings.Development.json
+**/appsettings.Local.json
