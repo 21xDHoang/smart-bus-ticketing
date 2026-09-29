@@ -37,4 +37,7 @@ public class Route
 
     /// <summary>Bảng giá vé của tuyến — mỗi đối tượng ưu đãi một dòng.</summary>
     public ICollection<Fare> Fares { get; set; } = new List<Fare>();
+
+    /// <summary>Các chuyến xe đã sinh cho tuyến này (bảng Trips — Sprint 2).</summary>
+    public ICollection<Trip> Trips { get; set; } = new List<Trip>();
 }
