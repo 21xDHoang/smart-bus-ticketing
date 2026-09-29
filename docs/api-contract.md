@@ -638,6 +638,149 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 > là hai trạm cùng thứ tự; `GET` xếp tiếp theo `id` nên thứ tự hiển thị vẫn ổn định, và gọi
 > `PUT /stops/order` một lần là về đúng thứ tự. Thêm unique index cần migration — việc của chủ CSDL.
 
+## Chuyến xe — `/trips`
+
+> 🚧 Backend **đã có `GET /trips/{id}`** (`TripsController` — Vàng Thị Dăm, story 13). Ba task còn
+> lại của story 13 — *API CRUD lịch trình theo tuyến* (Hiếu), *BackgroundService sinh chuyến tự
+> động* (Kiên), *API tra cứu danh sách chuyến theo ngày* (Hoàng) — **chưa làm**, nên hiện chưa có
+> `GET /trips` (danh sách) và chưa có đường nào tạo ra một chuyến qua API. Xem cột "Assign" ở sheet
+> `Sprint 2` của `Product_Backlog_Smart_Bus.xlsx`.
+>
+> **Endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập nhưng không đủ
+> quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+### Vì sao chỉ có hai bảng, không có `Schedules` và không có `TripStops`
+
+Story 13 được phát biểu trong backlog là *"Migrate bảng Schedules, Trips, TripStops"*, nhưng quy ước
+**A8.3** chốt **không tách bảng `Schedules`** và **A9** chốt **không có bảng `TripStops`**. Hệ quả
+trực tiếp lên hợp đồng API:
+
+- **Không có `Schedules`.** Lịch trình định kỳ không lưu thành bảng mẫu. Quản lý chọn tuyến + giờ bắt
+  đầu + giờ kết thúc + tần suất (phút) → hệ thống sinh thẳng ra N dòng `Trips`. Nếu có bảng mẫu thì
+  mọi endpoint phải trả lời thêm một câu mà không story nào hỏi: *"sửa mẫu thì các chuyến đã sinh có
+  đổi theo không?"*.
+- **Không có `TripStops`.** Thứ tự trạm của một chuyến **không** lưu riêng: cùng một tuyến, mọi
+  chuyến đều dừng đúng dãy trạm của tuyến đó theo `RouteStop.stopOrder`. Vì vậy `stops` trong chi
+  tiết chuyến là **suy ra** từ `/routes/{routeId}/stops`, không phải một bảng riêng — và cũng vì thế
+  mà sửa thứ tự trạm của tuyến là mọi chuyến của tuyến đó đổi theo, không cần đồng bộ gì.
+
+### Entity `Trip`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `routeId` | `string` (GUID) | Tuyến mà chuyến này chạy |
+| `busId` | `string` (GUID) | Xe được gán cho chuyến |
+| `departureTime` | `string` (ISO 8601, UTC) | Giờ khởi hành |
+| `arrivalTime` | `string \| null` | Giờ dự kiến tới bến cuối. `null` khi chưa chốt được lúc sinh chuyến |
+| `status` | `string` | `Scheduled` = đã sinh, chưa tới giờ chạy · `Running` = đang chạy · `Completed` = chạy xong · `Cancelled` = huỷ (lưu dạng chuỗi — quy ước A3) |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
+| `updatedAt` | `string \| null` | `null` khi chưa sửa lần nào (đổi xe, huỷ chuyến) |
+
+Vị trí hiện tại của xe (`currentStopId`, `currentLat`, `currentLng`, `positionUpdatedAt`) **có** cột
+trên bảng `Trips` (quy ước A8.6) nhưng **không** nằm trong chi tiết chuyến — xem ghi chú ở mục
+endpoint bên dưới.
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/trips/{id}` | Chi tiết một chuyến: giờ chạy, xe, sức chứa, danh sách trạm dừng | — | `TripDetail` |
+
+#### `GET /trips/{id}`
+
+```json
+// TripDetail — ví dụ
+{
+  "id": "a1c7f0e2-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "routeCode": "01",
+  "routeName": "Bến xe Mỹ Đình — Bến xe Gia Lâm",
+  "origin": "Bến xe Mỹ Đình",
+  "destination": "Bến xe Gia Lâm",
+  "departureTime": "2026-10-01T01:00:00Z",
+  "arrivalTime": "2026-10-01T01:45:00Z",
+  "status": "Scheduled",
+  "busId": "7b3d9a44-0000-0000-0000-000000000000",
+  "licensePlate": "29B-123.45",
+  "busType": "Hyundai County 29 chỗ",
+  "capacity": 29,
+  "busStatus": "Active",
+  "stops": [
+    {
+      "stopId": "9d2f5c33-0000-0000-0000-000000000000",
+      "stopName": "Bến xe Mỹ Đình",
+      "stopAddress": "Số 20 Phạm Hùng, Nam Từ Liêm, Hà Nội",
+      "latitude": 21.0287,
+      "longitude": 105.7788,
+      "stopOrder": 1,
+      "distanceKm": 0
+    },
+    {
+      "stopId": "b7e4c9a1-0000-0000-0000-000000000000",
+      "stopName": "Cầu Giấy",
+      "stopAddress": "Số 1 Cầu Giấy, Hà Nội",
+      "latitude": 21.0307,
+      "longitude": 105.8034,
+      "stopOrder": 2,
+      "distanceKm": 4.2
+    }
+  ]
+}
+```
+
+`stops[]` — mỗi phần tử là một trạm của **tuyến**, đúng hình dạng `RouteStop` của mục
+"Trạm trên tuyến" **trừ `id` và `routeId`** (hai trường đó là của cả danh sách, đã có ở cấp ngoài
+cùng — lặp lại ở từng dòng chỉ làm response phình ra mà không thêm thông tin):
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `stopId` | `string` (GUID) | Khoá của trạm |
+| `stopName` | `string` | Tên trạm |
+| `stopAddress` | `string` | Địa chỉ trạm |
+| `latitude` | `number` | Vĩ độ trạm |
+| `longitude` | `number` | Kinh độ trạm |
+| `stopOrder` | `number` | Thứ tự trạm trên tuyến, tính từ **1** và liên tục |
+| `distanceKm` | `number` | Khoảng cách từ trạm liền trước tới trạm này (km). Trạm đầu tiên = 0 |
+
+- Thứ tự `stops`: `stopOrder` tăng dần, hai dòng cùng `stopOrder` (xem ghi chú ở mục "Trạm trên
+  tuyến") xếp tiếp theo `stopId` để thứ tự hiển thị luôn ổn định.
+- Tuyến của chuyến chưa gán trạm nào → `stops` là mảng rỗng, **không** phải 404.
+- Chuyến không tồn tại → **404**.
+- Chuyến có thật nhưng tuyến hoặc xe của nó đã bị xoá khỏi CSDL → **404** (dữ liệu mồ côi, không
+  phải chuyến để hiển thị). Đường đi thường không tới đây: cả hai khoá ngoại đều `Restrict` nên
+  không xoá cứng được tuyến/xe còn chuyến tham chiếu.
+
+> **Vì sao `stops[]` không trả `id` của dòng `RouteStop`?** Vì chuyến **không sở hữu** dòng đó —
+> sửa hay gỡ trạm là thao tác trên tuyến (`PUT`/`DELETE /routes/{routeId}/stops/{id}`), không phải
+> trên chuyến. Trả kèm `id` ở đây là mời người gọi gửi nó vào một endpoint khác mà ở đó nó chỉ có
+> nghĩa khi đi kèm đúng `routeId`; bỏ hẳn đi thì không ai ghép nhầm. Cần `id` của dòng thì gọi
+> `GET /routes/{routeId}/stops` — `routeId` đã có sẵn trong response này.
+
+> **Vì sao trả kèm `routeCode`/`routeName`/`origin`/`destination` và `licensePlate`/`busType`/
+> `capacity` mà không chỉ `routeId`/`busId`?** Cùng lối `RouteStop` trả kèm `stopName`/`stopAddress`:
+> màn hình chi tiết chuyến hiển thị được ngay mà không phải gọi thêm `/routes/{id}` rồi
+> `/buses/{id}` để tự ghép. Đây là dữ liệu chỉ để đọc — muốn sửa tuyến thì gọi `PUT /routes/{id}`,
+> muốn sửa xe thì gọi API CRUD xe của Hiếu (story 14, chưa làm).
+
+> **Vì sao có `busStatus` khi story chỉ hỏi "loại xe, sức chứa"?** Vì `Maintenance`/`Inactive` là
+> cách duy nhất để một xe rời khỏi đội (quy ước A4 cấm cột `IsDeleted`): chuyến vẫn `Scheduled` với
+> xe đã vào bảo dưỡng, và người điều hành nhìn chi tiết chuyến cần thấy đúng điều đó. Cột đã nằm
+> sẵn trên dòng `Bus` được đọc cho `busType`/`capacity`, nên không tốn thêm truy vấn nào.
+
+> **Vì sao KHÔNG trả vị trí hiện tại của xe (`currentLat`/`currentLng`/`currentStopId`)?** Vì story
+> 13 là *lập lịch trình*, còn vị trí là chuyện của nhóm story theo dõi thời gian thực (Sprint 3).
+> Hình dạng response cho vị trí — có kèm "cách trạm kế tiếp bao xa", có đẩy qua SignalR hay không —
+> chưa story nào chốt; đoán trước ở đây thì lúc story đó làm sẽ phải sửa lại hợp đồng này lần nữa,
+> mà sửa hợp đồng thì phải báo cả nhóm (⛔5).
+
+> **Vì sao KHÔNG trả `seatsRemaining` (số ghế còn trống)?** Cần bảng vé/đặt chỗ — chưa migrate. Đó là
+> task *"API trả về kết quả gồm giá vé, giờ chạy, số ghế còn trống"* của Hoàng (story 1, Sprint 2).
+
+> **Vì sao chưa có `GET /trips` (danh sách)?** Danh sách chuyến theo ngày + lọc theo tuyến là task
+> riêng của Hoàng trong cùng story 13, và nó phụ thuộc BackgroundService sinh chuyến của Kiên. Làm
+> trước ở đây là tự đặt hình dạng cho một endpoint không thuộc phần việc này.
+
 ## Nhật ký kiểm toán — `/audit-logs`
 
 > ✅ Backend đã đủ cả hai phần của story 23: **truy vấn danh sách** (`AuditLogsController` —
