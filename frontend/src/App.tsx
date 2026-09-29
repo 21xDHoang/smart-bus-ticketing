@@ -5,6 +5,7 @@ import AuthPage from './pages/AuthPage';
 import StopManagePage from './pages/StopManagePage';
 import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
+import RouteLookupPage from './pages/RouteLookupPage';
 import ProfilePage from './pages/ProfilePage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
@@ -55,6 +56,7 @@ function App() {
   // thay vì để người dùng bấm vào rồi nhận trang 403.
   const navItems = [
     { to: '/', label: 'Trang chủ', roles: [] as string[] },
+    { to: '/route-lookup', label: 'Tra cứu tuyến', roles: [] as string[] },
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
     { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
@@ -149,6 +151,9 @@ function App() {
                 {/* /profile là trang cá nhân — ai đã đăng nhập đều vào được, không cần
                     giới hạn vai trò như các màn hình quản trị phía dưới. */}
                 <Route path="/profile" element={<ProfilePage />} />
+                {/* /route-lookup là màn hình tra cứu tuyến (US 1) — mọi người đã đăng nhập
+                    đều dùng được, không giới hạn vai trò như các màn hình quản trị. */}
+                <Route path="/route-lookup" element={<RouteLookupPage />} />
                 {/* /stops là màn hình quản trị — chỉ Admin và Manager vào được
                     (docs/api-contract.md). Vai trò khác nhận trang 403. */}
                 <Route
