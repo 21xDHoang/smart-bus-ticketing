@@ -62,7 +62,10 @@ public class RouteTripsController : ControllerBase
         return result.Success ? Ok(result.Data) : Failure(result);
     }
 
-    /// <summary>Thêm một chuyến lẻ cho tuyến. Chuyến mới luôn ở trạng thái Scheduled.</summary>
+    /// <summary>
+    /// Thêm một chuyến lẻ cho tuyến. Chuyến mới luôn ở trạng thái Scheduled.
+    /// Trùng khung giờ (cùng tuyến hoặc cùng xe) → 409; vượt trần 200 chuyến/ngày → 400.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create(
         Guid routeId,
@@ -114,7 +117,8 @@ public class RouteTripsController : ControllerBase
     /// <summary>
     /// Sinh chuyến hàng loạt theo lịch trình định kỳ (quy ước A8.3):
     /// tuyến + xe + mốc bắt đầu + mốc kết thúc + tần suất (phút) → N dòng Trips.
-    /// Trả 200 kèm danh sách chuyến vừa sinh.
+    /// Trùng khung giờ với chuyến hiện có → 409, vượt trần 200 chuyến/ngày → 400;
+    /// thao tác nguyên tử — lỗi thì không tạo chuyến nào. Trả 200 kèm danh sách chuyến vừa sinh.
     /// </summary>
     [HttpPost("generate")]
     public async Task<IActionResult> Generate(

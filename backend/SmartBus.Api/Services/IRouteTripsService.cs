@@ -29,7 +29,11 @@ public interface IRouteTripsService
         Guid id,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Thêm một chuyến lẻ. Chuyến mới luôn ở trạng thái Scheduled.</summary>
+    /// <summary>
+    /// Thêm một chuyến lẻ. Chuyến mới luôn ở trạng thái Scheduled.
+    /// Kiểm tra trùng khung giờ (cùng tuyến hoặc cùng xe) và trần chuyến/ngày của tuyến —
+    /// xem mục "Hai kiểm tra khi tạo lịch trình" của docs/api-contract.md.
+    /// </summary>
     Task<ServiceResult<TripResponse>> CreateAsync(
         Guid routeId,
         CreateTripRequest request,
@@ -53,6 +57,9 @@ public interface IRouteTripsService
     /// Sinh chuyến hàng loạt (quy ước A8.3): chuyến đầu xuất phát đúng mốc bắt đầu, các chuyến
     /// sau cách đều tần suất (phút), chuyến cuối không vượt quá mốc kết thúc.
     /// Mỗi lần gọi tạo tối đa 500 chuyến — quá thì 400, thu hẹp khoảng hoặc tăng tần suất.
+    /// Kiểm tra trùng khung giờ (cùng tuyến hoặc cùng xe) và trần chuyến/ngày của tuyến cho
+    /// từng ngày bị lịch trình chạm tới. Thao tác là nguyên tử: một chuyến trùng thì không
+    /// chuyến nào được tạo.
     /// </summary>
     Task<ServiceResult<GenerateTripsResponse>> GenerateAsync(
         Guid routeId,
