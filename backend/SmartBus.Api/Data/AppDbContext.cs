@@ -20,6 +20,7 @@ public partial class AppDbContext : DbContext
         ConfigureRoute(modelBuilder);
         ConfigureTrip(modelBuilder);
         ConfigureAuditLog(modelBuilder);
+        ConfigureDiscountRequest(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -31,4 +32,6 @@ public partial class AppDbContext : DbContext
     partial void ConfigureTrip(ModelBuilder modelBuilder);
 
     partial void ConfigureAuditLog(ModelBuilder modelBuilder);
+
+    partial void ConfigureDiscountRequest(ModelBuilder modelBuilder);
 }

@@ -24,6 +24,23 @@ public class Trip
 
     public Bus? Bus { get; set; }
 
+    // ── Tài xế phụ trách chuyến (US 14 "Phân công điều xe").
+    //    Trỏ thẳng tới Users, KHÔNG có bảng Drivers riêng: quy ước A8.4 chốt đúng 4 vai trò
+    //    (Admin/Manager/Driver/Passenger) và tài xế chỉ là một vai trò của Users — "cần thêm
+    //    vai trò sau này = thêm 1 dòng bảng Roles, không phải sửa schema". A9 cũng không có
+    //    bảng Drivers lẫn TripAssignments, mà luật 2.4 cấm tự thêm bảng ngoài A9.
+    //    Cũng không có cột phụ xe: A8.4 ghi rõ "Không có Phụ xe", và US 15 nói "phụ xe/tài xế"
+    //    vẫn thoả với một người làm.
+
+    /// <summary>
+    /// Tài xế được phân công. Nullable vì chuyến do BackgroundService sinh hàng loạt (US 13)
+    /// ra đời TRƯỚC khi có ai điều xe — US 14 chính là nghiệp vụ gán tài xế vào chuyến sau đó.
+    /// Bắt buộc NOT NULL sẽ chặn luôn luồng sinh chuyến tự động.
+    /// </summary>
+    public Guid? DriverId { get; set; }
+
+    public User? Driver { get; set; }
+
     /// <summary>Giờ khởi hành thực tế của chuyến. timestamptz UTC — xem quy ước A3.</summary>
     public DateTime DepartureTime { get; set; }
 
