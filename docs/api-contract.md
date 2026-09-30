@@ -752,7 +752,8 @@ Tham số query (đều không bắt buộc):
 Chuyến mới luôn ở trạng thái `Scheduled` — muốn đổi trạng thái thì dùng PUT, cùng lối tuyến mới
 luôn `Active`. Lỗi thường gặp: tuyến không tồn tại → **404** · xe không tồn tại → **404** · xe
 không ở trạng thái khai thác → **409** · `arrivalTime` không sau `departureTime` → **400**
-`errors.arrivalTime`.
+`errors.arrivalTime` · trùng khung giờ → **409** · vượt trần chuyến/ngày → **400**
+`errors.departureTime` — hai kiểm tra sau xem mục "Hai kiểm tra khi tạo lịch trình" bên dưới.
 
 #### `PUT /routes/{routeId}/trips/{id}`
 
@@ -822,11 +823,38 @@ Trả **200** kèm danh sách chuyến **vừa sinh** (không gồm chuyến cũ
 
 - Một lần gọi sinh **tối đa 500 chuyến**. Vượt → **400** `errors.endTime` kèm gợi ý thu hẹp khoảng
   hoặc tăng tần suất. Lịch trình nhiều ngày thì tách thành nhiều lần gọi, mỗi lần một ngày.
-- ⚠️ Gọi generate **hai lần cùng tham số sẽ sinh trùng** hai lần — API không tự khử trùng, màn
-  hình lập lịch trình nên hiển thị xác nhận trước khi gọi lại trên cùng một dải giờ.
+- Thao tác là **nguyên tử**: một chuyến trong dải bị trùng khung giờ thì **không chuyến nào**
+  được tạo — không bao giờ sinh lịch trình dở dang.
 - Lỗi thường gặp: tuyến không tồn tại → **404** · xe không tồn tại → **404** · xe không Active →
   **409** · `endTime` không sau `startTime` → **400** `errors.endTime` · `frequencyMinutes` ngoài
-  khoảng 1..1440 → **400** `errors.frequencyMinutes`.
+  khoảng 1..1440 → **400** `errors.frequencyMinutes` · trùng khung giờ với chuyến hiện có →
+  **409** · vượt trần chuyến/ngày của tuyến → **400** `errors.endTime`.
+
+### Hai kiểm tra khi tạo lịch trình
+
+Áp dụng cho cả `POST /routes/{routeId}/trips` lẫn `POST /routes/{routeId}/trips/generate`
+(xem chi tiết lỗi ở từng endpoint phía trên):
+
+**1. Trùng khung giờ → 409.** Khung giờ của một chuyến là khoảng [giờ khởi hành, giờ đến];
+chuyến chưa có giờ đến thì coi là một mốc (chỉ chặn chuyến trùng đúng giờ khởi hành hoặc nằm
+lọt trong khung giờ của chuyến kia). Chuyến mới không được chồng khung giờ với chuyến đang
+hoạt động (`Scheduled`/`Running`) **cùng tuyến hoặc cùng xe** — một xe không thể chạy hai
+chuyến cùng lúc. Chuyến nối đuôi (chuyến này đến đúng giờ chuyến kia khởi hành) không tính
+là trùng. Chuyến đã `Cancelled` hoặc `Completed` không tính — chúng không chiếm chỗ trên
+thời gian biểu nữa.
+
+**2. Vượt sức chứa tuyến → 400.** Mỗi ngày (tính theo **UTC**, cùng lối bộ lọc của
+`/audit-logs`) một tuyến chỉ có tối đa **200 chuyến đang hoạt động** — `Scheduled` và
+`Running`, không tính `Cancelled`/`Completed`. Với generate, kiểm tra từng ngày bị lịch trình
+chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200 thì cả lần gọi bị chặn.
+
+> **Vì sao trùng khung giờ trả 409 mà vượt trần trả 400?** Trùng khung giờ là xung đột với dữ
+> liệu đang có — cùng loại trùng giá vé, trùng trạm (mục D2). Vượt trần là tham số của lịch
+> trình nằm ngoài giới hạn cho phép — cùng loại trần 500 chuyến/lần ở generate.
+
+> ⚠️ **`PUT /routes/{routeId}/trips/{id}` KHÔNG kiểm tra hai điều kiện này** — cố ý: task chỉ
+> phủ "khi tạo lịch trình". Sửa giờ một chuyến đã có vẫn lách được kiểm tra trùng; nếu nhóm
+> muốn chặn cả khi sửa thì bổ sung ở task sau (cùng một hàm kiểm tra, chỉ khác điểm gọi).
 
 #### `routeId` phải khớp
 

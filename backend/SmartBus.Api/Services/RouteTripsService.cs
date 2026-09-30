@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using SmartBus.Api.Data;
 using SmartBus.Api.Dtos.Trips;
@@ -24,6 +25,18 @@ public class RouteTripsService : IRouteTripsService
     private const string TooManyTripsMessage = "Khoảng thời gian quá dài, một lần sinh tối đa 500 chuyến. Thu hẹp khoảng hoặc tăng tần suất";
     private const string TripCompletedMessage = "Chuyến đã hoàn thành, không thể hủy";
     private const string StatusInvalidMessage = "Trạng thái không hợp lệ";
+    private const string TimeSlotConflictMessage = "Trùng khung giờ với chuyến khác cùng tuyến hoặc cùng xe";
+
+    /// <summary>
+    /// Trần "sức chứa tuyến" — task "Validate trùng khung giờ và vượt sức chứa tuyến khi tạo lịch
+    /// trình": mỗi ngày (tính theo UTC) một tuyến chỉ có tối đa 200 chuyến đang hoạt động.
+    ///
+    /// Chọn 200 vì một ngày khai thác thật theo tần suất thường (10–30 phút) chỉ sinh vài chục
+    /// tới hơn trăm chuyến; trần này chặn lịch trình "quá dày" gõ nhầm (ví dụ tần suất 1 phút
+    /// cả ngày) mà không cản lịch trình hợp lý nào. Chỉ tính chuyến Scheduled và Running:
+    /// chuyến đã huỷ hay đã chạy xong không chiếm chỗ của ngày đó.
+    /// </summary>
+    private const int MaxTripsPerRoutePerDay = 200;
 
     /// <summary>
     /// Trần số chuyến mỗi lần gọi generate. Chọn 500 vì một ngày chạy thật theo tần suất thường
@@ -156,6 +169,37 @@ public class RouteTripsService : IRouteTripsService
         if (arrivalUtc is { } arrival && arrival < departureUtc)
         {
             return InvalidField<TripResponse>("arrivalTime", ArrivalBeforeDepartureMessage);
+        }
+
+        // ── Kiểm tra "sức chứa tuyến": trần chuyến/ngày (UTC) của tuyến.
+        //    Tính trước "trùng khung giờ" vì đây là giới hạn theo ngày, không liên quan tới chuyến
+        //    cụ thể nào — báo trần trước, xung đột sau. ──
+        var day = departureUtc.Date;
+        var tripsOnDay = await ActiveTripsOfRouteOnDayAsync(routeId, day, cancellationToken);
+
+        if (tripsOnDay >= MaxTripsPerRoutePerDay)
+        {
+            return InvalidField<TripResponse>("departureTime", DayLimitMessage(day));
+        }
+
+        // ── Kiểm tra "trùng khung giờ": chuyến mới chồng khung giờ với chuyến đang hoạt động
+        //    cùng tuyến HOẶC cùng xe (một xe không thể chạy hai chuyến cùng lúc). ──
+        //    Khung giờ của một chuyến là [giờ khởi hành, giờ đến]; chưa có giờ đến thì coi là một
+        //    mốc (chỉ chặn chuyến trùng đúng giờ khởi hành hoặc nằm lọt trong khung giờ của chuyến
+        //    kia). Chuyến nối đuôi (đến đúng giờ chuyến kia khởi hành) không tính là trùng.
+        var effectiveEnd = arrivalUtc ?? departureUtc;
+        var conflicting = await _db.Trips.AsNoTracking()
+            .Where(t => (t.RouteId == routeId || t.BusId == bus.Id)
+                && (t.Status == TripStatus.Scheduled || t.Status == TripStatus.Running)
+                && (t.DepartureTime == departureUtc
+                    || (t.DepartureTime < effectiveEnd && (t.ArrivalTime ?? t.DepartureTime) > departureUtc)))
+            .OrderBy(t => t.DepartureTime)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (conflicting is not null)
+        {
+            return ServiceResult<TripResponse>.Conflict(
+                $"{TimeSlotConflictMessage} (chuyến hiện có khởi hành lúc {FormatUtc(conflicting.DepartureTime)})");
         }
 
         var trip = new Trip
@@ -302,16 +346,74 @@ public class RouteTripsService : IRouteTripsService
         }
 
         var startUtc = start.UtcDateTime;
-        var trips = new List<Trip>((int)count);
+        var endUtc = end.UtcDateTime;
+
+        // Dựng trước mảng giờ khởi hành: hai kiểm tra bên dưới đều duyệt mảng này, và khi có lỗi
+        // thì chưa có bản ghi nào được thêm — generate là nguyên tử, không bao giờ sinh dở dang.
+        var departures = new DateTime[(int)count];
 
         for (var k = 0L; k < count; k++)
+        {
+            departures[k] = startUtc.AddMinutes(k * request.FrequencyMinutes);
+        }
+
+        // ── Kiểm tra "sức chứa tuyến": mỗi ngày (UTC) bị lịch trình chạm tới, tổng chuyến đang
+        //    hoạt động (đã có + sắp sinh) không được vượt trần. ──
+        var firstDay = startUtc.Date;
+        var lastDay = endUtc.Date;
+        var existingDepartures = await _db.Trips.AsNoTracking()
+            .Where(t => t.RouteId == routeId
+                && (t.Status == TripStatus.Scheduled || t.Status == TripStatus.Running)
+                && t.DepartureTime >= firstDay && t.DepartureTime < lastDay.AddDays(1))
+            .Select(t => t.DepartureTime)
+            .ToListAsync(cancellationToken);
+
+        for (var day = firstDay; day <= lastDay; day = day.AddDays(1))
+        {
+            var existingOnDay = existingDepartures.Count(d => d >= day && d < day.AddDays(1));
+            var generatedOnDay = departures.Count(d => d >= day && d < day.AddDays(1));
+
+            if (existingOnDay + generatedOnDay > MaxTripsPerRoutePerDay)
+            {
+                return InvalidField<GenerateTripsResponse>("endTime", DayLimitMessage(day));
+            }
+        }
+
+        // ── Kiểm tra "trùng khung giờ": không chuyến nào trong dải lịch trình được chồng khung
+        //    giờ với chuyến đang hoạt động cùng tuyến HOẶC cùng xe.
+        //    Kéo các chuyến hiện có trong khoảng [start, end] cộng các chuyến bắt đầu trước
+        //    start nhưng khung giờ còn kéo dài vào dải — so tiếp trong bộ nhớ vì số chuyến đã
+        //    bị trần 200/ngày giới hạn sẵn. ──
+        var existingTrips = await _db.Trips.AsNoTracking()
+            .Where(t => (t.RouteId == routeId || t.BusId == bus.Id)
+                && (t.Status == TripStatus.Scheduled || t.Status == TripStatus.Running)
+                && t.DepartureTime <= endUtc
+                && (t.ArrivalTime ?? t.DepartureTime) > startUtc)
+            .ToListAsync(cancellationToken);
+
+        foreach (var departure in departures)
+        {
+            var collidesWith = existingTrips.FirstOrDefault(t =>
+                t.DepartureTime == departure
+                || (t.DepartureTime < departure && (t.ArrivalTime ?? t.DepartureTime) > departure));
+
+            if (collidesWith is not null)
+            {
+                return ServiceResult<GenerateTripsResponse>.Conflict(
+                    $"Chuyến sinh lúc {FormatUtc(departure)} trùng khung giờ với chuyến hiện có cùng tuyến hoặc cùng xe");
+            }
+        }
+
+        var trips = new List<Trip>(departures.Length);
+
+        foreach (var departure in departures)
         {
             trips.Add(new Trip
             {
                 RouteId = routeId,
                 BusId = bus.Id,
                 Bus = bus,
-                DepartureTime = startUtc.AddMinutes(k * request.FrequencyMinutes),
+                DepartureTime = departure,
             });
         }
 
@@ -327,6 +429,21 @@ public class RouteTripsService : IRouteTripsService
 
     private Task<bool> RouteExistsAsync(Guid routeId, CancellationToken cancellationToken)
         => _db.Routes.AnyAsync(r => r.Id == routeId, cancellationToken);
+
+    /// <summary>Số chuyến đang hoạt động của tuyến trong một ngày (UTC), tính trọn ngày.</summary>
+    private Task<int> ActiveTripsOfRouteOnDayAsync(Guid routeId, DateTime day, CancellationToken cancellationToken)
+        => _db.Trips.AsNoTracking()
+            .CountAsync(t => t.RouteId == routeId
+                && (t.Status == TripStatus.Scheduled || t.Status == TripStatus.Running)
+                && t.DepartureTime >= day && t.DepartureTime < day.AddDays(1),
+                cancellationToken);
+
+    private static string DayLimitMessage(DateTime day)
+        => $"Tuyến đã đạt trần {MaxTripsPerRoutePerDay} chuyến trong ngày {day:yyyy-MM-dd} (UTC)";
+
+    /// <summary>Giờ hiển thị trong thông báo lỗi — UTC, ghi rõ để không ai nhầm với giờ Việt Nam.</summary>
+    private static string FormatUtc(DateTime time)
+        => time.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Hai nhánh "xe không tồn tại" và "xe không Active" khác nhau ở mã lỗi (404 so với 409) —
