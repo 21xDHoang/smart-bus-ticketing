@@ -638,6 +638,129 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 > là hai trạm cùng thứ tự; `GET` xếp tiếp theo `id` nên thứ tự hiển thị vẫn ổn định, và gọi
 > `PUT /stops/order` một lần là về đúng thứ tự. Thêm unique index cần migration — việc của chủ CSDL.
 
+## Xe buýt — `/buses`
+
+> ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi
+> API này — màn hình quản lý đội xe sẽ dựng theo khuôn `frontend/src/api/fareApi.ts`.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
+> nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+### Entity `Bus`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `licensePlate` | `string` | Biển số xe — "29B-123.45". Duy nhất toàn hệ thống (khoá nghiệp vụ) |
+| `busType` | `string` | Loại xe — "Xe buýt 45 chỗ", "Xe buýt điện" |
+| `capacity` | `number` | Sức chứa theo số ghế |
+| `status` | `string` | `Active` = đang khai thác · `Maintenance` = bảo dưỡng · `Inactive` = ngừng khai thác (lưu dạng chuỗi — quy ước A3) |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
+| `updatedAt` | `string \| null` | `null` khi xe chưa được sửa lần nào |
+
+```json
+// Ví dụ Bus
+{
+  "id": "1c9a4f05-0000-0000-0000-000000000000",
+  "licensePlate": "29B-123.45",
+  "busType": "Xe buýt 45 chỗ",
+  "capacity": 45,
+  "status": "Active",
+  "createdAt": "2026-09-29T08:00:00Z",
+  "updatedAt": null
+}
+```
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/buses` | Danh sách + tìm kiếm + lọc trạng thái + phân trang | — | `BusListResponse` |
+| GET | `/buses/{id}` | Chi tiết một xe | — | `Bus` |
+| POST | `/buses` | Thêm xe | `CreateBus` | `Bus` (201) |
+| PUT | `/buses/{id}` | Sửa xe | `UpdateBus` | `Bus` |
+| DELETE | `/buses/{id}` | **Xoá mềm** — ngừng khai thác | — | `Bus` |
+
+#### `GET /buses`
+
+Tham số query (đều không bắt buộc):
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `search` | `string` | — | Tìm theo biển số hoặc loại xe — **không phân biệt hoa thường** |
+| `status` | `string` | — | Lọc theo trạng thái: `Active`, `Maintenance` hoặc `Inactive`. Bỏ trống = lấy cả ba |
+| `page` | `number` | `1` | Trang, tính từ 1 |
+| `pageSize` | `number` | `10` | Số dòng mỗi trang, tối đa **100** |
+
+```json
+// BusListResponse — ví dụ GET /buses?page=1&pageSize=10&status=Active
+{
+  "items": [ /* Bus[] của trang hiện tại */ ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+- `total` là tổng số xe khớp bộ lọc (không phải số dòng trong `items`) — dùng để vẽ phân trang.
+- Thứ tự sắp xếp: `createdAt` giảm dần, xe tạo cùng lúc xếp theo `id` để phân trang ổn định.
+- `page` hoặc `pageSize` ngoài khoảng hợp lệ → **400**.
+- `status` không khớp ba mã trên → danh sách rỗng (không báo lỗi — cùng lối bộ lọc `status`
+  của `/routes`).
+
+#### `POST /buses`
+
+```json
+// CreateBus — body
+{
+  "licensePlate": "29B-123.45",
+  "busType": "Xe buýt 45 chỗ",
+  "capacity": 45
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `licensePlate` | ✅ | 2–20 ký tự, duy nhất toàn hệ thống |
+| `busType` | ✅ | 2–50 ký tự |
+| `capacity` | ✅ | Số nguyên từ 1 đến 200 — trần quy ước của API cho mọi cỡ xe buýt thành phố |
+
+Lỗi thường gặp: trùng biển số → **400** `errors.licensePlate` · `capacity` ngoài khoảng →
+**400** `errors.capacity`.
+
+> **Vì sao trùng biển số trả 400 mà không phải 409?** Biển số là khoá nghiệp vụ do quản lý
+> nhập tay vào ô form — cùng lý do trùng mã tuyến trả 400: frontend gắn thẳng lỗi vào ô input.
+> Ràng buộc unique ở CSDL là lớp chặn cuối cho hai request song song cùng biển số.
+
+Xe mới luôn bắt đầu ở `Active`. Dàn ghế (`Seats`) không do API này quản lý — `capacity` phải
+khớp với số dòng `Seat` của xe, và API tạo dàn ghế sẽ đến ở sprint làm story 2 (chọn vị trí ghế).
+
+#### `PUT /buses/{id}`
+
+Body gồm đủ 3 trường của `CreateBus` **cộng thêm `status`**:
+
+```json
+{ "licensePlate": "29B-123.45", "busType": "Xe buýt 45 chỗ", "capacity": 45, "status": "Maintenance" }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `licensePlate`, `busType`, `capacity` | ✅ | Như POST |
+| `status` | — | `Active`, `Maintenance` hoặc `Inactive`. Bỏ trống = giữ nguyên trạng thái hiện tại |
+
+- `status` ngoài ba mã trên → **400** `errors.status`.
+- `Maintenance` dùng khi xe đi bảo dưỡng — xe không được gán vào chuyến mới cho tới khi PUT
+  trở về `Active` (điều kiện `busId` của `POST /routes/{routeId}/trips` kiểm tra trạng thái `Active`).
+
+#### `DELETE /buses/{id}` — xoá mềm
+
+Chuyển xe về `Inactive`, **không xoá dữ liệu** khỏi CSDL — còn chuyến cũ tham chiếu tới xe
+(khoá ngoại đặt `Restrict` theo quy ước A5 nên xoá cứng cũng bị CSDL chặn), và quy ước A4 cấm
+thêm cột `IsDeleted`, nên dùng đúng cột trạng thái sẵn có.
+
+Trả **200** kèm `Bus` đã ngừng khai thác. Xe đã `Inactive` gọi lại → **200** không báo lỗi
+(idempotent — cùng lối `DELETE /routes/{id}`).
+
 ## Lịch trình chạy xe — `/routes/{routeId}/trips`
 
 > ✅ Backend đã có (`TripsController` — Trần Trung Hiếu, story 13). Frontend chưa có module gọi
