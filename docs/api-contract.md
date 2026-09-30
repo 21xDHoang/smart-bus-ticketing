@@ -638,6 +638,236 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 > là hai trạm cùng thứ tự; `GET` xếp tiếp theo `id` nên thứ tự hiển thị vẫn ổn định, và gọi
 > `PUT /stops/order` một lần là về đúng thứ tự. Thêm unique index cần migration — việc của chủ CSDL.
 
+## Lịch trình chạy xe — `/routes/{routeId}/trips`
+
+> ✅ Backend đã có (`TripsController` — Trần Trung Hiếu, story 13). Frontend chưa có module gọi
+> API này — màn hình lập lịch trình sẽ dựng theo khuôn `frontend/src/api/fareApi.ts`.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
+> nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Lịch trình theo tuyến **không** tách thành bảng mẫu `Schedule` (quy ước A8.3): mỗi chuyến là một
+dòng bảng `Trips`, còn lịch trình định kỳ được lập bằng API **sinh chuyến hàng loạt** — quản lý
+chọn tuyến + xe + mốc bắt đầu (**ngày áp dụng** + giờ khởi hành đầu tiên) + mốc kết thúc +
+**tần suất** (phút) → hệ thống sinh N dòng `Trips` cách đều tần suất. Sửa một chuyến lẻ thì dùng
+các endpoint CRUD phía dưới.
+
+### Entity `Trip`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `routeId` | `string` (GUID) | Tuyến của chuyến |
+| `busId` | `string` (GUID) | Xe chạy chuyến này |
+| `busLicensePlate` | `string` | Biển số xe — kèm sẵn để màn hình lập lịch trình hiển thị mà không phải gọi thêm API xe |
+| `departureTime` | `string` (ISO 8601, UTC) | Giờ khởi hành thực tế của chuyến |
+| `arrivalTime` | `string \| null` (ISO 8601, UTC) | Giờ dự kiến tới bến cuối. `null` khi chưa chốt |
+| `status` | `string` | `Scheduled` = đã sinh, chưa chạy · `Running` = đang chạy · `Completed` = đã chạy xong · `Cancelled` = đã huỷ |
+| `currentStopId` | `string \| null` | Trạm gần nhất xe vừa đi qua — chỉ có nghĩa khi xe đang chạy (quy ước A8.6) |
+| `currentLat` / `currentLng` | `number \| null` | Vị trí hiện tại của xe |
+| `positionUpdatedAt` | `string \| null` | Lần cuối vị trí được cập nhật |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
+| `updatedAt` | `string \| null` | `null` khi chưa sửa lần nào |
+
+```json
+// Ví dụ Trip
+{
+  "id": "6b3e8d12-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "busId": "1c9a4f05-0000-0000-0000-000000000000",
+  "busLicensePlate": "29B-123.45",
+  "departureTime": "2026-10-01T05:00:00Z",
+  "arrivalTime": "2026-10-01T06:30:00Z",
+  "status": "Scheduled",
+  "currentStopId": null,
+  "currentLat": null,
+  "currentLng": null,
+  "positionUpdatedAt": null,
+  "createdAt": "2026-09-30T03:15:00Z",
+  "updatedAt": null
+}
+```
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes/{routeId}/trips` | Danh sách chuyến của tuyến — lọc theo khoảng giờ khởi hành + trạng thái + phân trang | — | `TripListResponse` |
+| GET | `/routes/{routeId}/trips/{id}` | Chi tiết một chuyến | — | `Trip` |
+| POST | `/routes/{routeId}/trips` | Thêm một chuyến lẻ | `CreateTrip` | `Trip` (201) |
+| PUT | `/routes/{routeId}/trips/{id}` | Sửa xe / giờ chạy / trạng thái | `UpdateTrip` | `Trip` |
+| DELETE | `/routes/{routeId}/trips/{id}` | **Huỷ chuyến** — chuyển về `Cancelled` | — | `Trip` |
+| POST | `/routes/{routeId}/trips/generate` | **Sinh chuyến hàng loạt** theo tần suất (quy ước A8.3) | `GenerateTrips` | `GenerateTripsResponse` |
+
+#### `GET /routes/{routeId}/trips`
+
+Tham số query (đều không bắt buộc):
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `from` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **từ** thời điểm này, tính luôn mốc |
+| `to` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **tới** thời điểm này, tính luôn mốc |
+| `status` | `string` | — | Lọc theo trạng thái: `Scheduled` / `Running` / `Completed` / `Cancelled`. Bỏ trống = lấy cả bốn |
+| `page` | `number` | `1` | Trang, tính từ 1 |
+| `pageSize` | `number` | `10` | Số dòng mỗi trang, tối đa **100** |
+
+```json
+// TripListResponse — ví dụ GET /routes/{routeId}/trips?page=1&pageSize=10
+{
+  "items": [ /* Trip[] của trang hiện tại */ ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+- `total` là tổng số dòng khớp bộ lọc (không phải số dòng trong `items`) — dùng để vẽ phân trang.
+- Thứ tự sắp xếp: `departureTime` **tăng dần** — màn hình lập lịch trình đọc như một cuốn thời
+  gian biểu, khác các màn hình danh sách quản trị xếp theo `createdAt` giảm dần. Hai chuyến trùng
+  giờ khởi hành xếp tiếp theo `id` để phân trang ổn định.
+- Tuyến chưa có chuyến nào → mảng rỗng, **không** phải 404.
+- Tuyến không tồn tại → **404**.
+- `to` sớm hơn `from` → **400** `errors.to`.
+- `status` không khớp mã nào → danh sách rỗng (không báo lỗi — cùng lối bộ lọc `status` của
+  `/routes`).
+- `page` hoặc `pageSize` ngoài khoảng hợp lệ → **400**.
+
+#### `POST /routes/{routeId}/trips`
+
+```json
+// CreateTrip — body
+{
+  "busId": "1c9a4f05-0000-0000-0000-000000000000",
+  "departureTime": "2026-10-01T12:00:00+07:00",
+  "arrivalTime": "2026-10-01T13:30:00+07:00"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busId` | ✅ | GUID của xe có thật và đang ở trạng thái `Active` |
+| `departureTime` | ✅ | ISO 8601 **có kèm múi giờ** (ví dụ `+07:00` hoặc `Z`) — server quy về UTC khi lưu |
+| `arrivalTime` | — | Phải sau `departureTime` |
+
+Chuyến mới luôn ở trạng thái `Scheduled` — muốn đổi trạng thái thì dùng PUT, cùng lối tuyến mới
+luôn `Active`. Lỗi thường gặp: tuyến không tồn tại → **404** · xe không tồn tại → **404** · xe
+không ở trạng thái khai thác → **409** · `arrivalTime` không sau `departureTime` → **400**
+`errors.arrivalTime` · trùng khung giờ → **409** · vượt trần chuyến/ngày → **400**
+`errors.departureTime` — hai kiểm tra sau xem mục "Hai kiểm tra khi tạo lịch trình" bên dưới.
+
+#### `PUT /routes/{routeId}/trips/{id}`
+
+Body gồm đủ 2 trường bắt buộc của `CreateTrip` **cộng thêm `status`**:
+
+```json
+{
+  "busId": "1c9a4f05-0000-0000-0000-000000000000",
+  "departureTime": "2026-10-01T12:15:00+07:00",
+  "arrivalTime": "2026-10-01T13:45:00+07:00",
+  "status": "Scheduled"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busId`, `departureTime` | ✅ | Như POST |
+| `arrivalTime` | — | Như POST, nhưng **bỏ trống = bỏ hẳn** (gán null) — đây là PUT sửa toàn phần |
+| `status` | — | Một trong 4 mã ở bảng trên. Bỏ trống = giữ nguyên trạng thái hiện tại |
+
+- `status` ngoài 4 mã → **400** `errors.status`.
+- Đây cũng là cách **mở lại chuyến đã huỷ**: PUT với `status: "Scheduled"`.
+- Đổi xe thì xe mới phải đang `Active` → nếu không **409**. Giữ nguyên xe thì không kiểm tra lại:
+  xe chuyển sang bảo dưỡng sau khi sinh chuyến không chặn việc sửa giờ của chuyến đã tồn tại.
+
+#### `DELETE /routes/{routeId}/trips/{id}` — huỷ chuyến (xoá mềm)
+
+Chuyển chuyến về `Cancelled`, **không xoá dữ liệu** khỏi CSDL — vé đã bán vẫn tham chiếu tới, và
+quy ước A4 cấm thêm cột `IsDeleted` nên dùng đúng cột trạng thái sẵn có.
+
+- Trả **200** kèm `Trip` đã huỷ — giống `DELETE /routes/{id}` trả về tuyến đã ngừng khai thác.
+- Chuyến đã `Cancelled` gọi lại → **200** không báo lỗi (idempotent).
+- Chuyến đã `Completed` → **409** — huỷ chuyến đã chạy xong là viết lại lịch sử, chặn hẳn.
+
+#### `POST /routes/{routeId}/trips/generate` — sinh chuyến hàng loạt (quy ước A8.3)
+
+Đây chính là API "lập lịch trình": **ngày áp dụng** là phần ngày của `startTime`, **giờ khởi hành**
+là phần giờ của `startTime` và từng bước `frequencyMinutes`, **tần suất** là khoảng cách giữa hai
+chuyến liên tiếp tính bằng phút.
+
+```json
+// GenerateTrips — body
+{
+  "busId": "1c9a4f05-0000-0000-0000-000000000000",
+  "startTime": "2026-10-01T05:00:00+07:00",
+  "endTime": "2026-10-01T22:00:00+07:00",
+  "frequencyMinutes": 15
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busId` | ✅ | Như POST |
+| `startTime` | ✅ | Mốc bắt đầu — giờ khởi hành của chuyến đầu tiên |
+| `endTime` | ✅ | Mốc kết thúc — chuyến cuối được sinh **không vượt quá** mốc này. Phải sau `startTime` |
+| `frequencyMinutes` | ✅ | Số nguyên từ **1** đến **1440** |
+
+Chuyến đầu xuất phát đúng `startTime`, mỗi chuyến sau cách chuyến trước đúng `frequencyMinutes`
+phút. Ví dụ body trên sinh 69 chuyến: 05:00, 05:15, …, 22:00.
+
+Trả **200** kèm danh sách chuyến **vừa sinh** (không gồm chuyến cũ của tuyến):
+
+```json
+// GenerateTripsResponse
+{ "items": [ /* Trip[] vừa sinh */ ], "total": 69 }
+```
+
+- Một lần gọi sinh **tối đa 500 chuyến**. Vượt → **400** `errors.endTime` kèm gợi ý thu hẹp khoảng
+  hoặc tăng tần suất. Lịch trình nhiều ngày thì tách thành nhiều lần gọi, mỗi lần một ngày.
+- Thao tác là **nguyên tử**: một chuyến trong dải bị trùng khung giờ thì **không chuyến nào**
+  được tạo — không bao giờ sinh lịch trình dở dang.
+- Lỗi thường gặp: tuyến không tồn tại → **404** · xe không tồn tại → **404** · xe không Active →
+  **409** · `endTime` không sau `startTime` → **400** `errors.endTime` · `frequencyMinutes` ngoài
+  khoảng 1..1440 → **400** `errors.frequencyMinutes` · trùng khung giờ với chuyến hiện có →
+  **409** · vượt trần chuyến/ngày của tuyến → **400** `errors.endTime`.
+
+### Hai kiểm tra khi tạo lịch trình
+
+Áp dụng cho cả `POST /routes/{routeId}/trips` lẫn `POST /routes/{routeId}/trips/generate`
+(xem chi tiết lỗi ở từng endpoint phía trên):
+
+**1. Trùng khung giờ → 409.** Khung giờ của một chuyến là khoảng [giờ khởi hành, giờ đến];
+chuyến chưa có giờ đến thì coi là một mốc (chỉ chặn chuyến trùng đúng giờ khởi hành hoặc nằm
+lọt trong khung giờ của chuyến kia). Chuyến mới không được chồng khung giờ với chuyến đang
+hoạt động (`Scheduled`/`Running`) **cùng tuyến hoặc cùng xe** — một xe không thể chạy hai
+chuyến cùng lúc. Chuyến nối đuôi (chuyến này đến đúng giờ chuyến kia khởi hành) không tính
+là trùng. Chuyến đã `Cancelled` hoặc `Completed` không tính — chúng không chiếm chỗ trên
+thời gian biểu nữa.
+
+**2. Vượt sức chứa tuyến → 400.** Mỗi ngày (tính theo **UTC**, cùng lối bộ lọc của
+`/audit-logs`) một tuyến chỉ có tối đa **200 chuyến đang hoạt động** — `Scheduled` và
+`Running`, không tính `Cancelled`/`Completed`. Với generate, kiểm tra từng ngày bị lịch trình
+chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200 thì cả lần gọi bị chặn.
+
+> **Vì sao trùng khung giờ trả 409 mà vượt trần trả 400?** Trùng khung giờ là xung đột với dữ
+> liệu đang có — cùng loại trùng giá vé, trùng trạm (mục D2). Vượt trần là tham số của lịch
+> trình nằm ngoài giới hạn cho phép — cùng loại trần 500 chuyến/lần ở generate.
+
+> ⚠️ **`PUT /routes/{routeId}/trips/{id}` KHÔNG kiểm tra hai điều kiện này** — cố ý: task chỉ
+> phủ "khi tạo lịch trình". Sửa giờ một chuyến đã có vẫn lách được kiểm tra trùng; nếu nhóm
+> muốn chặn cả khi sửa thì bổ sung ở task sau (cùng một hàm kiểm tra, chỉ khác điểm gọi).
+
+#### `routeId` phải khớp
+
+`GET`/`PUT`/`DELETE` trên `/routes/{routeId}/trips/{id}` đều kiểm tra chuyến có **thuộc đúng**
+tuyến đó không. Chuyến của tuyến khác → **404**, không phải 200.
+
+#### Giờ gửi lên phải kèm múi giờ
+
+Mọi trường thời gian trong body (`departureTime`, `arrivalTime`, `startTime`, `endTime`) nhận
+ISO 8601 **có kèm múi giờ** — ví dụ `2026-10-01T05:00:00+07:00` hoặc `...Z`. Server quy về UTC khi
+lưu (cột `timestamptz` — quy ước A3) và mọi trường thời gian trả về đều là UTC. Chuỗi không kèm
+múi giờ bị hiểu là giờ máy chủ — frontend luôn gửi kèm offset để không phụ thuộc vào máy chủ.
+
 ## Nhật ký kiểm toán — `/audit-logs`
 
 > ✅ Backend đã đủ cả hai phần của story 23: **truy vấn danh sách** (`AuditLogsController` —
