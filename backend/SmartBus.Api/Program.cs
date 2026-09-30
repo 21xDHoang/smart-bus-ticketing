@@ -47,6 +47,10 @@ builder.Services.AddScoped<IRouteStopService, RouteStopService>();
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
 builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 
+// Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
+// Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+builder.Services.AddScoped<IBusService, BusService>();
+
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();

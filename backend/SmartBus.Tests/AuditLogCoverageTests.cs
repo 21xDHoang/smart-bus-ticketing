@@ -76,6 +76,12 @@ public class AuditLogCoverageTests
         ("DELETE", "/api/routes/{routeId:guid}/trips/{id:guid}", CachGhi.Middleware),
         ("POST",   "/api/routes/{routeId:guid}/trips/generate",  CachGhi.Middleware),
 
+        // Danh sách xe buýt — story 14, Trần Trung Hiếu. Ba endpoint đều do
+        // AuditLogMiddleware tự ghi (verb → hành động, tên bảng suy ra là "Buses").
+        ("POST",   "/api/buses",                                 CachGhi.Middleware),
+        ("PUT",    "/api/buses/{id:guid}",                       CachGhi.Middleware),
+        ("DELETE", "/api/buses/{id:guid}",                       CachGhi.Middleware),
+
         ("POST",   "/api/stops",                                 CachGhi.Middleware),
         ("PUT",    "/api/stops/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/stops/{id:guid}",                       CachGhi.Middleware),
