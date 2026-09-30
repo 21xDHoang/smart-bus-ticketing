@@ -7,6 +7,7 @@ import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
 import ProfilePage from './pages/ProfilePage';
+import TripListByDayPage from './pages/TripListByDayPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -60,6 +61,7 @@ function App() {
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
     { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
+    { to: '/trips-by-day', label: 'Chuyến theo ngày', roles: ['Admin', 'Manager'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
@@ -181,6 +183,16 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <RouteStopsPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /trips-by-day là màn hình danh sách chuyến theo ngày (US 13) — chỉ Admin
+                    và Manager vào được (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/trips-by-day"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <TripListByDayPage />
                     </RouteGuard>
                   }
                 />
