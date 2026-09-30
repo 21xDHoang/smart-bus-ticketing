@@ -10,8 +10,12 @@ namespace SmartBus.Api.Services;
 /// còn "ngày áp dụng + giờ khởi hành + tần suất" của lịch trình được nắm trọn trong
 /// <see cref="GenerateAsync"/> — tuyến + xe + mốc bắt đầu + mốc kết thúc + tần suất (phút)
 /// → sinh N dòng Trips cách đều tần suất.
+///
+/// Tên interface là <c>IRouteTripsService</c> chứ không phải <c>ITripService</c>: bề mặt API
+/// còn có chi tiết chuyến phẳng <c>GET /api/trips/{id}</c> (Vàng Thị Dăm) sống ở interface
+/// <c>ITripService</c> riêng — cùng khuôn với cặp <c>IStopService</c> / <c>IRouteStopService</c>.
 /// </summary>
-public interface ITripService
+public interface IRouteTripsService
 {
     /// <summary>Danh sách chuyến của tuyến, lọc theo khoảng giờ khởi hành/trạng thái và phân trang.</summary>
     Task<ServiceResult<TripListResponse>> ListAsync(

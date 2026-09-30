@@ -6,14 +6,14 @@ using SmartBus.Api.Entities;
 namespace SmartBus.Api.Services;
 
 /// <summary>
-/// Cài đặt <see cref="ITripService"/>. Story 13 "Lập lịch trình" — Trần Trung Hiếu.
+/// Cài đặt <see cref="IRouteTripsService"/>. Story 13 "Lập lịch trình" — Trần Trung Hiếu.
 ///
 /// Lịch trình định kỳ không tách bảng Schedule (quy ước A8.3): "ngày áp dụng + giờ khởi hành +
 /// tần suất" của lịch trình chính là ba tham số của <see cref="GenerateAsync"/> — mốc bắt đầu
 /// mang ngày áp dụng, mốc kết thúc chặn trên của dải giờ, tần suất là khoảng cách giữa hai
 /// chuyến liên tiếp tính bằng phút.
 /// </summary>
-public class TripService : ITripService
+public class RouteTripsService : IRouteTripsService
 {
     private const string RouteNotFoundMessage = "Không tìm thấy tuyến đường";
     private const string TripNotFoundMessage = "Không tìm thấy chuyến xe";
@@ -37,7 +37,7 @@ public class TripService : ITripService
 
     private readonly AppDbContext _db;
 
-    public TripService(AppDbContext db) => _db = db;
+    public RouteTripsService(AppDbContext db) => _db = db;
 
     public async Task<ServiceResult<TripListResponse>> ListAsync(
         Guid routeId,

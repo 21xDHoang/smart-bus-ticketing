@@ -10,6 +10,12 @@ namespace SmartBus.Api.Controllers;
 /// Lịch trình chạy xe theo tuyến — US 13 "Lập lịch trình", Trần Trung Hiếu.
 /// Hợp đồng đầy đủ ở mục "Lịch trình chạy xe — /routes/{routeId}/trips" của docs/api-contract.md.
 ///
+/// Tên lớp đặt là <c>RouteTripsController</c> chứ không phải <c>TripsController</c>: bề mặt API
+/// còn có <c>GET /api/trips/{id}</c> (chi tiết chuyến — Vàng Thị Dăm) đứng ở controller
+/// <c>TripsController</c> riêng. Cùng khuôn với cặp <c>StopsController</c> (CRUD trạm phẳng) và
+/// <c>RouteStopsController</c> (gán trạm lồng dưới tuyến) đã có từ Sprint 1 — hai controller
+/// khác tên, hai tầng đường dẫn khác nhau, không đụng nhau.
+///
 /// Lịch trình gắn chặt với tuyến nên đường dẫn lồng dưới tuyến
 /// (<c>/api/routes/{routeId}/trips</c>) thay vì <c>/api/trips?routeId=…</c> — cùng lối với
 /// <c>/api/routes/{routeId}/fares</c> và <c>/api/routes/{routeId}/stops</c> đã ghi ở mục D1.
@@ -24,11 +30,11 @@ namespace SmartBus.Api.Controllers;
 [ApiController]
 [Route("api/routes/{routeId:guid}/trips")]
 [Authorize(Policy = RbacPolicies.ManagerOrAbove)]
-public class TripsController : ControllerBase
+public class RouteTripsController : ControllerBase
 {
-    private readonly ITripService _tripService;
+    private readonly IRouteTripsService _tripService;
 
-    public TripsController(ITripService tripService) => _tripService = tripService;
+    public RouteTripsController(IRouteTripsService tripService) => _tripService = tripService;
 
     /// <summary>Danh sách chuyến của tuyến — lọc theo khoảng giờ khởi hành, trạng thái, phân trang.</summary>
     [HttpGet]

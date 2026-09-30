@@ -43,7 +43,9 @@ builder.Services.AddScoped<IRouteStopService, RouteStopService>();
 
 // Lịch trình chạy xe theo tuyến: CRUD /routes/{routeId}/trips + sinh chuyến hàng loạt theo tần suất.
 // Task story 13 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
-builder.Services.AddScoped<ITripService, TripService>();
+// Đặt tên RouteTrips để tránh đụng ITripService/TripService của API chi tiết chuyến /trips/{id}
+// (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
+builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
