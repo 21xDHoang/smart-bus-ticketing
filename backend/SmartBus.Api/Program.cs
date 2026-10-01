@@ -55,6 +55,11 @@ builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();
 
+// Hồ sơ tài xế: CRUD /drivers + ca làm việc /drivers/{id}/trips.
+// Tài xế là Users mang vai trò Driver (quy ước A8.4) — không có bảng Drivers riêng.
+// Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+builder.Services.AddScoped<IDriverService, DriverService>();
+
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
