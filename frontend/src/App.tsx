@@ -9,6 +9,7 @@ import RouteLookupPage from './pages/RouteLookupPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
+import TripAssignmentPage from './pages/TripAssignmentPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -64,6 +65,7 @@ function App() {
     { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
     { to: '/trips-by-day', label: 'Chuyến theo ngày', roles: ['Admin', 'Manager'] },
     { to: '/trip-schedule', label: 'Lịch trình', roles: ['Admin', 'Manager'] },
+    { to: '/trip-assignment', label: 'Phân công điều xe', roles: ['Admin', 'Manager'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
@@ -205,6 +207,16 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <TripSchedulePage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /trip-assignment là màn hình phân công điều xe theo chuyến (US 14) — chỉ Admin
+                    và Manager vào được (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/trip-assignment"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <TripAssignmentPage />
                     </RouteGuard>
                   }
                 />
