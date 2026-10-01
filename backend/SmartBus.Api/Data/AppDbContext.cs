@@ -21,6 +21,7 @@ public partial class AppDbContext : DbContext
         ConfigureTrip(modelBuilder);
         ConfigureAuditLog(modelBuilder);
         ConfigureDiscountRequest(modelBuilder);
+        ConfigureMonthlyPass(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -34,4 +35,6 @@ public partial class AppDbContext : DbContext
     partial void ConfigureAuditLog(ModelBuilder modelBuilder);
 
     partial void ConfigureDiscountRequest(ModelBuilder modelBuilder);
+
+    partial void ConfigureMonthlyPass(ModelBuilder modelBuilder);
 }
