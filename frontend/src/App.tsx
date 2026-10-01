@@ -6,6 +6,7 @@ import StopManagePage from './pages/StopManagePage';
 import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
+import TripSearchResultPage from './pages/TripSearchResultPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
@@ -160,6 +161,10 @@ function App() {
                 {/* /route-lookup là màn hình tra cứu tuyến (US 1) — mọi người đã đăng nhập
                     đều dùng được, không giới hạn vai trò như các màn hình quản trị. */}
                 <Route path="/route-lookup" element={<RouteLookupPage />} />
+                {/* /trip-results là màn hình kết quả tìm kiếm chuyến (US 1, Sprint 2) — danh
+                    sách chuyến + sắp xếp theo giờ/giá. Cũng dành cho mọi người đã đăng nhập,
+                    không giới hạn vai trò như các màn hình quản trị. */}
+                <Route path="/trip-results" element={<TripSearchResultPage />} />
                 {/* /stops là màn hình quản trị — chỉ Admin và Manager vào được
                     (docs/api-contract.md). Vai trò khác nhận trang 403. */}
                 <Route
