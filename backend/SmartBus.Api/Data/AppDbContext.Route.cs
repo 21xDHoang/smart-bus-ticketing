@@ -55,6 +55,41 @@ public partial class AppDbContext
             // RouteId là cột đầu của chỉ mục nên không cần thêm chỉ mục riêng cho nó.
             e.HasIndex(rs => new { rs.RouteId, rs.StopId }).IsUnique();
 
+            // ── Chỉ mục cho truy vấn "tìm tuyến theo điểm đi - điểm đến" (US 1) ──
+            //
+            // Câu hỏi cần trả lời: tuyến nào chứa CẢ trạm đi lẫn trạm đến, và trạm đi đứng
+            // TRƯỚC trạm đến trên tuyến. Dạng câu lệnh là self-join ngay trên bảng nối:
+            //
+            //   FROM "RouteStops" a
+            //   JOIN "RouteStops" b ON b."RouteId" = a."RouteId" AND b."StopId" = @to
+            //   JOIN "Routes"      r ON r."Id"      = a."RouteId"
+            //   WHERE a."StopId" = @from AND a."StopOrder" < b."StopOrder"
+            //
+            // Chỉ mục này BAO PHỦ nhánh tra theo trạm đi: Postgres đọc được cả RouteId lẫn
+            // StopOrder ngay trong chỉ mục, không phải nhảy về heap lấy từng dòng. Chỉ mục FK
+            // lẻ trên StopId mà EF tự sinh không làm được — nó chỉ có một cột.
+            //
+            // KHÔNG unique: một trạm nằm trên nhiều tuyến là bình thường; ràng buộc "một trạm
+            // không lặp trên CÙNG một tuyến" đã do chỉ mục (RouteId, StopId) ở trên lo.
+            //
+            // Khai báo chỉ mục này cũng làm EF thôi sinh chỉ mục FK riêng cho StopId (quy ước
+            // ForeignKeyIndexConvention: đã có chỉ mục lấy StopId làm tiền tố thì không sinh
+            // thêm) — migration đi kèm sẽ DROP IX_RouteStops_StopId. Cố ý: giữ lại thành chỉ
+            // mục thừa, vừa tốn chỗ vừa làm chậm mọi INSERT vào bảng nối.
+            e.HasIndex(rs => new { rs.StopId, rs.RouteId, rs.StopOrder });
+
+            // Chỉ mục cho "các trạm của tuyến, theo đúng thứ tự chạy" và cho MAX(StopOrder)
+            // của tuyến (RouteStopService.OrderedByRouteQuery và NextStopOrderAsync — chạy mỗi
+            // lần gán thêm một trạm). Chỉ mục (RouteId, StopId) lọc được theo RouteId nhưng
+            // không sắp được theo StopOrder nên vẫn phải sort; có chỉ mục này thì
+            // MAX(StopOrder) chỉ còn là một lần seek vào đầu chỉ mục.
+            //
+            // KHÔNG unique, dù đọc lên thấy "thứ tự trạm phải duy nhất": RouteStopService ghi
+            // rõ hai request POST chạy song song có thể cùng đọc max(StopOrder) rồi cùng ghi
+            // max+1, nên hai dòng cùng thứ tự LÀ chuyện có thật. Đặt unique ở đây sẽ biến cuộc
+            // đua đó thành DbUpdateException không ai bắt — tức lỗi 500 cho người dùng.
+            e.HasIndex(rs => new { rs.RouteId, rs.StopOrder });
+
             // Bảng nối thật sự thuộc cha — xoá tuyến thì các dòng RouteStops đi theo (A5).
             e.HasOne(rs => rs.Route)
              .WithMany(r => r.RouteStops)
