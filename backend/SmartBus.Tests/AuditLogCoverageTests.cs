@@ -82,6 +82,13 @@ public class AuditLogCoverageTests
         ("PUT",    "/api/buses/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/buses/{id:guid}",                       CachGhi.Middleware),
 
+        // Hồ sơ tài xế — story 14, Trần Trung Hiếu. Ba endpoint đều do AuditLogMiddleware
+        // tự ghi (verb → hành động). Tên bảng suy ra là "Drivers" dù bản ghi nằm ở bảng
+        // Users — đánh đổi đã biết, ghi chú ở docs/api-contract.md mục "Hồ sơ tài xế".
+        ("POST",   "/api/drivers",                               CachGhi.Middleware),
+        ("PUT",    "/api/drivers/{id:guid}",                     CachGhi.Middleware),
+        ("DELETE", "/api/drivers/{id:guid}",                     CachGhi.Middleware),
+
         ("POST",   "/api/stops",                                 CachGhi.Middleware),
         ("PUT",    "/api/stops/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/stops/{id:guid}",                       CachGhi.Middleware),
@@ -490,6 +497,65 @@ public class AuditLogCoverageTests
         Assert.False(await db.Stops.AnyAsync(item => item.Id == row.Id));
     }
 
+    // ---------------------------------------------------------------------------------- Drivers
+
+    [Fact]
+    public async Task Post_drivers_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+
+        var response = await client.PostAsJsonAsync(DriversUrl, new
+        {
+            fullName = "Tài Xế Mới",
+            phoneNumber = "0912345679",
+            password = MatKhau,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — tên bảng trong Target là "Drivers" dù bản ghi vừa tạo nằm ở bảng Users:
+        // AuditLogMiddleware suy tên từ route (api/drivers) chứ không đọc entity. Đã ghi chú
+        // ở docs/api-contract.md mục "Hồ sơ tài xế — /drivers".
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"Drivers:{await IdOfAsync(response)}", admin);
+    }
+
+    [Fact]
+    public async Task Put_drivers_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var target = await SeedUserAsync(factory, RoleIds.Driver, RoleCodes.Driver, phoneNumber: "0911111111");
+
+        var response = await client.PutAsJsonAsync($"{DriversUrl}/{target.Id}", new
+        {
+            fullName = "Tài Xế Đổi Tên",
+            phoneNumber = "0911111111",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — cùng ca như POST: tên bảng trong Target là "Drivers", bảng thật là Users.
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"Drivers:{target.Id}", admin);
+    }
+
+    [Fact]
+    public async Task Delete_drivers_ghi_Delete_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var target = await SeedUserAsync(factory, RoleIds.Driver, RoleCodes.Driver, phoneNumber: "0911111111");
+
+        // Xoá mềm: khóa tài khoản, dữ liệu vẫn còn. Không tự xoá được chính mình nên phải
+        // nhắm vào tài khoản khác.
+        var response = await client.DeleteAsync($"{DriversUrl}/{target.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — cùng ca như POST: tên bảng trong Target là "Drivers", bảng thật là Users.
+        await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"Drivers:{target.Id}", admin);
+    }
+
     // ------------------------------------------------------------------------------------ Auth
 
     [Fact]
@@ -880,6 +946,8 @@ public class AuditLogCoverageTests
     private const string StopsUrl = "/api/stops";
 
     private const string UsersUrl = "/api/admin/users";
+
+    private const string DriversUrl = "/api/drivers";
 
     private const string AuditLogsUrl = "/api/audit-logs";
 

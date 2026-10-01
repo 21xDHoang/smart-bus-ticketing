@@ -888,6 +888,209 @@ thêm cột `IsDeleted`, nên dùng đúng cột trạng thái sẵn có.
 Trả **200** kèm `Bus` đã ngừng khai thác. Xe đã `Inactive` gọi lại → **200** không báo lỗi
 (idempotent — cùng lối `DELETE /routes/{id}`).
 
+## Hồ sơ tài xế — `/drivers`
+
+> ✅ Backend đã có (`DriversController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi
+> API này — màn hình hồ sơ tài xế sẽ dựng theo khuôn `frontend/src/api/busApi.ts`.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
+> nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+### Tài xế là tài khoản `Users` mang vai trò `Driver` — không có bảng riêng
+
+Backlog ghi task migrate của story 14 là *"Migrate bảng Buses, Drivers, TripAssignments"*, nhưng
+quy ước **A8.4** chốt đúng **4 vai trò** (Admin, Manager, Driver, Passenger) và **A9** không có
+bảng `Drivers` lẫn `TripAssignments`. Hệ quả trực tiếp lên hợp đồng API:
+
+- **Không có bảng `Drivers`.** Tài xế là một `User` mang vai trò `Driver` — `Trips.DriverId`
+  trỏ thẳng vào `Users` (migration của Dăm, PR #52). API này là lớp CRUD hồ sơ chạy trên bảng
+  `Users`, luôn gắn vai trò `Driver`, không bao giờ chạm vai trò khác.
+- **Không có Phụ xe.** A8.4 ghi rõ *"Không có Phụ xe"* — US 15 nói "phụ xe/tài xế" vẫn thoả với
+  một người làm. Bảng `Trips` cũng không có cột phụ xe nên không có gì để quản lý ở đây.
+- ⚠️ **Bằng lái đang chờ migration của Dăm.** Task ghi *"hồ sơ tài xế + bằng lái"*, nhưng `Users`
+  chưa có cột nào để lưu thông tin bằng lái và chỉ Vàng Thị Dăm được chạy migration (quy ước A7).
+  Hợp đồng này tạm thời chưa có trường bằng lái — khi Dăm thêm cột (dự kiến `licenseNumber`,
+  `licenseType`, `licenseExpiry`) thì bổ sung vào `Driver` và hai body POST/PUT, không phá
+  endpoint hiện có.
+- ⚠️ **Nhật ký kiểm toán ghi `target` dạng `Drivers:<id>`** — `AuditLogMiddleware` suy tên bảng từ
+  route (`api/drivers/{id}` → "Drivers") chứ bảng thật là `Users`. Cố ý giữ nguyên: đọc nhật ký
+  thấy "Drivers" đúng nghiệp vụ hơn, và sửa middleware là sửa file của người khác.
+
+### Entity `Driver`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính — là `id` của dòng `Users` |
+| `fullName` | `string` | Họ và tên |
+| `phoneNumber` | `string` | SĐT đăng nhập, duy nhất toàn hệ thống |
+| `email` | `string \| null` | Không bắt buộc — tài xế vẫn đăng nhập được bằng SĐT |
+| `isActive` | `boolean` | `true` = còn hoạt động, `false` = đã bị khóa (xoá mềm) |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo hồ sơ |
+
+```json
+// Ví dụ Driver
+{
+  "id": "3f2a1b0c-0000-0000-0000-000000000000",
+  "fullName": "Nguyễn Văn An",
+  "phoneNumber": "0912345678",
+  "email": "an@gmail.com",
+  "isActive": true,
+  "createdAt": "2026-09-30T03:15:00Z"
+}
+```
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/drivers` | Danh sách tài xế + tìm kiếm + lọc trạng thái + phân trang | — | `DriverListResponse` |
+| GET | `/drivers/{id}` | Chi tiết hồ sơ một tài xế | — | `Driver` |
+| POST | `/drivers` | Tạo hồ sơ tài xế mới (tài khoản vai trò Driver) | `CreateDriver` | `Driver` (201) |
+| PUT | `/drivers/{id}` | Sửa hồ sơ | `UpdateDriver` | `Driver` |
+| DELETE | `/drivers/{id}` | **Xoá mềm** — khóa tài khoản | — | `Driver` |
+| GET | `/drivers/{id}/trips` | **Ca làm việc** — danh sách chuyến tài xế được phân công | — | `DriverTripListResponse` |
+
+#### `GET /drivers`
+
+Tham số query (đều không bắt buộc):
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `search` | `string` | — | Tìm theo họ tên, SĐT hoặc email — **không phân biệt hoa thường** |
+| `isActive` | `boolean` | — | `true` = còn hoạt động, `false` = đã khóa. Bỏ trống = lấy cả hai |
+| `page` | `number` | `1` | Trang, tính từ 1 |
+| `pageSize` | `number` | `10` | Số dòng mỗi trang, tối đa **100** |
+
+```json
+// DriverListResponse — ví dụ GET /drivers?page=1&pageSize=10
+{
+  "items": [ /* Driver[] của trang hiện tại */ ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+- Chỉ trả về tài khoản **mang vai trò Driver** — vai trò chính hoặc một vai trò trong bảng nối
+  `UserRoles` (tài khoản vừa Driver vừa Passenger vẫn là tài xế).
+- `total` là tổng số dòng khớp bộ lọc (không phải số dòng trong `items`) — dùng để vẽ phân trang.
+- Thứ tự sắp xếp: `createdAt` giảm dần, tạo cùng lúc xếp theo `id` để phân trang ổn định.
+- `page` hoặc `pageSize` ngoài khoảng hợp lệ → **400**.
+
+#### `POST /drivers`
+
+```json
+// CreateDriver — body
+{
+  "fullName": "Nguyễn Văn An",
+  "phoneNumber": "0912345678",
+  "email": "an@gmail.com",
+  "password": "matkhau123"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `fullName` | ✅ | 2–200 ký tự |
+| `phoneNumber` | ✅ | SĐT di động Việt Nam: 10 số, bắt đầu `0[35789]` |
+| `email` | — | Đúng định dạng, tối đa 256 ký tự |
+| `password` | ✅ | Ít nhất 8 ký tự, gồm **cả chữ và số** — giống hệt form đăng ký |
+
+Không có trường `roleCode` (khác `CreateAdminUser`): hồ sơ tạo từ đây **luôn** là tài xế — màn
+hình hồ sơ tài xế không cần biết mã vai trò, và gửi vai trò khác vào đây chỉ là lỗi chờ xảy ra.
+Muốn nâng một hành khách thành tài xế thì dùng `PUT /admin/users/{id}/roles` (việc của Admin).
+
+Lỗi thường gặp: trùng SĐT → **400** `errors.phoneNumber` · trùng email → **400** `errors.email`.
+
+> **Vì sao trùng SĐT trả 400 mà không phải 409?** Cùng lý do form đăng ký và `/admin/users`: SĐT
+> gõ tay vào ô form, frontend gắn thẳng lỗi vào ô input.
+
+#### `PUT /drivers/{id}`
+
+Body gồm `fullName`, `phoneNumber`, `email` — cùng ràng buộc như POST. **Không** đổi mật khẩu
+(nghiệp vụ riêng), **không** đổi trạng thái (khóa tài khoản có `DELETE` riêng).
+
+#### `DELETE /drivers/{id}` — xoá mềm
+
+Khóa tài khoản (`isActive = false`), **không xoá dữ liệu** khỏi CSDL — chuyến đã chạy vẫn tham
+chiếu tới tài xế qua `Trips.DriverId`, và quy ước A4 cấm thêm cột `IsDeleted`.
+
+- Trả **200** kèm `Driver` đã khóa — giống `DELETE /admin/users/{id}`.
+- Tài xế đã khóa gọi lại → **200** không báo lỗi (idempotent).
+- **Tự khóa tài khoản của chính mình → 409** `Không thể tự khóa tài khoản của chính mình` —
+  cùng chốt an toàn của `/admin/users`: `JwtMiddleware` đọc lại `IsActive` ở mọi request nên tự
+  khóa xong là không còn đường nào mở lại.
+
+#### `GET /drivers/{id}/trips` — ca làm việc
+
+Tham số query giống `GET /routes/{routeId}/trips` — cùng tên `from`, `to`, `status`, `page`,
+`pageSize` nên frontend không phải nói hai thứ tiếng:
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `from` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **từ** thời điểm này, tính luôn mốc |
+| `to` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **tới** thời điểm này, tính luôn mốc |
+| `status` | `string` | — | `Scheduled` / `Running` / `Completed` / `Cancelled`. Bỏ trống = lấy cả bốn |
+| `page` | `number` | `1` | Trang, tính từ 1 |
+| `pageSize` | `number` | `10` | Số dòng mỗi trang, tối đa **100** |
+
+```json
+// DriverTripListResponse — ví dụ GET /drivers/{id}/trips?page=1&pageSize=10
+{
+  "items": [
+    {
+      "id": "6b3e8d12-0000-0000-0000-000000000000",
+      "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+      "routeCode": "01",
+      "routeName": "Bến Thành — Chợ Lớn",
+      "busId": "1c9a4f05-0000-0000-0000-000000000000",
+      "busLicensePlate": "29B-123.45",
+      "departureTime": "2026-10-01T05:00:00Z",
+      "arrivalTime": "2026-10-01T06:30:00Z",
+      "status": "Scheduled",
+      "createdAt": "2026-09-30T03:15:00Z",
+      "updatedAt": null
+    }
+  ],
+  "total": 7,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+- `items[]` là các dòng `Trips` có `driverId` trỏ vào tài xế này, kèm sẵn `routeCode`/`routeName`
+  để màn hình hiển thị ca làm việc mà không phải gọi thêm API tuyến — cùng lối `RouteStop` kèm
+  sẵn tên trạm.
+- **Không** trả 4 trường vị trí (`currentStopId`, `currentLat`, `currentLng`,
+  `positionUpdatedAt`): vị trí là chuyện của nhóm story theo dõi thời gian thực (Sprint 3),
+  cùng lối `TripDetail`.
+- Thứ tự sắp xếp: `departureTime` **tăng dần** — màn hình đọc như thời gian biểu của tài xế,
+  trùng giờ xếp tiếp theo `id` để phân trang ổn định.
+- Tài xế chưa được phân công chuyến nào → `items: []`, `total: 0`, **không** phải 404.
+- `to` sớm hơn `from` → **400** `errors.to`.
+- `status` không khớp mã nào → danh sách rỗng (không báo lỗi — cùng lối bộ lọc của
+  `/routes/{routeId}/trips`).
+
+#### `{id}` phải là tài xế
+
+Mọi endpoint nhận `{id}` đều kiểm tra tài khoản tồn tại **và** mang vai trò Driver. Không tồn tại
+hoặc không phải tài xế → **404** `Không tìm thấy tài xế`.
+
+> **Vì sao không phải tài xế cũng trả 404?** Người gọi đang hỏi *"tài xế có id này"* — id không
+> phải tài xế thì tài xế đó không tồn tại. Trả 200 kèm hồ sơ một hành khách là rò rỉ thông tin
+> qua một endpoint không dành cho việc đó (quản lý cần xem hồ sơ hành khách thì đã có
+> `/admin/users`, chỉ dành cho Admin).
+
+### Vì sao có `/drivers` khi đã có `/admin/users`
+
+`/admin/users` là công cụ **quản trị toàn hệ thống**, chỉ Admin dùng, quản lý mọi vai trò kể cả
+đổi vai trò của chính mình. `/drivers` phục vụ nghiệp vụ **điều hành** của story 14 (*"Là quản lý,
+tôi muốn gán xe buýt và tài xế/phụ xe cho từng chuyến chạy cụ thể"*) nên Admin và **Manager** đều
+dùng được — cùng lối `/buses`. Nó chỉ nhìn thấy tài xế, không có endpoint nào đổi vai trò hay
+đổi mật khẩu, nên một Manager không thể vô tình hạ Admin thành Hành khách hay tạo ra một Admin
+mới. Đây cũng là chỗ treo danh sách ca làm việc (`GET /drivers/{id}/trips`), thứ `/admin/users`
+không có.
+
 ## Lịch trình chạy xe — `/routes/{routeId}/trips`
 
 > ✅ Backend đã có (`RouteTripsController` — Trần Trung Hiếu, story 13). Frontend chưa có module gọi
