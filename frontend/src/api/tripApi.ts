@@ -132,3 +132,33 @@ export function fetchTrips(routeId: string, params: TripListParams): Promise<Tri
     params: query,
   });
 }
+
+/**
+ * Body của PUT /routes/{routeId}/trips/{id} — sửa một chuyến (đổi xe/giờ chạy/trạng thái).
+ * Khớp `UpdateTripRequest` của backend, xem docs/api-contract.md.
+ */
+export interface UpdateTripPayload {
+  /** Xe chạy chuyến — bắt buộc, GUID xe có thật và đang `Active`. */
+  busId: string;
+  /** Giờ khởi hành — bắt buộc, ISO 8601 có kèm múi giờ. */
+  departureTime: string;
+  /** Giờ dự kiến tới bến cuối. null = bỏ hẳn. */
+  arrivalTime: string | null;
+  /** Trạng thái — bỏ trống = giữ nguyên trạng thái hiện tại. */
+  status?: TripStatus;
+}
+
+/**
+ * PUT /api/routes/{routeId}/trips/{id} — sửa xe / giờ chạy / trạng thái.
+ *
+ * PUT là sửa TOÀN PHẦN đối với `busId` + `departureTime` (cả hai bắt buộc) và `arrivalTime`
+ * (null = bỏ hẳn), nên khi chỉ muốn đổi xe, caller phải gửi kèm đủ giờ chạy hiện tại của
+ * chuyến — nếu không `departureTime` bị thiếu sẽ 400, `arrivalTime` bị thiếu sẽ thành null.
+ */
+export function updateTrip(
+  routeId: string,
+  tripId: string,
+  payload: UpdateTripPayload,
+): Promise<Trip> {
+  return axiosClient.put<Trip, Trip>(`/routes/${routeId}/trips/${tripId}`, payload);
+}
