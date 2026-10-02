@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
@@ -13,11 +13,13 @@ import {
   message,
 } from 'antd';
 import type { TableProps } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, WarningOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import {
+  fetchAllTripsForDay,
   fetchRouteOptions,
   fetchTrips,
+  findConflictingTrips,
   updateTrip,
   TRIP_STATUS_META,
   TRIP_STATUS_OPTIONS,
@@ -52,6 +54,9 @@ function dayBounds(day: Dayjs): { from: string; to: string } {
  * Chọn tuyến + ngày + trạng thái rồi gán/đổi XE cho từng chuyến qua PUT /routes/{routeId}/trips/{id}.
  * Phần "chọn tài xế" đã vẽ trong modal nhưng tạm khoá — endpoint gán tài xế (Kiên) và hồ sơ
  * tài xế (Hiếu) chưa có, sẽ nối sau. Phần "phụ xe" bỏ theo quy ước A8.4 (không có vai trò phụ xe).
+ *
+ * Kèm "cảnh báo trực quan khi trùng lịch xe": cột "Cảnh báo" đánh dấu chuyến đang trùng xe,
+ * và modal cảnh báo khi chọn xe trùng giờ với chuyến khác.
  */
 export default function TripAssignmentPage() {
   const [routes, setRoutes] = useState<TripRouteOption[]>([]);
@@ -70,6 +75,10 @@ export default function TripAssignmentPage() {
   const [loading, setLoading] = useState(false);
   // Tăng giá trị để tải lại danh sách khi bấm nút "Làm mới" hoặc sau khi lưu phân công.
   const [reloadKey, setReloadKey] = useState(0);
+
+  // Toàn bộ chuyến của tuyến trong ngày đang xem — dùng để dò trùng lịch xe, không dùng để
+  // vẽ bảng (bảng vẽ từ `data` phân trang phía server).
+  const [dayTrips, setDayTrips] = useState<Trip[]>([]);
 
   const [busOptions, setBusOptions] = useState<BusOption[]>([]);
   const [loadingBuses, setLoadingBuses] = useState(true);
@@ -112,6 +121,33 @@ export default function TripAssignmentPage() {
     // oxlint-disable-next-line react/set-state-in-effect
     void loadBusOptions();
   }, [loadBusOptions]);
+
+  // Tải toàn bộ chuyến trong ngày để dò trùng lịch — tách khỏi effect vẽ bảng vì không phụ
+  // thuộc vào bộ lọc trạng thái hay phân trang: dò trùng cần nhìn đủ mọi chuyến chiếm chỗ
+  // (Scheduled/Running), còn bảng có thể đang lọc hẹp hơn.
+  useEffect(() => {
+    // Xoá ngay để không hiện nhầm cảnh báo trùng của tuyến/ngày trước đó trong lúc đang tải.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setDayTrips([]);
+
+    if (!selectedRouteId) return;
+
+    let cancelled = false;
+    const { from, to } = dayBounds(date);
+
+    fetchAllTripsForDay(selectedRouteId, from, to)
+      .then((all) => {
+        if (!cancelled) setDayTrips(all);
+      })
+      .catch(() => {
+        // Dò trùng là phụ trợ — lỗi thì để trống, bảng chính tự báo lỗi ở effect riêng.
+        if (!cancelled) setDayTrips([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRouteId, date, reloadKey]);
 
   useEffect(() => {
     if (!selectedRouteId) return;
@@ -177,6 +213,18 @@ export default function TripAssignmentPage() {
     }
   };
 
+  // Ánh xạ id chuyến → các chuyến trùng lịch xe với nó trong ngày. Chỉ tính chuyến đang chiếm
+  // chỗ (Scheduled/Running): chuyến đã huỷ/hoàn thành không chặn chỗ trên thời gian biểu nữa.
+  const conflictsByTrip = useMemo(() => {
+    const map = new Map<string, Trip[]>();
+    for (const trip of dayTrips) {
+      if (trip.status !== 'Scheduled' && trip.status !== 'Running') continue;
+      const conflicts = findConflictingTrips(dayTrips, trip.busId, trip, trip.id, (t) => t.busId);
+      if (conflicts.length > 0) map.set(trip.id, conflicts);
+    }
+    return map;
+  }, [dayTrips]);
+
   const columns: TableProps<Trip>['columns'] = [
     {
       title: 'Giờ khởi hành',
@@ -201,6 +249,35 @@ export default function TripAssignmentPage() {
       key: 'busLicensePlate',
       width: 140,
       render: (plate: string) => (plate ? <Tag>{plate}</Tag> : '—'),
+    },
+    {
+      title: 'Cảnh báo',
+      key: 'conflict',
+      width: 120,
+      render: (_, trip) => {
+        const conflicts = conflictsByTrip.get(trip.id);
+        if (!conflicts || conflicts.length === 0) {
+          return <Text type="secondary">—</Text>;
+        }
+        return (
+          <Tooltip
+            title={
+              <div>
+                {conflicts.map((other) => (
+                  <div key={other.id}>
+                    Trùng chuyến {dayjs(other.departureTime).format('HH:mm')}
+                    {other.arrivalTime ? `–${dayjs(other.arrivalTime).format('HH:mm')}` : ''}
+                  </div>
+                ))}
+              </div>
+            }
+          >
+            <Tag color="warning" icon={<WarningOutlined />}>
+              Trùng lịch
+            </Tag>
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Tài xế',
@@ -313,7 +390,7 @@ export default function TripAssignmentPage() {
             columns={columns}
             dataSource={data}
             loading={loading}
-            scroll={{ x: 820 }}
+            scroll={{ x: 940 }}
             locale={{ emptyText: 'Không có chuyến nào trong ngày này' }}
             pagination={{
               current: page,
@@ -337,6 +414,7 @@ export default function TripAssignmentPage() {
         open={modalOpen}
         trip={assigningTrip}
         busOptions={busOptions}
+        dayTrips={dayTrips}
         loadingBuses={loadingBuses}
         submitting={submitting}
         onCancel={() => setModalOpen(false)}
