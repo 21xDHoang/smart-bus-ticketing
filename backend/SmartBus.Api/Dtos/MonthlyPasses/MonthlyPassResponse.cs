@@ -2,9 +2,10 @@ namespace SmartBus.Api.Dtos.MonthlyPasses;
 
 /// <summary>
 /// Hình dạng trả về của endpoint vé tháng — khớp interface <c>MonthlyPass</c> của frontend
-/// (frontend/src/api/monthlyPassApi.ts). Endpoint đăng ký vé tháng (POST /monthly-passes —
-/// chưa làm, task của Trần Trung Hiếu) dùng chung DTO này thay vì dựng hình dạng thứ hai cho
-/// cùng một tài nguyên. Hợp đồng đầy đủ ở mục "Vé tháng — /monthly-passes" của docs/api-contract.md.
+/// (frontend/src/api/monthlyPassApi.ts). Gia hạn, tra cứu vé đang hoạt động (GET
+/// /monthly-passes/me) và endpoint đăng ký vé tháng (POST /monthly-passes — chưa làm, task của
+/// Trần Trung Hiếu) dùng chung DTO này thay vì dựng hình dạng thứ hai cho cùng một tài nguyên.
+/// Hợp đồng đầy đủ ở mục "Vé tháng — /monthly-passes" của docs/api-contract.md.
 /// </summary>
 public class MonthlyPassResponse
 {
