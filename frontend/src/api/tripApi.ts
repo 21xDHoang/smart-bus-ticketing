@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import axiosClient from './axiosClient';
 import { fetchRoutes } from './routeApi';
 
@@ -161,4 +162,104 @@ export function updateTrip(
   payload: UpdateTripPayload,
 ): Promise<Trip> {
   return axiosClient.put<Trip, Trip>(`/routes/${routeId}/trips/${tripId}`, payload);
+}
+
+// -----------------------------------------------------------------------------
+// Cảnh báo trùng lịch xe/tài xế — task "Cảnh báo trực quan khi trùng lịch xe hoặc
+// tài xế trên UI" (story 14, Nguyễn Đình Băng).
+//
+// Đây là phép kiểm tra chạy PHÍA FRONTEND, chỉ để hiện cảnh báo trực quan — không
+// thay thế phép kiểm tra của backend. Backend chỉ chặn trùng khung giờ khi TẠO chuyến
+// (POST/generate); PUT /routes/{routeId}/trips/{id} (thao tác gán xe của màn hình này)
+// cố ý KHÔNG kiểm tra trùng (xem api-contract.md mục "Hai kiểm tra khi tạo lịch trình"),
+// nên cảnh báo dưới đây là chốt chặn duy nhất cho luồng đổi xe.
+//
+// Luật trùng khớp ĐÚNG với RouteTripsService.CreateAsync: khung giờ một chuyến là khoảng
+// [giờ khởi hành, giờ đến]; chuyến chưa có giờ đến thì coi là một mốc. Chuyến nối đuôi
+// (chuyến này đến đúng giờ chuyến kia khởi hành) KHÔNG tính là trùng. Chỉ chuyến đang
+// chiếm chỗ trên thời gian biểu (Scheduled/Running) mới tính — Cancelled/Completed không
+// chặn chỗ nữa.
+// -----------------------------------------------------------------------------
+
+/** Khung giờ của một chuyến — đủ cho phép so trùng, rút từ chính `Trip`. */
+export interface TripTimeWindow {
+  departureTime: string;
+  arrivalTime: string | null;
+}
+
+/**
+ * Hai chuyến có trùng khung giờ không — khớp luật kiểm tra trùng của backend.
+ *
+ * `aDep.isSame(bDep)` chặn trường hợp hai chuyến "mốc" (chưa có giờ đến) cùng giờ khởi
+ * hành: khoảng của cả hai đều rỗng nên phép so khoảng bên dưới không tự bắt được.
+ */
+export function tripsOverlap(a: TripTimeWindow, b: TripTimeWindow): boolean {
+  const aDep = dayjs(a.departureTime);
+  const aEnd = a.arrivalTime ? dayjs(a.arrivalTime) : aDep;
+  const bDep = dayjs(b.departureTime);
+  const bEnd = b.arrivalTime ? dayjs(b.arrivalTime) : bDep;
+
+  return aDep.isSame(bDep) || (aDep.isBefore(bEnd) && bDep.isBefore(aEnd));
+}
+
+/**
+ * Tìm các chuyến trong `trips` trùng lịch với một tài nguyên (xe hoặc tài xế) đang xét.
+ *
+ * `resourceIdOf` cho biết mỗi chuyến khoá tài nguyên ở đâu — hiện dùng `t => t.busId`;
+ * khi backend trả thêm `driverId` trên `TripResponse` thì chỉ cần đổi thành
+ * `t => t.driverId` để có cảnh báo trùng tài xế mà không phải viết lại phép so trùng.
+ *
+ * @param excludeTripId id của chính chuyến đang gán — không bao giờ tự trùng với nó.
+ */
+export function findConflictingTrips(
+  trips: Trip[],
+  resourceId: string,
+  window: TripTimeWindow,
+  excludeTripId: string,
+  resourceIdOf: (trip: Trip) => string | null,
+): Trip[] {
+  return trips.filter(
+    (other) =>
+      other.id !== excludeTripId &&
+      resourceIdOf(other) === resourceId &&
+      (other.status === 'Scheduled' || other.status === 'Running') &&
+      tripsOverlap(other, window),
+  );
+}
+
+/**
+ * Trần `pageSize` của GET /routes/{routeId}/trips là 100 — `[Range(1, 100)]` trong
+ * ListTripsRequest, xem docs/api-contract.md. Cùng trần với các ô chọn tuyến/xe.
+ */
+const TRIP_CONFLICT_PAGE_SIZE = 100;
+
+/**
+ * Toàn bộ chuyến của tuyến trong một ngày — dùng để dò trùng lịch, không dùng để vẽ bảng.
+ *
+ * Bảng chính phân trang phía server nên chỉ giữ ~10 dòng một trang; phép dò trùng cần nhìn
+ * ĐỦ mọi chuyến trong ngày (tối đa 200/ngày theo trần backend) mới không bỏ sót chuyến trùng
+ * nằm ở trang khác. Lặp theo trang cho tới khi đủ `total`, cùng lối `fetchRouteOptions`.
+ */
+export async function fetchAllTripsForDay(
+  routeId: string,
+  from: string,
+  to: string,
+): Promise<Trip[]> {
+  const all: Trip[] = [];
+
+  for (let page = 1; ; page += 1) {
+    const { items, total } = await fetchTrips(routeId, {
+      from,
+      to,
+      page,
+      pageSize: TRIP_CONFLICT_PAGE_SIZE,
+    });
+
+    all.push(...items);
+
+    // `items.length === 0` là chốt chặn để không lặp vô hạn nếu `total` sai.
+    if (all.length >= total || items.length === 0) break;
+  }
+
+  return all;
 }

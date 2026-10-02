@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { Form, Modal, Select, Typography } from 'antd';
+import { useEffect, useMemo } from 'react';
+import { Alert, Form, Modal, Select, Typography } from 'antd';
 import type { BusOption } from '../api/busApi';
+import { findConflictingTrips } from '../api/tripApi';
 import type { Trip } from '../api/tripApi';
 import dayjs from 'dayjs';
 
@@ -16,6 +17,8 @@ interface TripAssignmentModalProps {
   trip: Trip | null;
   /** Danh sách xe đang khai thác (Active) cho ô chọn. */
   busOptions: BusOption[];
+  /** Toàn bộ chuyến của tuyến trong ngày — dùng để dò trùng lịch xe khi đổi xe. */
+  dayTrips: Trip[];
   /** Đang tải danh sách xe. */
   loadingBuses: boolean;
   /** Trang cha bật loading cho nút OK trong lúc gọi API. */
@@ -33,17 +36,33 @@ interface TripAssignmentModalProps {
  * (task của Hiếu) chưa có — xem docs/api-contract.md. Khi có API thì mở lại ô này và nối
  * `driverId` vào payload PUT. Ô "Phụ xe" không có: quy ước A8.4 chốt chỉ 4 vai trò, không
  * có Phụ xe (bảng Trips cũng không có cột phụ xe).
+ *
+ * Kèm "cảnh báo trực quan khi trùng lịch xe": lúc chọn xe, nếu xe đó còn chuyến khác trùng
+ * khung giờ thì hiện Alert cảnh báo (không chặn lưu). Cảnh báo trùng TÀI XẾ sẽ dùng cùng hàm
+ * `findConflictingTrips` với `t => t.driverId` khi backend trả `driverId` trên TripResponse.
  */
 export default function TripAssignmentModal({
   open,
   trip,
   busOptions,
+  dayTrips,
   loadingBuses,
   submitting,
   onCancel,
   onSubmit,
 }: TripAssignmentModalProps) {
   const [form] = Form.useForm<TripAssignmentFormValues>();
+
+  // Xe đang chọn trong form — so trùng lịch ngay khi đổi lựa chọn, chưa cần bấm Lưu.
+  const selectedBusId = Form.useWatch('busId', form);
+
+  // Các chuyến khác trong ngày dùng cùng xe đang chọn và trùng khung giờ với chuyến đang gán.
+  // Chỉ để cảnh báo, không chặn lưu — người quản lý có thể cố ý chấp nhận trùng (đổi xe giữa
+  // chừng); phép kiểm tra của backend ở PUT cũng cố ý bỏ trống phần này.
+  const conflictingTrips = useMemo(() => {
+    if (!trip || !selectedBusId) return [];
+    return findConflictingTrips(dayTrips, selectedBusId, trip, trip.id, (t) => t.busId);
+  }, [dayTrips, trip, selectedBusId]);
 
   // Mỗi lần mở modal: nạp xe hiện tại của chuyến làm giá trị mặc định.
   useEffect(() => {
@@ -98,6 +117,25 @@ export default function TripAssignmentModal({
           <Text strong>{dayjs(trip.departureTime).format('HH:mm — DD/MM/YYYY')}</Text> · xe hiện
           tại: <Text strong>{trip.busLicensePlate}</Text>
         </Typography.Paragraph>
+      )}
+
+      {conflictingTrips.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Xe này đã được phân công cho chuyến khác trùng giờ"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              {conflictingTrips.map((other) => (
+                <li key={other.id}>
+                  Chuyến khởi hành {dayjs(other.departureTime).format('HH:mm — DD/MM/YYYY')}
+                  {other.arrivalTime ? ` → đến ${dayjs(other.arrivalTime).format('HH:mm')}` : ''}
+                </li>
+              ))}
+            </ul>
+          }
+          style={{ marginBottom: 16 }}
+        />
       )}
 
       <Form form={form} layout="vertical">
