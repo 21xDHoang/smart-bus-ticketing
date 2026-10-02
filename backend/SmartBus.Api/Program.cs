@@ -51,6 +51,12 @@ builder.Services.AddScoped<ITripService, TripService>();
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
 builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 
+// Tra cứu danh sách chuyến theo ngày + lọc theo tuyến: GET /api/trips.
+// Task story 13 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Cùng bề mặt /trips với ITripService ở trên nhưng khác bề mặt nghiệp vụ (bộ lọc thay vì định
+// danh) nên đứng riêng — cùng khuôn cặp IStopService / IRouteStopService.
+builder.Services.AddScoped<ITripLookupService, TripLookupService>();
+
 // Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();
