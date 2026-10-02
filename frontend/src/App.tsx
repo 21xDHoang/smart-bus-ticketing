@@ -2,6 +2,7 @@ import { ConfigProvider, Layout, Avatar, Dropdown, message } from 'antd';
 import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
+import BusManagePage from './pages/BusManagePage';
 import StopManagePage from './pages/StopManagePage';
 import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
@@ -63,6 +64,7 @@ function App() {
     { to: '/route-lookup', label: 'Tra cứu tuyến', roles: [] as string[] },
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
+    { to: '/buses', label: 'Đội xe', roles: ['Admin', 'Manager'] },
     { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
     { to: '/trips-by-day', label: 'Chuyến theo ngày', roles: ['Admin', 'Manager'] },
     { to: '/trip-schedule', label: 'Lịch trình', roles: ['Admin', 'Manager'] },
@@ -172,6 +174,16 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <StopManagePage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /buses là màn hình quản lý đội xe (US 14) — chỉ Admin và Manager vào được
+                    (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/buses"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <BusManagePage />
                     </RouteGuard>
                   }
                 />
