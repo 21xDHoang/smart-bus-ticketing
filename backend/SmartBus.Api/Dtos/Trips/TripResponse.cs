@@ -21,6 +21,24 @@ public class TripResponse
     /// </summary>
     public string BusLicensePlate { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Tài xế được phân công cho chuyến — null khi chưa phân công.
+    ///
+    /// Chuyến sinh hàng loạt (<c>POST .../trips/generate</c>) ra đời ở trạng thái chưa phân công,
+    /// việc gán làm sau bằng <c>PATCH .../trips/driver-assignment</c>. Đây là trường màn hình
+    /// "Phân công điều xe" dùng để lọc ra các chuyến còn thiếu tài xế.
+    /// </summary>
+    public Guid? DriverId { get; set; }
+
+    /// <summary>
+    /// Họ tên tài xế — kèm sẵn để màn hình phân công hiển thị mà không phải gọi thêm
+    /// <c>GET /drivers/{id}</c> cho từng dòng, cùng lối <see cref="BusLicensePlate"/>.
+    ///
+    /// null đúng khi và chỉ khi <see cref="DriverId"/> là null: không có bảng Drivers riêng
+    /// (quy ước A8.4), tài xế là <c>User</c> mang vai trò Driver nên tên đọc từ <c>Users.FullName</c>.
+    /// </summary>
+    public string? DriverName { get; set; }
+
     /// <summary>Giờ khởi hành thực tế của chuyến — UTC, serialize ra ISO 8601 kèm hậu tố Z.</summary>
     public DateTime DepartureTime { get; set; }
 
