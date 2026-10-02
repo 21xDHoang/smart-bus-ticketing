@@ -65,6 +65,14 @@ builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 // api-contract.md.
 builder.Services.AddScoped<ITripConflictService, TripConflictService>();
 
+// Đổi xe/đổi tài xế khi có sự cố: PATCH /api/trips/{id}/assignment (US 14 "Phân công điều xe").
+// Task story 14 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Gọi ITripConflictService ở trên để kiểm tra trùng lịch nhưng chỉ CẢNH BÁO trong response,
+// không chặn — chuyến có sự cố cần đổi được ngay. Thay đổi thành công được AuditLogMiddleware
+// ghi tự động (Update / "Trips:{id}") — đúng yêu cầu "ghi log thay đổi" của task, không phải
+// gọi ghi log tay.
+builder.Services.AddScoped<ITripAssignmentService, TripAssignmentService>();
+
 // Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();
