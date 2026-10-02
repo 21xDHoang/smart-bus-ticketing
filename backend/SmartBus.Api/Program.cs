@@ -90,6 +90,14 @@ builder.Services.AddScoped<IBusService, BusService>();
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IDriverService, DriverService>();
 
+// Gia hạn vé tháng: POST /api/monthly-passes/{id}/renew — ghi thêm MỘT dòng mới, tính ngày hiệu
+// lực kế tiếp từ ValidTo của vé cũ (dòng cũ giữ nguyên làm lịch sử).
+// Task story 16 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò (RBAC của dự án chỉ có AdminOnly/ManagerOrAbove):
+// hành khách tự gia hạn vé của mình, quyền sở hữu kiểm ở tầng service — vé của người khác trả 404.
+// Đăng ký vé tháng (POST /monthly-passes) là task riêng của Trần Trung Hiếu — sẽ có service riêng khi làm.
+builder.Services.AddScoped<IMonthlyPassRenewalService, MonthlyPassRenewalService>();
+
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
