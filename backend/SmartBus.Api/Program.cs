@@ -57,6 +57,14 @@ builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 // danh) nên đứng riêng — cùng khuôn cặp IStopService / IRouteStopService.
 builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 
+// Kiểm tra trùng lịch điều xe: xe trùng chuyến, tài xế trùng chuyến (US 14 "Phân công điều xe").
+// Task story 14 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Chưa gắn endpoint — cùng một phép kiểm tra dùng cho API gán xe + tài xế vào chuyến (task 113 —
+// Nguyễn Duy Kiên) và API đổi xe/đổi tài xế khi có sự cố (task kế tiếp của Hoàng): "cùng một hàm
+// kiểm tra, chỉ khác điểm gọi" — ghi chú cuối mục "Hai kiểm tra khi tạo lịch trình" của
+// api-contract.md.
+builder.Services.AddScoped<ITripConflictService, TripConflictService>();
+
 // Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();
