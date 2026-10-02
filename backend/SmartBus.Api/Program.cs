@@ -57,6 +57,14 @@ builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 // danh) nên đứng riêng — cùng khuôn cặp IStopService / IRouteStopService.
 builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 
+// Tìm chuyến cho hành khách: GET /api/trips/search (giá vé phổ thông + giờ chạy + số ghế còn trống).
+// Task story 1 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Công khai có chủ đích: story 1 là luồng tra cứu của hành khách, đăng nhập là bước của màn hình
+// đặt vé (phân quyền của dự án là opt-in — không gắn [Authorize] nghĩa là ai cũng gọi được).
+// Khác ITripLookupService ở trên (Admin/Manager — màn hình điều hành): service này nhận thẳng
+// routeId đã chọn và trả thêm giá vé + số ghế, không phân trang.
+builder.Services.AddScoped<ITripSearchService, TripSearchService>();
+
 // Kiểm tra trùng lịch điều xe: xe trùng chuyến, tài xế trùng chuyến (US 14 "Phân công điều xe").
 // Task story 14 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Chưa gắn endpoint — cùng một phép kiểm tra dùng cho API gán xe + tài xế vào chuyến (task 113 —
