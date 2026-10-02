@@ -1376,6 +1376,8 @@ các endpoint CRUD phía dưới.
 | `routeId` | `string` (GUID) | Tuyến của chuyến |
 | `busId` | `string` (GUID) | Xe chạy chuyến này |
 | `busLicensePlate` | `string` | Biển số xe — kèm sẵn để màn hình lập lịch trình hiển thị mà không phải gọi thêm API xe |
+| `driverId` | `string \| null` (GUID) | Tài xế được phân công. `null` = chưa phân công — chuyến sinh hàng loạt ra đời ở trạng thái này, việc gán làm sau bằng `PATCH .../trips/driver-assignment` |
+| `driverName` | `string \| null` | Họ tên tài xế — kèm sẵn cùng lý do `busLicensePlate`. `null` đúng khi và chỉ khi `driverId` là `null` |
 | `departureTime` | `string` (ISO 8601, UTC) | Giờ khởi hành thực tế của chuyến |
 | `arrivalTime` | `string \| null` (ISO 8601, UTC) | Giờ dự kiến tới bến cuối. `null` khi chưa chốt |
 | `status` | `string` | `Scheduled` = đã sinh, chưa chạy · `Running` = đang chạy · `Completed` = đã chạy xong · `Cancelled` = đã huỷ (lưu dạng chuỗi — quy ước A3) |
@@ -1391,6 +1393,16 @@ bảng `Trips` (quy ước A8.6) và **có** trong `Trip` của mục này, như
 story theo dõi thời gian thực (Sprint 3). Xem ghi chú *"Vì sao KHÔNG trả vị trí hiện tại của xe"* ở
 mục "Chuyến xe — `/trips`" phía trên.
 
+> **Vì sao trả kèm `driverId`/`driverName`?** Màn hình "Phân công điều xe" phải biết chuyến nào
+> **chưa có tài xế** để lọc ra và gán hàng loạt, và phải hiện được tên tài xế mà không gọi thêm
+> `GET /drivers/{id}` cho từng dòng — cùng lối `busLicensePlate` kèm sẵn biển số. Không có bảng
+> `Drivers`/`TripAssignments` (quy ước A9): tài xế là `User` mang vai trò `Driver`, `Trips.DriverId`
+> trỏ thẳng vào `Users` (quy ước A8.4), nên `driverName` đọc từ `Users.FullName`. Chuyến **chưa**
+> phân công trả `null` ở cả hai trường — đây là trạng thái hợp lệ, không phải lỗi.
+>
+> ⚠️ Đổi hình dạng `Trip` là đổi hình dạng API: trường mới đã **thêm vào cuối**, không sửa/xoá
+> trường nào, nên client cũ không vỡ.
+
 ```json
 // Ví dụ Trip
 {
@@ -1398,6 +1410,8 @@ mục "Chuyến xe — `/trips`" phía trên.
   "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
   "busId": "1c9a4f05-0000-0000-0000-000000000000",
   "busLicensePlate": "29B-123.45",
+  "driverId": "8d1b7c34-0000-0000-0000-000000000000",
+  "driverName": "Nguyễn Văn An",
   "departureTime": "2026-10-01T05:00:00Z",
   "arrivalTime": "2026-10-01T06:30:00Z",
   "status": "Scheduled",
@@ -1420,6 +1434,7 @@ mục "Chuyến xe — `/trips`" phía trên.
 | PUT | `/routes/{routeId}/trips/{id}` | Sửa xe / giờ chạy / trạng thái | `UpdateTrip` | `Trip` |
 | DELETE | `/routes/{routeId}/trips/{id}` | **Huỷ chuyến** — chuyển về `Cancelled` | — | `Trip` |
 | POST | `/routes/{routeId}/trips/generate` | **Sinh chuyến hàng loạt** theo tần suất (quy ước A8.3) | `GenerateTrips` | `GenerateTripsResponse` |
+| PATCH | `/routes/{routeId}/trips/driver-assignment` | **Gán một tài xế cho nhiều chuyến** cùng lúc (màn hình "Phân công điều xe") | `AssignDriverToTrips` | `DriverAssignmentResponse` |
 
 #### `GET /routes/{routeId}/trips`
 
@@ -1552,6 +1567,92 @@ Trả **200** kèm danh sách chuyến **vừa sinh** (không gồm chuyến cũ
   khoảng 1..1440 → **400** `errors.frequencyMinutes` · trùng khung giờ với chuyến hiện có →
   **409** · vượt trần chuyến/ngày của tuyến → **400** `errors.endTime`.
 
+#### `PATCH /routes/{routeId}/trips/driver-assignment` — gán tài xế hàng loạt
+
+Phần **"xe"** của việc phân công điều xe đã có sẵn: đổi xe một chuyến là
+`PUT /routes/{routeId}/trips/{id}` với `busId` mới. Endpoint này phụ trách phần **"tài xế"**, và làm
+theo lô vì màn hình phân công chọn nhiều chuyến rồi gán một tài xế trong một thao tác.
+
+> **Vì sao là `PATCH` chứ không phải `PUT`?** Đây là sửa **một phần** bản ghi chuyến (chỉ đổi
+> `driverId`), không thay cả bản ghi như `PUT /routes/{routeId}/trips/{id}`.
+>
+> **Vì sao nằm dưới `/routes/{routeId}/trips`?** Đi song song với `POST .../trips/generate` (cũng là
+> thao tác theo lô trên nhiều chuyến của một tuyến), và nhờ có `{routeId}` trên đường dẫn nên
+> `AuditLogMiddleware` suy đúng tên bảng `Trips` cho dòng nhật ký — để ở `/trips/driver-assignment`
+> thì middleware lấy đoạn cuối và ghi ra bảng `"DriverAssignment"` không tồn tại (giới hạn đã ghi ở
+> `AuditLogMiddleware.ResolveTableName`).
+>
+> **"Phụ xe" không có ở đây:** quy ước A8.4 chốt đúng 4 vai trò, không có Phụ xe; bảng `Trips` cũng
+> không có cột phụ xe. Tên task trong backlog nhắc "phụ xe" là chữ còn sót, không phải yêu cầu.
+
+```json
+// AssignDriverToTrips — body
+{
+  "tripIds": ["6b3e8d12-0000-0000-0000-000000000000", "7c4f9e23-0000-0000-0000-000000000000"],
+  "driverId": "8d1b7c34-0000-0000-0000-000000000000"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `tripIds` | ✅ | 1–200 GUID chuyến **của đúng tuyến này**, không trùng nhau |
+| `driverId` | ✅ | GUID tài khoản **mang vai trò `Driver`** và đang hoạt động (`isActive = true`) |
+
+Trả **200** kèm kết quả từng chuyến:
+
+```json
+// DriverAssignmentResponse
+{
+  "driverId": "8d1b7c34-0000-0000-0000-000000000000",
+  "driverName": "Nguyễn Văn An",
+  "assignedCount": 2,
+  "items": [
+    {
+      "id": "6b3e8d12-0000-0000-0000-000000000000",
+      "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+      "busId": "1c9a4f05-0000-0000-0000-000000000000",
+      "busLicensePlate": "29B-123.45",
+      "driverId": "8d1b7c34-0000-0000-0000-000000000000",
+      "driverName": "Nguyễn Văn An",
+      "departureTime": "2026-10-01T05:00:00Z",
+      "arrivalTime": "2026-10-01T06:30:00Z",
+      "status": "Scheduled",
+      "updatedAt": "2026-09-30T03:15:00Z",
+      "conflicts": { "busConflicts": [], "driverConflicts": [] }
+    }
+  ]
+}
+```
+
+- `assignedCount` = số chuyến **thực sự được đổi** tài xế trong lần gọi này (chuyến đã đúng tài xế
+  đó từ trước không tính, và `updatedAt` của nó giữ nguyên).
+- `items[]` cùng khuôn với response của `PATCH /trips/{id}/assignment` (API đổi xe/đổi tài xế khi có
+  sự cố) để hai endpoint anh em không nói hai thứ tiếng.
+- `conflicts` là **cảnh báo, không phải lỗi**: tài xế đang vướng chuyến khác trùng khung giờ thì
+  chuyến đó hiện trong `driverConflicts` nhưng thao tác **vẫn thành công (200)** — luồng điều hành
+  được phép cố ý chấp nhận trùng (ví dụ đổi tài xế giữa chừng khi có sự cố). Cùng triết lý với
+  `PUT /routes/{routeId}/trips/{id}` cố ý không chặn trùng khung giờ.
+- `busConflicts` luôn rỗng: endpoint này chỉ đổi tài xế, không soi vế xe — soi thêm sẽ dội lại những
+  lần trùng xe có sẵn thành tiếng ồn không liên quan tới thao tác đang làm.
+- `driverConflicts` gồm hai nguồn: các chuyến **đã có trong CSDL** mang tài xế này mà trùng khung
+  giờ (qua `ITripConflictService` của story 14), và các chuyến **khác trong cùng lô** vừa gán trùng
+  khung giờ với nhau. Gộp lại, mỗi chuyến chỉ xuất hiện một lần.
+- Thao tác là **nguyên tử**: một chuyến trong lô không hợp lệ thì **không chuyến nào** được gán.
+- Gọi lại y hệt lần hai → **200**, `assignedCount` bằng 0, `updatedAt` không đổi (idempotent).
+
+Lỗi thường gặp:
+
+| Tình huống | Kết quả |
+|---|---|
+| `tripIds` rỗng / nhiều hơn 200 / có GUID trùng nhau | **400** `errors.tripIds` |
+| Thiếu `driverId` | **400** `errors.driverId` |
+| Tuyến không tồn tại | **404** |
+| Chuyến không tồn tại **hoặc thuộc tuyến khác** | **404** (cùng lối "routeId phải khớp" bên dưới) |
+| Chuyến đã `Cancelled` hoặc `Completed` | **409** — gán tài xế cho chuyến đã huỷ/đã chạy xong là vô nghĩa |
+| `driverId` không phải tài khoản mang vai trò `Driver` | **404** |
+| Tài khoản tài xế đang bị khoá (`isActive = false`) | **409** |
+| Trùng khung giờ với chuyến khác của tài xế | **200** kèm `conflicts.driverConflicts` — không chặn |
+
 ### Hai kiểm tra khi tạo lịch trình
 
 Áp dụng cho cả `POST /routes/{routeId}/trips` lẫn `POST /routes/{routeId}/trips/generate`
@@ -1587,6 +1688,9 @@ chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200
 
 `GET`/`PUT`/`DELETE` trên `/routes/{routeId}/trips/{id}` đều kiểm tra chuyến có **thuộc đúng**
 tuyến đó không. Chuyến của tuyến khác → **404**, không phải 200.
+
+`PATCH /routes/{routeId}/trips/driver-assignment` cũng vậy: **một** chuyến trong `tripIds` thuộc
+tuyến khác là **cả lô** bị chặn với **404** — không âm thầm bỏ qua chuyến lạ rồi gán phần còn lại.
 
 #### Giờ gửi lên phải kèm múi giờ
 

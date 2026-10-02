@@ -110,7 +110,12 @@ public class RouteTripsService : IRouteTripsService
         var skip = (long)(page - 1) * pageSize;
 
         var trips = await query
+            // Driver nạp kèm để ToResponse có họ tên tài xế mà không phải truy vấn lại — cùng lý
+            // do Include(t => t.Bus) ở dòng dưới. Thiếu Include thì chuyến đã gán tài xế vẫn trả
+            // driverId nhưng driverName null, và màn hình phân công sẽ hiện "Chưa phân công" cho
+            // một chuyến đã phân công.
             .Include(t => t.Bus)
+            .Include(t => t.Driver)
             // Lịch trình đọc theo thứ tự chạy chứ không theo thời điểm tạo — khác RouteService
             // xếp theo CreatedAt giảm dần: màn hình lập lịch trình đọc như một cuốn thời gian biểu.
             .OrderBy(t => t.DepartureTime)
@@ -138,6 +143,7 @@ public class RouteTripsService : IRouteTripsService
         var trip = await _db.Trips
             .AsNoTracking()
             .Include(t => t.Bus)
+            .Include(t => t.Driver) // tài xế — xem chú thích ở ListAsync
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         // Chuyến của tuyến khác cũng là 404 — cùng lối FaresController: routeId phải khớp.
@@ -226,6 +232,7 @@ public class RouteTripsService : IRouteTripsService
     {
         var trip = await _db.Trips
             .Include(t => t.Bus)
+            .Include(t => t.Driver) // tài xế — xem chú thích ở ListAsync
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (trip is null || trip.RouteId != routeId)
@@ -285,6 +292,7 @@ public class RouteTripsService : IRouteTripsService
     {
         var trip = await _db.Trips
             .Include(t => t.Bus)
+            .Include(t => t.Driver) // tài xế — xem chú thích ở ListAsync
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (trip is null || trip.RouteId != routeId)
@@ -494,6 +502,11 @@ public class RouteTripsService : IRouteTripsService
         RouteId = trip.RouteId,
         BusId = trip.BusId,
         BusLicensePlate = trip.Bus?.LicensePlate ?? string.Empty,
+        DriverId = trip.DriverId,
+        // Navigation chỉ có giá trị khi truy vấn nạp kèm .Include(t => t.Driver) — mọi nhánh đọc
+        // chuyến ĐÃ CÓ đều nạp (xem ListAsync). Chuyến vừa tạo/vừa sinh trong chính request này
+        // thì DriverId luôn null nên không cần Include, cùng lối Bus ở CreateAsync.
+        DriverName = trip.Driver?.FullName,
         DepartureTime = trip.DepartureTime,
         ArrivalTime = trip.ArrivalTime,
         // Tên chuỗi của enum — đúng giá trị đang nằm trong cột Status

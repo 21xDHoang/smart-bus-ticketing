@@ -80,6 +80,13 @@ public class AuditLogCoverageTests
         // (PATCH → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
         ("PATCH",  "/api/trips/{id:guid}/assignment",            CachGhi.Middleware),
 
+        // Gán tài xế vào chuyến theo lô — story 14, Nguyễn Duy Kiên. Cũng do AuditLogMiddleware tự
+        // ghi (PATCH → Update). Tên bảng suy ra là "Trips": route có tham số {routeId} nên tài
+        // nguyên là đoạn tĩnh đầu tiên sau tham số cuối, đúng luật AuditLogMiddleware.ResourceSegmentIndex
+        // — đặt endpoint ở /trips/driver-assignment (không có tham số nào) thì Target đã là
+        // "DriverAssignment", một bảng không tồn tại.
+        ("PATCH",  "/api/routes/{routeId:guid}/trips/driver-assignment", CachGhi.Middleware),
+
         // Danh sách xe buýt — story 14, Trần Trung Hiếu. Ba endpoint đều do
         // AuditLogMiddleware tự ghi (verb → hành động, tên bảng suy ra là "Buses").
         ("POST",   "/api/buses",                                 CachGhi.Middleware),
@@ -565,7 +572,7 @@ public class AuditLogCoverageTests
         await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"Drivers:{target.Id}", admin);
     }
 
-    // --------------------------------------------------- Trips — đổi xe/đổi tài xế (sự cố)
+    // ----------------------------------------------------------------------------------- Trips
 
     // Story 14, Phùng Duy Hoàng: đổi xe/đổi tài xế khi có sự cố. Phần ghi nhật ký của endpoint
     // này chạy qua middleware như mọi endpoint khác — khác biệt duy nhất là việc đổi phân công
@@ -587,6 +594,38 @@ public class AuditLogCoverageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await AssertMotBanGhiAsync(factory, AuditAction.Update, $"Trips:{trip.Id}", admin);
+    }
+
+    // Gán tài xế theo lô (task 113 — Nguyễn Duy Kiên) cũng là một endpoint "Trips" nữa, nhưng
+    // route của nó KHÔNG có {id} nên dòng nhật ký chỉ ghi được tên bảng. Ca này ghim sự thật đó.
+    [Fact]
+    public async Task Patch_route_trips_driver_assignment_ghi_Update_voi_ten_bang_Trips()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var route = await SeedRouteAsync(factory, "01");
+        var bus = await SeedBusAsync(factory, "29B-123.45");
+        var trip = await SeedTripAsync(factory, route.Id, bus.Id);
+        var driver = await SeedUserAsync(factory, RoleIds.Driver, RoleCodes.Driver, phoneNumber: "0911111111");
+
+        var response = await client.PatchAsJsonAsync(
+            $"{RouteTripsUrl(route.Id)}/driver-assignment",
+            new { tripIds = new[] { trip.Id }, driverId = driver.Id });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var log = await AssertMotBanGhiAsync(factory, AuditAction.Update, target: null, admin);
+
+        // PATCH → Update, và tên bảng đúng là "Trips" — cùng tên bảng mà bốn endpoint anh em
+        // POST/PUT/DELETE .../trips đang ghi (xem chú thích ở bảng phủ sóng, Phần 1).
+        //
+        // Target CHỈ có tên bảng, không kèm id: route chỉ có {routeId} (khoá của tài nguyên cha,
+        // middleware cố ý không nhận — xem AuditLogMiddleware.RouteId), mà body trả về cũng không
+        // có trường "id" ở mức gốc (id từng chuyến nằm trong "items"). Đối tượng bị sửa nằm trong
+        // thân request nên middleware không đọc được — cùng giới hạn đã ghi nhận ở
+        // PUT .../stops/order. Test này ghim sự thật đó lại để lần sau có ai đổi hình dạng
+        // response thì thấy ngay nhật ký đổi theo.
+        Assert.Equal("Trips", log.Target);
     }
 
     // -------------------------------------------------------- Vé tháng — gia hạn (story 16)
@@ -824,6 +863,8 @@ public class AuditLogCoverageTests
     private static string FaresUrl(Guid routeId) => $"{RoutesUrl}/{routeId}/fares";
 
     private static string RouteStopsUrl(Guid routeId) => $"{RoutesUrl}/{routeId}/stops";
+
+    private static string RouteTripsUrl(Guid routeId) => $"{RoutesUrl}/{routeId}/trips";
 
     private static object RouteBody(string code, string? ten = null)
         => new
