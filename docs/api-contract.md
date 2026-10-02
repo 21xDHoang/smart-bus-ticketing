@@ -640,12 +640,11 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 
 ## Chuyến xe — `/trips`
 
-> ✅ Backend **đã có `GET /trips/{id}`** (`TripsController` — Vàng Thị Dăm, story 13). Hai task còn
-> lại của story 13 — *BackgroundService sinh chuyến tự động* (Kiên), *API tra cứu danh sách chuyến
-> theo ngày* (Hoàng) — **chưa làm**, nên hiện chưa có `GET /trips` (danh sách). Đường **tạo** chuyến
-> thì đã có: CRUD lịch trình theo tuyến của Hiếu ở mục
-> "Lịch trình chạy xe — `/routes/{routeId}/trips`" bên dưới. Xem cột "Assign" ở sheet `Sprint 2`
-> của `Product_Backlog_Smart_Bus.xlsx`.
+> ✅ Backend **đã có `GET /trips/{id}`** (`TripsController` — Vàng Thị Dăm, story 13) và
+> **`GET /trips`** (`TripLookupController` — Phùng Duy Hoàng, story 13). Task còn lại của story 13
+> là *BackgroundService sinh chuyến tự động* (Kiên) — **chưa làm**. Đường **tạo** chuyến thì đã có:
+> CRUD lịch trình theo tuyến của Hiếu ở mục "Lịch trình chạy xe — `/routes/{routeId}/trips`" bên
+> dưới. Xem cột "Assign" ở sheet `Sprint 2` của `Product_Backlog_Smart_Bus.xlsx`.
 >
 > **Endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập nhưng không đủ
 > quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
@@ -669,7 +668,80 @@ trực tiếp lên hợp đồng API:
 
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
+| GET | `/trips` | Tra cứu danh sách chuyến theo ngày + lọc theo tuyến/trạng thái + phân trang | — | `TripLookupListResponse` |
 | GET | `/trips/{id}` | Chi tiết một chuyến: giờ chạy, xe, sức chứa, danh sách trạm dừng | — | `TripDetail` |
+
+#### `GET /trips` — tra cứu danh sách chuyến theo ngày
+
+Tham số query (đều không bắt buộc):
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `routeId` | `string` (GUID) | — | Chỉ lấy chuyến của một tuyến. Bỏ trống = mọi tuyến. GUID không trỏ tới tuyến nào → **404** |
+| `from` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **từ** thời điểm này, tính luôn mốc |
+| `to` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **tới** thời điểm này, tính luôn mốc |
+| `status` | `string` | — | `Scheduled` / `Running` / `Completed` / `Cancelled`. Bỏ trống = lấy cả bốn |
+| `page` | `number` | `1` | Trang, tính từ 1 |
+| `pageSize` | `number` | `10` | Số dòng mỗi trang, tối đa **100** |
+
+```json
+// TripLookupListResponse — ví dụ GET /trips?routeId=3f2a1b0c-0000-0000-0000-000000000000&from=2026-10-01T00:00:00+07:00&to=2026-10-01T23:59:59+07:00&page=1&pageSize=10
+{
+  "items": [
+    {
+      "id": "6b3e8d12-0000-0000-0000-000000000000",
+      "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+      "routeCode": "01",
+      "routeName": "Bến xe Mỹ Đình — Bến xe Gia Lâm",
+      "busId": "1c9a4f05-0000-0000-0000-000000000000",
+      "busLicensePlate": "29B-123.45",
+      "departureTime": "2026-10-01T01:00:00Z",
+      "arrivalTime": "2026-10-01T01:45:00Z",
+      "status": "Scheduled",
+      "createdAt": "2026-09-30T03:15:00Z",
+      "updatedAt": null
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+- **Lọc "theo ngày" = gửi `from`/`to` của trọn ngày đó** (ví dụ `00:00:00` → `23:59:59` giờ Việt
+  Nam) — không có tham số `date` riêng: cùng một cách lọc khoảng thời gian như
+  `/routes/{routeId}/trips` và `/drivers/{id}/trips` nên frontend không phải nói hai thứ tiếng.
+- `total` là tổng số dòng khớp bộ lọc (không phải số dòng trong `items`) — dùng để vẽ phân trang.
+- `items[]` kèm sẵn `routeCode`/`routeName`: khác danh sách chuyến của một tuyến (`routeId` đã nằm
+  trong đường dẫn), kết quả ở đây trải nhiều tuyến nên mỗi dòng phải tự nói mình thuộc tuyến nào —
+  cùng lối danh sách ca làm việc của tài xế. `busLicensePlate` kèm sẵn cùng lý do.
+- **Không** trả 4 trường vị trí (`currentStopId`, `currentLat`, `currentLng`, `positionUpdatedAt`):
+  vị trí là chuyện của nhóm story theo dõi thời gian thực (Sprint 3) — cùng lối `TripDetail` và
+  `DriverTrip`.
+- Thứ tự sắp xếp: `departureTime` **tăng dần** — màn hình đọc như một cuốn thời gian biểu; trùng
+  giờ khởi hành xếp tiếp theo `id` để phân trang ổn định.
+- Không có chuyến nào khớp bộ lọc → `items: []`, `total: 0`, **không** phải 404.
+- `routeId` không trỏ tới tuyến nào → **404** `Không tìm thấy tuyến đường`: đây là tham chiếu cứng
+  tới một tuyến, không phải bộ lọc mềm — cùng câu hỏi *"chuyến của tuyến X"* hỏi ở
+  `/routes/{routeId}/trips` cũng trả 404, hai đường phải trả lời giống nhau. (Khác `userId` của
+  `/audit-logs`: người dùng có thể không còn trong hệ thống, còn tuyến thì khoá ngoại `Restrict`
+  không cho xoá cứng.)
+- `to` sớm hơn `from` → **400** `errors.to`.
+- `status` không khớp mã nào → danh sách rỗng (không báo lỗi — cùng lối bộ lọc `status` của
+  `/routes/{routeId}/trips`).
+- `page`/`pageSize` ngoài khoảng hợp lệ, hoặc `routeId` sai định dạng GUID → **400**.
+
+> **Vì sao vừa có `/trips` vừa có `/routes/{routeId}/trips`?** Hai màn hình đi từ hai đầu khác
+> nhau. Màn hình lập lịch trình đi từ tuyến ra — chọn tuyến trước, rồi xem/sửa chuyến của đúng
+> tuyến đó (CRUD của Hiếu, `routeId` là một phần định danh nằm trên đường dẫn). Màn hình điều hành
+> theo ngày đi từ ngày vào — xem cả ngày của toàn mạng lưới rồi thu hẹp dần theo tuyến, nên
+> `routeId` ở đây là bộ lọc bỏ trống được. Gộp hai cái vào một endpoint thì màn hình lập lịch trình
+> phải gửi `routeId` như tham số lọc và mất tính "chuyến nào cũng thuộc đúng tuyến trên đường dẫn".
+
+> **Vì sao đứng ở controller riêng (`TripLookupController`)?** Cùng lối cặp `StopsController` /
+> `RouteStopsController` và cặp `TripsController` / `RouteTripsController` đã có: mỗi bề mặt một
+> controller, hai task thuộc hai người. Tên lớp khác nhau, route template khác nhau (`api/trips`
+> so với `api/trips/{id:guid}`) nên không tranh chấp.
 
 #### `GET /trips/{id}`
 
@@ -760,10 +832,6 @@ cùng — lặp lại ở từng dòng chỉ làm response phình ra mà không 
 
 > **Vì sao KHÔNG trả `seatsRemaining` (số ghế còn trống)?** Cần bảng vé/đặt chỗ — chưa migrate. Đó là
 > task *"API trả về kết quả gồm giá vé, giờ chạy, số ghế còn trống"* của Hoàng (story 1, Sprint 2).
-
-> **Vì sao chưa có `GET /trips` (danh sách)?** Danh sách chuyến theo ngày + lọc theo tuyến là task
-> riêng của Hoàng trong cùng story 13, và nó phụ thuộc BackgroundService sinh chuyến của Kiên. Làm
-> trước ở đây là tự đặt hình dạng cho một endpoint không thuộc phần việc này.
 
 ## Xe buýt — `/buses`
 
