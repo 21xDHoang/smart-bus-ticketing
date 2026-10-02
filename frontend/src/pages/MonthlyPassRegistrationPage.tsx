@@ -7,7 +7,6 @@ import {
   Form,
   Select,
   Space,
-  Tag,
   Typography,
   message,
 } from 'antd';
@@ -16,6 +15,7 @@ import dayjs from 'dayjs';
 import monthlyPassApi, { PASS_TYPE_OPTIONS, findPassType } from '../api/monthlyPassApi';
 import type { MonthlyPass, MonthlyPassRoute, PassTypeCode } from '../api/monthlyPassApi';
 import type { AppError } from '../api/axiosClient';
+import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
 
 const { Title, Text } = Typography;
 
@@ -252,7 +252,7 @@ export default function MonthlyPassRegistrationPage() {
               {
                 key: 'status',
                 label: 'Trạng thái',
-                children: <Tag color="success">Còn hiệu lực</Tag>,
+                children: <MonthlyPassStatusTag pass={registered} />,
               },
             ]}
           />
