@@ -57,6 +57,14 @@ builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 // danh) nên đứng riêng — cùng khuôn cặp IStopService / IRouteStopService.
 builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 
+// Tìm chuyến cho hành khách: GET /api/trips/search (giá vé phổ thông + giờ chạy + số ghế còn trống).
+// Task story 1 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Công khai có chủ đích: story 1 là luồng tra cứu của hành khách, đăng nhập là bước của màn hình
+// đặt vé (phân quyền của dự án là opt-in — không gắn [Authorize] nghĩa là ai cũng gọi được).
+// Khác ITripLookupService ở trên (Admin/Manager — màn hình điều hành): service này nhận thẳng
+// routeId đã chọn và trả thêm giá vé + số ghế, không phân trang.
+builder.Services.AddScoped<ITripSearchService, TripSearchService>();
+
 // Kiểm tra trùng lịch điều xe: xe trùng chuyến, tài xế trùng chuyến (US 14 "Phân công điều xe").
 // Task story 14 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Chưa gắn endpoint — cùng một phép kiểm tra dùng cho API gán xe + tài xế vào chuyến (task 113 —
@@ -64,6 +72,14 @@ builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 // kiểm tra, chỉ khác điểm gọi" — ghi chú cuối mục "Hai kiểm tra khi tạo lịch trình" của
 // api-contract.md.
 builder.Services.AddScoped<ITripConflictService, TripConflictService>();
+
+// Đổi xe/đổi tài xế khi có sự cố: PATCH /api/trips/{id}/assignment (US 14 "Phân công điều xe").
+// Task story 14 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Gọi ITripConflictService ở trên để kiểm tra trùng lịch nhưng chỉ CẢNH BÁO trong response,
+// không chặn — chuyến có sự cố cần đổi được ngay. Thay đổi thành công được AuditLogMiddleware
+// ghi tự động (Update / "Trips:{id}") — đúng yêu cầu "ghi log thay đổi" của task, không phải
+// gọi ghi log tay.
+builder.Services.AddScoped<ITripAssignmentService, TripAssignmentService>();
 
 // Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.

@@ -76,6 +76,10 @@ public class AuditLogCoverageTests
         ("DELETE", "/api/routes/{routeId:guid}/trips/{id:guid}", CachGhi.Middleware),
         ("POST",   "/api/routes/{routeId:guid}/trips/generate",  CachGhi.Middleware),
 
+        // Đổi xe/đổi tài xế khi có sự cố — story 14, Phùng Duy Hoàng. Middleware tự ghi
+        // (PATCH → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
+        ("PATCH",  "/api/trips/{id:guid}/assignment",            CachGhi.Middleware),
+
         // Gán tài xế vào chuyến theo lô — story 14, Nguyễn Duy Kiên. Cũng do AuditLogMiddleware tự
         // ghi (PATCH → Update). Tên bảng suy ra là "Trips": route có tham số {routeId} nên tài
         // nguyên là đoạn tĩnh đầu tiên sau tham số cuối, đúng luật AuditLogMiddleware.ResourceSegmentIndex
@@ -565,6 +569,30 @@ public class AuditLogCoverageTests
 
     // ----------------------------------------------------------------------------------- Trips
 
+    // Story 14, Phùng Duy Hoàng: đổi xe/đổi tài xế khi có sự cố. Phần ghi nhật ký của endpoint
+    // này chạy qua middleware như mọi endpoint khác — khác biệt duy nhất là việc đổi phân công
+    // KHÔNG bị chặn khi trùng lịch (200 kèm cảnh báo), nên có một ca dễ tưởng là không ghi:
+    // request thành công nhưng thực tế có đổi dữ liệu thì vẫn phải có ĐÚNG MỘT bản ghi.
+    [Fact]
+    public async Task Patch_trips_assignment_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var route = await SeedRouteAsync(factory, "01");
+        var busCu = await SeedBusAsync(factory, "29B-111.11");
+        var busMoi = await SeedBusAsync(factory, "29B-222.22");
+        var trip = await SeedTripAsync(factory, route.Id, busCu.Id);
+
+        var response = await client.PatchAsJsonAsync(
+            $"{TripsUrl}/{trip.Id}/assignment", new { busId = busMoi.Id });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"Trips:{trip.Id}", admin);
+    }
+
+    // Gán tài xế theo lô (task 113 — Nguyễn Duy Kiên) cũng là một endpoint "Trips" nữa, nhưng
+    // route của nó KHÔNG có {id} nên dòng nhật ký chỉ ghi được tên bảng. Ca này ghim sự thật đó.
     [Fact]
     public async Task Patch_route_trips_driver_assignment_ghi_Update_voi_ten_bang_Trips()
     {
@@ -916,6 +944,38 @@ public class AuditLogCoverageTests
         return route;
     }
 
+    private static async Task<Bus> SeedBusAsync(TestAppFactory factory, string licensePlate)
+    {
+        var bus = new Bus
+        {
+            Id = Guid.NewGuid(),
+            LicensePlate = licensePlate,
+            BusType = "Xe buýt 45 chỗ",
+            Capacity = 45,
+        };
+
+        await factory.SeedAsync(db => db.Buses.Add(bus));
+
+        return bus;
+    }
+
+    /// <summary>Chuyến Scheduled 01:00–01:45 UTC ngày 01/10/2026 — đủ để PATCH phân công.</summary>
+    private static async Task<Trip> SeedTripAsync(TestAppFactory factory, Guid routeId, Guid busId)
+    {
+        var trip = new Trip
+        {
+            Id = Guid.NewGuid(),
+            RouteId = routeId,
+            BusId = busId,
+            DepartureTime = new DateTime(2026, 10, 1, 1, 0, 0, DateTimeKind.Utc),
+            ArrivalTime = new DateTime(2026, 10, 1, 1, 45, 0, DateTimeKind.Utc),
+        };
+
+        await factory.SeedAsync(db => db.Trips.Add(trip));
+
+        return trip;
+    }
+
     private static async Task<Stop> SeedStopAsync(TestAppFactory factory, string name)
     {
         var stop = new Stop
@@ -955,48 +1015,6 @@ public class AuditLogCoverageTests
         return row;
     }
 
-    private static async Task<Bus> SeedBusAsync(TestAppFactory factory, string licensePlate)
-    {
-        var bus = new Bus
-        {
-            Id = Guid.NewGuid(),
-            LicensePlate = licensePlate,
-            BusType = "Hyundai County 29 chỗ",
-            Capacity = 29,
-            Status = BusStatus.Active,
-        };
-
-        await factory.SeedAsync(db => db.Buses.Add(bus));
-
-        return bus;
-    }
-
-    private static async Task<Trip> SeedTripAsync(
-        TestAppFactory factory,
-        Guid routeId,
-        Guid busId,
-        DateTime? departureTime = null,
-        TripStatus status = TripStatus.Scheduled)
-    {
-        // Chỉ gán khoá ngoại, KHÔNG gán navigation: Route/Bus được seed ở scope khác, gán
-        // navigation vào đây sẽ khiến EF tưởng chúng là bản ghi mới và chèn trùng khoá chính.
-        var trip = new Trip
-        {
-            Id = Guid.NewGuid(),
-            RouteId = routeId,
-            BusId = busId,
-            DepartureTime = departureTime ?? GioKhoiHanh,
-            Status = status,
-        };
-
-        await factory.SeedAsync(db => db.Trips.Add(trip));
-
-        return trip;
-    }
-
-    /// <summary>Giờ khởi hành mặc định của chuyến seed trong lớp này — UTC, như mọi cột thời gian.</summary>
-    private static readonly DateTime GioKhoiHanh = new(2026, 10, 2, 8, 0, 0, DateTimeKind.Utc);
-
     private static async Task<Fare> SeedFareAsync(
         TestAppFactory factory,
         Guid routeId,
@@ -1031,6 +1049,8 @@ public class AuditLogCoverageTests
     private const string UsersUrl = "/api/admin/users";
 
     private const string DriversUrl = "/api/drivers";
+
+    private const string TripsUrl = "/api/trips";
 
     private const string AuditLogsUrl = "/api/audit-logs";
 

@@ -646,8 +646,9 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 > CRUD lịch trình theo tuyến của Hiếu ở mục "Lịch trình chạy xe — `/routes/{routeId}/trips`" bên
 > dưới. Xem cột "Assign" ở sheet `Sprint 2` của `Product_Backlog_Smart_Bus.xlsx`.
 >
-> **Endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập nhưng không đủ
-> quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+> **Mọi endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager` — trừ `GET /trips/search`**,
+> API công khai dành cho hành khách chưa đăng nhập (story 1, mục riêng bên dưới). Người đã đăng
+> nhập nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
 
 ### Vì sao chỉ có hai bảng, không có `Schedules` và không có `TripStops`
 
@@ -669,7 +670,9 @@ trực tiếp lên hợp đồng API:
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
 | GET | `/trips` | Tra cứu danh sách chuyến theo ngày + lọc theo tuyến/trạng thái + phân trang | — | `TripLookupListResponse` |
+| GET | `/trips/search` | Tìm chuyến cho hành khách (**công khai**): giờ chạy, giá vé, số ghế còn trống | — | `TripSearchResult[]` |
 | GET | `/trips/{id}` | Chi tiết một chuyến: giờ chạy, xe, sức chứa, danh sách trạm dừng | — | `TripDetail` |
+| PATCH | `/trips/{id}/assignment` | Đổi xe/đổi tài xế một chuyến (luồng sự cố) — cảnh báo trùng lịch, không chặn | `ReassignTrip` | `TripAssignment` |
 
 #### `GET /trips` — tra cứu danh sách chuyến theo ngày
 
@@ -742,6 +745,103 @@ Tham số query (đều không bắt buộc):
 > `RouteStopsController` và cặp `TripsController` / `RouteTripsController` đã có: mỗi bề mặt một
 > controller, hai task thuộc hai người. Tên lớp khác nhau, route template khác nhau (`api/trips`
 > so với `api/trips/{id:guid}`) nên không tranh chấp.
+
+#### `GET /trips/search` — tìm chuyến cho hành khách: giờ chạy · giá vé · số ghế còn trống
+
+> ✅ Backend đã có (`TripSearchController` — Phùng Duy Hoàng, story 1, task *"API trả về kết quả gồm
+> giá vé, giờ chạy, số ghế còn trống"*).
+>
+> **Đây là endpoint CÔNG KHAI duy nhất của mục `/trips`** — gọi không cần đăng nhập. Story 1 mở đầu
+> bằng *"Là hành khách, tôi muốn tìm kiếm tuyến xe…"*: tra cứu chuyến là việc trước khi đăng nhập,
+> đăng nhập là bước của màn hình đặt vé. Mọi endpoint còn lại của mục này (kể cả `GET /trips` ngay
+> trên) đều yêu cầu `Admin`/`Manager`.
+>
+> Endpoint trả lời câu hỏi *"tuyến này, trong khoảng ngày này, có những chuyến nào — giá bao nhiêu,
+> còn bao nhiêu ghế?"*. Việc **tìm ra tuyến** từ điểm đi/điểm đến là task *"API tìm kiếm chuyến theo
+> điểm đi, điểm đến, ngày giờ"* của Trần Trung Hiếu (story 1) — xem ghi chú ranh giới cuối mục này.
+
+Tham số query:
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `routeId` | `string` (GUID) | — | **Bắt buộc.** Tuyến cần xem chuyến. Thiếu hoặc sai định dạng GUID → **400**; GUID không trỏ tới tuyến nào → **404** |
+| `from` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **từ** thời điểm này, tính luôn mốc |
+| `to` | `string` (ISO 8601 có múi giờ) | — | Chỉ lấy chuyến khởi hành **tới** thời điểm này, tính luôn mốc |
+
+```json
+// TripSearchResult[] — ví dụ GET /trips/search?routeId=3f2a1b0c-0000-0000-0000-000000000000&from=2026-10-01T00:00:00+07:00&to=2026-10-01T23:59:59+07:00
+[
+  {
+    "id": "6b3e8d12-0000-0000-0000-000000000000",
+    "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+    "routeCode": "01",
+    "routeName": "Bến xe Mỹ Đình — Bến xe Gia Lâm",
+    "departureTime": "2026-10-01T01:00:00Z",
+    "arrivalTime": "2026-10-01T01:45:00Z",
+    "price": 7000,
+    "seatsRemaining": 45,
+    "capacity": 45,
+    "busType": "Xe buýt 45 chỗ"
+  }
+]
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chuyến — màn hình gửi lại khi đặt vé (Sprint 3) |
+| `routeId` | `string` (GUID) | Khoá tuyến |
+| `routeCode` | `string` | Mã tuyến hiển thị — "01" |
+| `routeName` | `string` | Tên tuyến |
+| `departureTime` | `string` | Giờ khởi hành (UTC) |
+| `arrivalTime` | `string` \| `null` | Giờ đến dự kiến; chuyến chưa có giờ đến → `null` |
+| `price` | `number` \| `null` | **Giá vé phổ thông** của tuyến (đồng). Tuyến chưa cấu hình giá → `null` |
+| `seatsRemaining` | `number` | Số ghế còn trống — xem ghi chú bên dưới |
+| `capacity` | `number` | Sức chứa của xe chạy chuyến |
+| `busType` | `string` | Loại xe — "Xe buýt 45 chỗ" |
+
+- **Chỉ trả chuyến `Scheduled`** — chuyến đã chạy, đang chạy hay đã hủy không còn là lựa chọn để đặt
+  vé. Vì vậy endpoint không có tham số `status` (khác `GET /trips` của màn hình điều hành).
+- Thứ tự: `departureTime` tăng dần, trùng giờ xếp tiếp theo `id` để hai lần gọi ra cùng một kết quả.
+  Màn hình kết quả sắp xếp lại theo giờ/giá phía client — thứ tự này không thay thế việc đó.
+- Lọc "theo ngày" = gửi `from`/`to` của trọn ngày — không có tham số `date` riêng, cùng quy ước của
+  `GET /trips` và `/routes/{routeId}/trips`.
+- Không có chuyến nào khớp → `[]`, **không** phải 404. `routeId` không trỏ tới tuyến nào → **404**
+  `Không tìm thấy tuyến đường` (tham chiếu cứng — cùng câu trả lời của `GET /trips`).
+- `to` sớm hơn `from` → **400** `errors.to`. `routeId` thiếu hoặc sai định dạng GUID → **400**.
+- Trả về **mảng trần**, không phân trang: một tuyến trong một khoảng ngày là vài chục chuyến — màn
+  hình đọc hết để tự sắp xếp theo giờ/giá. Cùng lối `GET /routes/{routeId}/stops`.
+- Kèm sẵn `routeCode`/`routeName`/`busType`/`capacity` thay vì chỉ `routeId`: màn hình kết quả hiển
+  thị được ngay mà không phải gọi thêm `/routes/{id}` rồi `/buses/{id}` — cùng lối `TripDetail`.
+- Chuyến mồ côi (tuyến/xe đã biến mất) không bao giờ lọt ra kết quả: phép đọc ghép tường minh
+  `Trips` ⋈ `Routes` ⋈ `Buses`, cùng lối `GET /trips`.
+- Không trả 4 trường vị trí thời gian thực — chuyện của Sprint 3, cùng lối `TripDetail`/`TripLookup`.
+  Không lọc theo trạng thái tuyến/xe: bộ lọc duy nhất là chuyến `Scheduled` + khoảng thời gian —
+  chuyến bị hủy tự rời khỏi kết quả (hủy chuyến là `DELETE /routes/{routeId}/trips/{id}`).
+
+> **Vì sao `price` là giá phổ thông chứ không phải cả bảng giá theo đối tượng ưu đãi?** Màn hình kết
+> quả so sánh các chuyến theo một con số niêm yết; chọn đối tượng ưu đãi (sinh viên, người cao
+> tuổi…) là bước của màn hình đặt vé (Sprint 3), khi đó mới cần `GET /routes/{routeId}/fares` đầy
+> đủ. Trả kèm cả bảng giá ở đây thì mỗi dòng kết quả nặng thêm một mảng trong khi cột hiển thị vẫn
+> chỉ có một chỗ. Tuyến chưa cấu hình giá → `price: null` (màn hình hiện "Chưa có giá"), không phải
+> 404 — thiếu giá là trạng thái dữ liệu bình thường, không phải lỗi gọi.
+
+> **Vì sao `seatsRemaining` hôm nay luôn bằng `capacity`?** Vì bảng vé / giữ chỗ chưa được migrate —
+> Sprint 3 mới có `Tickets`/`SeatHolds` để trừ ghế đã bán hoặc đang giữ. Hợp đồng chốt hình dạng
+> trường ngay từ bây giờ để màn hình kết quả (Băng, story 1) ghép được mà không phải sửa hợp đồng
+> lần nữa (⛔5); khi bảng vé vào, chỉ phần tính toán trong `TripSearchService` đổi, hình dạng
+> response giữ nguyên.
+
+> **Ranh giới với task *"API tìm kiếm chuyến theo điểm đi, điểm đến, ngày giờ"* (Trần Trung Hiếu,
+> story 1):** endpoint này **không** nhận điểm đi/điểm đến — nó nhận thẳng `routeId` đã chọn. Hai
+> task chia nhau hai nửa của một luồng: task của Hiếu trả lời *"điểm đi A, điểm đến B, ngày D →
+> những tuyến nào?"*, endpoint này trả lời *"tuyến X trong khoảng ngày → những chuyến nào, giá bao
+> nhiêu, còn mấy ghế?"*. Màn hình kết quả (Băng, đã xong) ghép hai bước lại. Làm gộp cả hai vào một
+> endpoint thì task của Hiếu không còn gì để làm — và ngược lại; mỗi bên giữ đúng phần mình.
+
+> **Vì sao đứng ở controller riêng (`TripSearchController`)?** Cùng lối `TripLookupController` ở
+> trên: mỗi bề mặt một controller, hai task thuộc hai người. Route template khác nhau
+> (`api/trips/search` so với `api/trips` và `api/trips/{id:guid}`) nên không tranh chấp — đoạn
+> literal `search` không thể khớp `{id:guid}`.
 
 #### `GET /trips/{id}`
 
@@ -830,8 +930,103 @@ cùng — lặp lại ở từng dòng chỉ làm response phình ra mà không 
 > chưa story nào chốt; đoán trước ở đây thì lúc story đó làm sẽ phải sửa lại hợp đồng này lần nữa,
 > mà sửa hợp đồng thì phải báo cả nhóm (⛔5).
 
-> **Vì sao KHÔNG trả `seatsRemaining` (số ghế còn trống)?** Cần bảng vé/đặt chỗ — chưa migrate. Đó là
-> task *"API trả về kết quả gồm giá vé, giờ chạy, số ghế còn trống"* của Hoàng (story 1, Sprint 2).
+> **Vì sao KHÔNG trả `seatsRemaining` (số ghế còn trống)?** Màn hình điều hành đọc thời gian biểu,
+> không bán vé — giá và ghế trống là chuyện của màn hình tra cứu dành cho hành khách, đã có ở
+> `GET /trips/search` (story 1, Phùng Duy Hoàng). Màn hình cần giá/ghế thì gọi endpoint đó.
+
+#### `PATCH /trips/{id}/assignment` — đổi xe / đổi tài xế khi có sự cố
+
+> ✅ Backend đã có (`TripAssignmentController` — Phùng Duy Hoàng, story 14, task *"API đổi xe/đổi
+> tài xế khi có sự cố + ghi log thay đổi"*). Đây là luồng **điều hành khi có sự cố** (xe hỏng giữa
+> đường, tài xế ốm đột xuất): thay xe và/hoặc tài xế của một chuyến đã nằm trong lịch, **không
+> đụng tới giờ chạy**.
+>
+> **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (cùng nhóm với lịch trình — story 14 là
+> nghiệp vụ của quản lý). Người đã đăng nhập nhưng không đủ quyền nhận **403** kèm body
+> `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Body — **ít nhất một trong hai trường**, cả hai đều không bắt buộc (bỏ trống = giữ nguyên):
+
+```json
+// ReassignTrip — ví dụ đổi cả xe lẫn tài xế
+{
+  "busId": "7b3d9a44-0000-0000-0000-000000000000",
+  "driverId": "9a2b1c3d-0000-0000-0000-000000000000"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busId` | — | Xe **mới** của chuyến. Xe phải đang `Active`; bỏ trống = giữ nguyên xe hiện tại |
+| `driverId` | — | Tài xế **mới** của chuyến — tài khoản mang vai trò `Driver`. Bỏ trống = giữ nguyên tài xế hiện tại |
+
+- Cả hai trường bỏ trống → **400** kèm lỗi ở cả `errors.busId` lẫn `errors.driverId`. API này
+  **không có** cách bỏ phân công (gán tài xế về null): tài xế hiện tại không dùng được nữa thì
+  gán người thay thế.
+- Truyền đúng giá trị hiện tại = **không thay đổi gì**: trả **200** nguyên trạng, `updatedAt` giữ
+  nguyên (idempotent).
+
+```json
+// TripAssignment — ví dụ chuyến vừa được đổi xe, chưa phân công tài xế, không có xung đột
+{
+  "id": "a1c7f0e2-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "busId": "7b3d9a44-0000-0000-0000-000000000000",
+  "busLicensePlate": "29B-123.45",
+  "driverId": null,
+  "driverName": null,
+  "departureTime": "2026-10-01T01:00:00Z",
+  "arrivalTime": "2026-10-01T01:45:00Z",
+  "status": "Running",
+  "updatedAt": "2026-10-01T02:10:00Z",
+  "conflicts": {
+    "busConflicts": [],
+    "driverConflicts": []
+  }
+}
+```
+
+`conflicts` giữ nguyên hình dạng kết quả kiểm tra trùng lịch điều xe (`busConflicts` /
+`driverConflicts`, mỗi phần tử là một chuyến đang hoạt động trùng khung giờ — xem service kiểm tra
+trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong request này.
+
+- Chuyến không tồn tại → **404** `Không tìm thấy chuyến xe`.
+- Chuyến đã `Cancelled` → **409** `Chuyến đã hủy, không thể đổi xe hoặc tài xế`; đã `Completed` →
+  **409** `Chuyến đã hoàn thành, không thể đổi xe hoặc tài xế`. Chỉ đổi được chuyến `Scheduled`
+  hoặc `Running` — hai trạng thái còn chiếm chỗ trên thời gian biểu.
+- Xe không tồn tại → **404** · xe không `Active` → **409** (cùng câu với lúc tạo lịch trình) ·
+  tài xế không tồn tại hoặc tài khoản không mang vai trò `Driver` → **404**
+  `Không tìm thấy tài xế` · tài khoản tài xế đang bị khóa → **409**.
+- **Trùng lịch điều xe KHÔNG chặn** — khác `POST /routes/{routeId}/trips` (409): thay đổi vẫn
+  được áp dụng, xung đột trả về trong `conflicts` để màn hình cảnh báo (hai ghi chú "Vì sao" ngay
+  dưới).
+- Thay đổi thành công **tự động vào nhật ký kiểm toán** (US 23) — xem ghi chú "Ghi log thay đổi"
+  ngay dưới.
+
+> **Vì sao trùng lịch chỉ cảnh báo mà không chặn?** Đây là luồng sự cố: chuyến đang chạy cần thay
+> xe/tài xế ngay, người điều hành có quyền cố ý chấp nhận trùng (ví dụ đổi xe giữa chừng khi chuyến
+> cũ sắp về bến). Cùng triết lý "cảnh báo trực quan, không chặn lưu" của modal phân công điều xe —
+> nhưng phép kiểm tra ở đây mạnh hơn cảnh báo phía client: nó soi **mọi tuyến**, không chỉ các
+> chuyến trong ngày của một tuyến.
+
+> **Vì sao chỉ soi tài nguyên được đổi?** Đổi mỗi tài xế thì vế xe hiện tại không đem ra soi: một
+> chuyến vướng lịch xe từ trước (dữ liệu cũ — `PUT /routes/{routeId}/trips/{id}` cố ý không kiểm
+> trùng) mà bị chặn luôn việc đổi tài xế thì vô lý. Phép kiểm tra trả lời đúng một câu: *"thay đổi
+> này có tạo xung đột MỚI không?"*.
+
+> **Ghi log thay đổi (US 23).** Mọi request thành công đi qua middleware nhật ký tự động: một dòng
+> hành động `Update`, đối tượng `Trips:{id}`, kèm người thực hiện + IP + thời điểm. Endpoint không
+> tự gọi ghi log — middleware phủ sẵn mọi thao tác thay đổi dữ liệu (đúng thiết kế: "không ai phải
+> nhớ thêm một dòng gọi log vào controller mới"). Request lỗi (400/404/409) không sinh dòng nào vì
+> dữ liệu chưa hề đổi.
+> ⚠️ Bảng `AuditLogs` **không có cột chi tiết cũ/mới** (A9): nhật ký trả lời được "ai đổi chuyến
+> nào lúc nào", không trả lời được "đổi từ xe nào sang xe nào". Muốn lưu chi tiết phải đổi bảng —
+> việc của Dăm (quy ước 2.3), không tự thêm cột.
+
+> **Cho task "API gán xe + tài xế vào từng chuyến" (Kiên):** bề mặt phân công điều xe nằm ở đây.
+> Khi làm API gán hàng loạt / gán cho chuyến chưa phân công, mở rộng trên cùng khuôn
+> `TripAssignment` + `conflicts` thay vì dựng endpoint thứ hai có hình dạng khác, và dùng chung
+> service kiểm tra trùng lịch của story 14 ("cùng một hàm kiểm tra, chỉ khác điểm gọi").
 
 ## Xe buýt — `/buses`
 
@@ -1483,6 +1678,11 @@ chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200
 > ⚠️ **`PUT /routes/{routeId}/trips/{id}` KHÔNG kiểm tra hai điều kiện này** — cố ý: task chỉ
 > phủ "khi tạo lịch trình". Sửa giờ một chuyến đã có vẫn lách được kiểm tra trùng; nếu nhóm
 > muốn chặn cả khi sửa thì bổ sung ở task sau (cùng một hàm kiểm tra, chỉ khác điểm gọi).
+>
+> ➡️ Task sau đó đã làm một phần: **`PATCH /trips/{id}/assignment`** (đổi xe/tài xế khi có sự cố —
+> mục "Chuyến xe — `/trips`") gọi đúng phép kiểm tra trùng lịch điều xe này, nhưng chỉ **cảnh
+> báo** trong `conflicts` chứ không chặn — chuyến có sự cố cần đổi được ngay. `PUT` giữ nguyên
+> hành vi cũ (không kiểm tra gì).
 
 #### `routeId` phải khớp
 
