@@ -1595,6 +1595,115 @@ ISO 8601 **có kèm múi giờ** — ví dụ `2026-10-01T05:00:00+07:00` hoặc
 lưu (cột `timestamptz` — quy ước A3) và mọi trường thời gian trả về đều là UTC. Chuỗi không kèm
 múi giờ bị hiểu là giờ máy chủ — frontend luôn gửi kèm offset để không phụ thuộc vào máy chủ.
 
+## Vé tháng — `/monthly-passes`
+
+> 🚧 Bề mặt vé tháng mới có **một phần**: gia hạn (Phùng Duy Hoàng). Hai phần còn lại của story 16
+> **chưa làm**: đăng ký vé tháng `POST /monthly-passes` (Trần Trung Hiếu) và tra cứu vé tháng đang
+> hoạt động của tôi `GET /monthly-passes/me` (Phùng Duy Hoàng). Hai bảng `MonthlyPasses`/`PassTypes`
+> đã migrate xong (Vàng Thị Dăm).
+
+Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đây:
+
+- **Vé tháng là quyền đi lại trên MỘT tuyến trong một khoảng thời gian, KHÔNG kèm ghế** (A8.2).
+  Khách vé tháng không đảm bảo có chỗ ngồi — trade-off đã chốt, không phải thiếu sót.
+- **Hiệu lực thật của vé suy từ `validFrom`/`validTo`, KHÔNG đọc cột `status`.** Cột `status` do
+  job quét vé hết hạn lật (BackgroundService — Nguyễn Duy Kiên) nên LUÔN có độ trễ: giữa lúc
+  `validTo` trôi qua và lúc job chạy, một vé đã hết hạn vẫn còn `status = "Active"`.
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| POST | `/monthly-passes/{id}/renew` | Gia hạn vé tháng của chính người gọi — ghi thêm một dòng mới, tính ngày hiệu lực kế tiếp | `{ passTypeCode? }` | `MonthlyPass` (dòng mới) |
+
+### Entity `MonthlyPass`
+
+```json
+// MonthlyPass — hình dạng trả về của mọi endpoint vé tháng
+{
+  "id": "3f2a1b0c-0000-0000-0000-000000000000",
+  "code": "MP-01-A1B2C3",
+  "routeId": "9d8c7b6a-0000-0000-0000-000000000000",
+  "passTypeCode": "OneMonth",
+  "price": 200000,
+  "validFrom": "2026-10-01T00:00:00Z",
+  "validTo": "2026-11-01T00:00:00Z",
+  "status": "Active",
+  "createdAt": "2026-09-28T03:20:11Z"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | GUID | |
+| `code` | string | Mã vé tháng = nội dung mã QR soát vé. Duy nhất toàn hệ thống, khuôn `MP-{mã tuyến}-{6 ký tự A–Z/0–9}` |
+| `routeId` | GUID | Tuyến mà vé cho phép đi lại |
+| `passTypeCode` | string | Mã loại vé trong bảng `PassTypes` — quyết định thời hạn và giá gói |
+| `price` | number | Số tiền THỰC TRẢ lúc đăng ký/gia hạn — **ảnh chụp**, không tra lại bảng giá |
+| `validFrom` / `validTo` | ISO 8601 UTC | Khoảng hiệu lực, **tính cả hai mốc**. Nguồn sự thật về hiệu lực của vé |
+| `status` | string | `Active` / `Expired` — trạng thái LƯU, có độ trễ (xem trên) |
+| `createdAt` | ISO 8601 UTC | |
+
+#### `POST /monthly-passes/{id}/renew` — gia hạn vé tháng
+
+Gia hạn một vé tháng của **chính người gọi**. Thao tác **ghi thêm MỘT dòng mới** với
+`validFrom` = `validTo` của vé cũ; **dòng cũ giữ nguyên, không sửa một trường nào** — nó ở lại làm
+lịch sử và làm mốc tính kỳ kế tiếp. Sửa tại chỗ thì mất cả hai, nên đây là quy tắc chốt trong
+entity `MonthlyPass` (Vàng Thị Dăm).
+
+```
+POST /api/monthly-passes/3f2a1b0c-…/renew     ← {id} là vé ĐANG ĐƯỢC GIA HẠN (vé cũ)
+```
+
+Body **tùy chọn** — gửi `{}` hoặc không gửi body đều được:
+
+```json
+// RenewMonthlyPassRequest
+{ "passTypeCode": "ThreeMonths" }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `passTypeCode` | — | Mã loại vé trong `PassTypes`, tối đa 20 ký tự. **Bỏ trống / chuỗi rỗng = giữ nguyên loại vé của vé đang gia hạn.** Không khớp loại vé nào → **404** |
+
+**Cách tính ngày hiệu lực kế tiếp** (đây chính là phần "tính ngày hiệu lực kế tiếp" của task):
+
+1. Vé cũ **còn hạn** (`validTo` > bây giờ): `validFrom (mới) = validTo (cũ)` — kỳ mới nối đuôi kỳ
+   cũ liền mạch, không mất ngày nào.
+2. Vé cũ **đã hết hạn**: `validFrom (mới) = bây giờ` — gia hạn lúc nào hiệu lực từ lúc đó,
+   **không hồi tố**.
+3. `validTo (mới) = validFrom (mới) + durationMonths` của loại vé, cộng theo **tháng lịch**:
+   `31/01 + 1 tháng = 28/02` (ngày cuối tháng tự kẹp — cùng lối .NET `AddMonths`).
+4. `price` = giá hiện hành của loại vé (**chụp lại** — đổi giá gói sau này không làm vé đã gia hạn
+   nhảy theo), `status` = `Active`, `code` do server sinh và kiểm duy nhất.
+
+Trả **200** kèm `MonthlyPass` của **dòng mới** (id mới — không phải vé cũ):
+
+> **Vì sao 200 mà không phải 201?** Chưa có `GET /monthly-passes/{id}` để trỏ `Location` — cùng lối
+> `POST /routes/{routeId}/trips/generate` trả 200 kèm kết quả. Đổi sang 201 khi có endpoint tra vé
+> theo id.
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token / token hết hạn | 401 | |
+| `{id}` không tồn tại **hoặc vé của người khác** | 404 | Cùng một câu `"Không tìm thấy vé tháng"` — không phân biệt để không lộ vé của người khác có tồn tại |
+| `passTypeCode` không khớp loại vé nào | 404 | |
+| Khoảng hiệu lực mới **chồng lấn** với một vé tháng KHÁC của cùng người trên **cùng tuyến** | 409 | So khoảng `[validFrom, validTo)` — vé nối đuôi (mốc này `validTo` = mốc kia `validFrom`) **không** tính chồng |
+| `passTypeCode` dài quá 20 ký tự | 400 | `errors.passTypeCode` |
+
+Ghi chú:
+
+- **Yêu cầu đăng nhập, không yêu cầu vai trò cụ thể** — RBAC của dự án chỉ có `AdminOnly`/
+  `ManagerOrAbove`, không có policy `Passenger`; quyền sở hữu kiểm ở tầng service (vé của người
+  khác → 404). Admin/Manager gọi endpoint này cũng chỉ gia hạn được vé của chính mình.
+- **Không chặn theo trạng thái tuyến**: đây là giao dịch mua bán, tuyến tạm ngưng vẫn có thể mở
+  lại — chặn ở đây sẽ khoá luôn vé đã bán hợp lệ. Task không yêu cầu; muốn chặn thì bổ sung ở
+  task sau.
+- **Nhật ký kiểm toán**: middleware tự ghi `Create`, `Target` = `MonthlyPasses:{id vé MỚI}` — id
+  đọc từ body trả về (POST → Create), không phải `{id}` trên đường dẫn. Tra vết một lần gia hạn:
+  tra theo id vé mới, rồi ngược về vé cũ bằng `validFrom` của nó = `validTo` của vé cũ.
+- Gia hạn vé **còn hạn** tạo một dòng **tương lai** (`validFrom` > bây giờ) — hợp lệ, và là lý do
+  bảng không có unique `(userId, routeId)`: hai dòng cùng người cùng tuyến là chuyện bình thường
+  khi kỳ sau đã đăng ký trước.
+
 ## Nhật ký kiểm toán — `/audit-logs`
 
 > ✅ Backend đã đủ cả hai phần của story 23: **truy vấn danh sách** (`AuditLogsController` —

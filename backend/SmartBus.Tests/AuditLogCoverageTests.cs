@@ -93,6 +93,11 @@ public class AuditLogCoverageTests
         ("PUT",    "/api/drivers/{id:guid}",                     CachGhi.Middleware),
         ("DELETE", "/api/drivers/{id:guid}",                     CachGhi.Middleware),
 
+        // Gia hạn vé tháng — story 16, Phùng Duy Hoàng. Middleware tự ghi (POST → Create, tên
+        // bảng suy từ đoạn trước {id} là "MonthlyPasses"). Target là id vé MỚI đọc từ body trả
+        // về, không phải vé cũ trên đường dẫn — ca này cố ý để lộ điều đó ra test Phần 2.
+        ("POST",   "/api/monthly-passes/{id:guid}/renew",        CachGhi.Middleware),
+
         ("POST",   "/api/stops",                                 CachGhi.Middleware),
         ("PUT",    "/api/stops/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/stops/{id:guid}",                       CachGhi.Middleware),
@@ -584,6 +589,37 @@ public class AuditLogCoverageTests
         await AssertMotBanGhiAsync(factory, AuditAction.Update, $"Trips:{trip.Id}", admin);
     }
 
+    // -------------------------------------------------------- Vé tháng — gia hạn (story 16)
+
+    // Story 16, Phùng Duy Hoàng: gia hạn vé tháng. Người gọi phải là CHÍNH CHỦ VÉ — service lọc
+    // theo UserId trong truy vấn nên token Admin gia hạn hộ vé của người khác sẽ ra 404, không
+    // phải 200. Vì vậy ca này đăng nhập bằng tài khoản hành khách, không dùng SignInAsAdminAsync.
+    [Fact]
+    public async Task Post_monthly_passes_renew_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        await EnsureAllRolesAsync(factory);
+        var chuVe = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var client = ClientWith(factory, factory.CreateTokenFor(chuVe));
+
+        var route = await SeedRouteAsync(factory, "01");
+        var passType = await SeedPassTypeAsync(factory, "OneMonth", durationMonths: 1, price: 200_000m);
+        var veCu = await SeedMonthlyPassAsync(factory, chuVe.Id, route.Id, passType.Id);
+
+        var response = await client.PostAsync($"{MonthlyPassesUrl}/{veCu.Id}/renew", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target là id vé MỚI (đọc từ body trả về), KHÔNG phải {id} vé cũ trên đường
+        // dẫn: middleware ưu tiên CreatedIdFromResponse cho POST. Dòng nhật ký trỏ đúng bản ghi
+        // vừa sinh — cùng lối mọi endpoint POST khác, nhưng ở đây dễ tưởng nhầm vì đường dẫn đã
+        // có sẵn một id vé.
+        var veMoi = await IdOfAsync(response);
+        Assert.NotEqual(veCu.Id, veMoi);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"MonthlyPasses:{veMoi}", chuVe);
+    }
+
     // ------------------------------------------------------------------------------------ Auth
 
     [Fact]
@@ -993,6 +1029,50 @@ public class AuditLogCoverageTests
         return fare;
     }
 
+    private static async Task<PassType> SeedPassTypeAsync(
+        TestAppFactory factory,
+        string code,
+        int durationMonths,
+        decimal price)
+    {
+        var passType = new PassType
+        {
+            Id = Guid.NewGuid(),
+            Code = code,
+            Name = $"Vé {code}",
+            DurationMonths = durationMonths,
+            Price = price,
+        };
+
+        await factory.SeedAsync(db => db.PassTypes.Add(passType));
+
+        return passType;
+    }
+
+    /// <summary>Vé tháng còn hạn quanh lúc chạy test — đủ làm mốc nối để sinh vé kỳ sau.</summary>
+    private static async Task<MonthlyPass> SeedMonthlyPassAsync(
+        TestAppFactory factory,
+        Guid userId,
+        Guid routeId,
+        Guid passTypeId)
+    {
+        var pass = new MonthlyPass
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            RouteId = routeId,
+            PassTypeId = passTypeId,
+            Price = 200_000m,
+            ValidFrom = DateTime.UtcNow.AddDays(-10),
+            ValidTo = DateTime.UtcNow.AddDays(10),
+            Code = $"MP-01-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
+        };
+
+        await factory.SeedAsync(db => db.MonthlyPasses.Add(pass));
+
+        return pass;
+    }
+
     private const string LoginUrl = "/api/auth/login";
 
     private const string LogoutUrl = "/api/auth/logout";
@@ -1010,6 +1090,8 @@ public class AuditLogCoverageTests
     private const string DriversUrl = "/api/drivers";
 
     private const string TripsUrl = "/api/trips";
+
+    private const string MonthlyPassesUrl = "/api/monthly-passes";
 
     private const string AuditLogsUrl = "/api/audit-logs";
 
