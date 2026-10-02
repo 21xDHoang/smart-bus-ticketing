@@ -111,6 +111,13 @@ builder.Services.AddScoped<IDriverService, DriverService>();
 // Đăng ký vé tháng (POST /monthly-passes) là task riêng của Trần Trung Hiếu — sẽ có service riêng khi làm.
 builder.Services.AddScoped<IMonthlyPassRenewalService, MonthlyPassRenewalService>();
 
+// Tra cứu vé tháng đang hoạt động của chính người gọi: GET /api/monthly-passes/me — chỉ trả vé có
+// hiệu lực NGAY LÚC NÀY (ValidFrom <= now <= ValidTo); cố ý không đọc cột Status vì cột đó có độ
+// trễ job quét (luật nền của mục hợp đồng).
+// Task story 16 — Phùng Duy Hoàng (file này cũng của Hoàng).
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — cùng lối IMonthlyPassRenewalService ở trên.
+builder.Services.AddScoped<IMonthlyPassLookupService, MonthlyPassLookupService>();
+
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();

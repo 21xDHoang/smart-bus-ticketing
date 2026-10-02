@@ -1715,10 +1715,9 @@ múi giờ bị hiểu là giờ máy chủ — frontend luôn gửi kèm offset
 
 ## Vé tháng — `/monthly-passes`
 
-> 🚧 Bề mặt vé tháng mới có **một phần**: gia hạn (Phùng Duy Hoàng). Hai phần còn lại của story 16
-> **chưa làm**: đăng ký vé tháng `POST /monthly-passes` (Trần Trung Hiếu) và tra cứu vé tháng đang
-> hoạt động của tôi `GET /monthly-passes/me` (Phùng Duy Hoàng). Hai bảng `MonthlyPasses`/`PassTypes`
-> đã migrate xong (Vàng Thị Dăm).
+> 🚧 Bề mặt vé tháng mới có **hai phần**, đều của Phùng Duy Hoàng: gia hạn và tra cứu vé đang hoạt
+> động của tôi. Phần còn lại của story 16 **chưa làm**: đăng ký vé tháng `POST /monthly-passes`
+> (Trần Trung Hiếu). Hai bảng `MonthlyPasses`/`PassTypes` đã migrate xong (Vàng Thị Dăm).
 
 Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đây:
 
@@ -1731,6 +1730,7 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
 | POST | `/monthly-passes/{id}/renew` | Gia hạn vé tháng của chính người gọi — ghi thêm một dòng mới, tính ngày hiệu lực kế tiếp | `{ passTypeCode? }` | `MonthlyPass` (dòng mới) |
+| GET | `/monthly-passes/me` | Vé tháng **đang hoạt động** của chính người gọi | — | `MonthlyPass[]` (mảng trần) |
 
 ### Entity `MonthlyPass`
 
@@ -1821,6 +1821,32 @@ Ghi chú:
 - Gia hạn vé **còn hạn** tạo một dòng **tương lai** (`validFrom` > bây giờ) — hợp lệ, và là lý do
   bảng không có unique `(userId, routeId)`: hai dòng cùng người cùng tuyến là chuyện bình thường
   khi kỳ sau đã đăng ký trước.
+
+#### `GET /monthly-passes/me` — vé tháng đang hoạt động của tôi
+
+Trả về **mảng trần** (không phân trang, có thể rỗng) các vé tháng của **chính người gọi** đang **có
+hiệu lực ngay lúc này** — trả lời câu hỏi "bây giờ tôi đi được tuyến nào bằng vé tháng?".
+
+Không tham số, không body. Không có token → **401**. Không có vé nào đang hoạt động → **200** kèm
+`[]` — mảng rỗng là câu trả lời hợp lệ, không phải 404. **Không yêu cầu vai trò cụ thể** (cùng lối
+`POST .../renew`): ai đăng nhập cũng chỉ thấy vé của chính mình.
+
+**"Đang hoạt động" = `validFrom <= bây giờ <= validTo`** — tính cả hai mốc, hiệu lực suy từ cặp mốc
+theo luật nền thứ hai ở đầu mục; cột `status` **không tham gia** câu trả lời. Hệ quả, cả hai đều
+cố ý:
+
+- Vé đã quá `validTo` nhưng job quét chưa chạy tới (cột vẫn `"Active"`) → **không** trả về.
+- Cột `status` nói gì cũng không làm vé rơi khỏi kết quả khi cặp mốc còn hiệu lực.
+
+Vé của **kỳ sau** (dòng gia hạn có `validFrom` ở tương lai) chưa "đang hoạt động" nên **không** nằm
+trong kết quả cho tới ngày hiệu lực — cố ý: đây là câu hỏi lúc lên xe, không phải lịch sử đăng ký.
+
+Sắp theo `validTo` **tăng dần** (vé sắp hết hạn đứng đầu — màn hình nhắc gia hạn đọc dòng đầu),
+phụ theo `code` cho ổn định. Mỗi phần tử đúng hình dạng `MonthlyPass` ở trên; frontend ghép
+`routeId` → tên tuyến bằng `GET /routes` như các màn hình khác.
+
+> **Vì sao mảng trần mà không `{ items, total }` như các danh sách khác?** Một người chỉ có vài vé
+> đang hoạt động (mỗi tuyến một vé) — phân trang là nghi thức thừa, và màn hình chỉ cần đúng mảng.
 
 ## Nhật ký kiểm toán — `/audit-logs`
 
