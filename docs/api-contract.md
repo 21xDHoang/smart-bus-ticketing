@@ -670,6 +670,7 @@ trực tiếp lên hợp đồng API:
 |---|---|---|---|---|
 | GET | `/trips` | Tra cứu danh sách chuyến theo ngày + lọc theo tuyến/trạng thái + phân trang | — | `TripLookupListResponse` |
 | GET | `/trips/{id}` | Chi tiết một chuyến: giờ chạy, xe, sức chứa, danh sách trạm dừng | — | `TripDetail` |
+| PATCH | `/trips/{id}/assignment` | Đổi xe/đổi tài xế một chuyến (luồng sự cố) — cảnh báo trùng lịch, không chặn | `ReassignTrip` | `TripAssignment` |
 
 #### `GET /trips` — tra cứu danh sách chuyến theo ngày
 
@@ -832,6 +833,100 @@ cùng — lặp lại ở từng dòng chỉ làm response phình ra mà không 
 
 > **Vì sao KHÔNG trả `seatsRemaining` (số ghế còn trống)?** Cần bảng vé/đặt chỗ — chưa migrate. Đó là
 > task *"API trả về kết quả gồm giá vé, giờ chạy, số ghế còn trống"* của Hoàng (story 1, Sprint 2).
+
+#### `PATCH /trips/{id}/assignment` — đổi xe / đổi tài xế khi có sự cố
+
+> ✅ Backend đã có (`TripAssignmentController` — Phùng Duy Hoàng, story 14, task *"API đổi xe/đổi
+> tài xế khi có sự cố + ghi log thay đổi"*). Đây là luồng **điều hành khi có sự cố** (xe hỏng giữa
+> đường, tài xế ốm đột xuất): thay xe và/hoặc tài xế của một chuyến đã nằm trong lịch, **không
+> đụng tới giờ chạy**.
+>
+> **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (cùng nhóm với lịch trình — story 14 là
+> nghiệp vụ của quản lý). Người đã đăng nhập nhưng không đủ quyền nhận **403** kèm body
+> `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Body — **ít nhất một trong hai trường**, cả hai đều không bắt buộc (bỏ trống = giữ nguyên):
+
+```json
+// ReassignTrip — ví dụ đổi cả xe lẫn tài xế
+{
+  "busId": "7b3d9a44-0000-0000-0000-000000000000",
+  "driverId": "9a2b1c3d-0000-0000-0000-000000000000"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busId` | — | Xe **mới** của chuyến. Xe phải đang `Active`; bỏ trống = giữ nguyên xe hiện tại |
+| `driverId` | — | Tài xế **mới** của chuyến — tài khoản mang vai trò `Driver`. Bỏ trống = giữ nguyên tài xế hiện tại |
+
+- Cả hai trường bỏ trống → **400** kèm lỗi ở cả `errors.busId` lẫn `errors.driverId`. API này
+  **không có** cách bỏ phân công (gán tài xế về null): tài xế hiện tại không dùng được nữa thì
+  gán người thay thế.
+- Truyền đúng giá trị hiện tại = **không thay đổi gì**: trả **200** nguyên trạng, `updatedAt` giữ
+  nguyên (idempotent).
+
+```json
+// TripAssignment — ví dụ chuyến vừa được đổi xe, chưa phân công tài xế, không có xung đột
+{
+  "id": "a1c7f0e2-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "busId": "7b3d9a44-0000-0000-0000-000000000000",
+  "busLicensePlate": "29B-123.45",
+  "driverId": null,
+  "driverName": null,
+  "departureTime": "2026-10-01T01:00:00Z",
+  "arrivalTime": "2026-10-01T01:45:00Z",
+  "status": "Running",
+  "updatedAt": "2026-10-01T02:10:00Z",
+  "conflicts": {
+    "busConflicts": [],
+    "driverConflicts": []
+  }
+}
+```
+
+`conflicts` giữ nguyên hình dạng kết quả kiểm tra trùng lịch điều xe (`busConflicts` /
+`driverConflicts`, mỗi phần tử là một chuyến đang hoạt động trùng khung giờ — xem service kiểm tra
+trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong request này.
+
+- Chuyến không tồn tại → **404** `Không tìm thấy chuyến xe`.
+- Chuyến đã `Cancelled` → **409** `Chuyến đã hủy, không thể đổi xe hoặc tài xế`; đã `Completed` →
+  **409** `Chuyến đã hoàn thành, không thể đổi xe hoặc tài xế`. Chỉ đổi được chuyến `Scheduled`
+  hoặc `Running` — hai trạng thái còn chiếm chỗ trên thời gian biểu.
+- Xe không tồn tại → **404** · xe không `Active` → **409** (cùng câu với lúc tạo lịch trình) ·
+  tài xế không tồn tại hoặc tài khoản không mang vai trò `Driver` → **404**
+  `Không tìm thấy tài xế` · tài khoản tài xế đang bị khóa → **409**.
+- **Trùng lịch điều xe KHÔNG chặn** — khác `POST /routes/{routeId}/trips` (409): thay đổi vẫn
+  được áp dụng, xung đột trả về trong `conflicts` để màn hình cảnh báo (hai ghi chú "Vì sao" ngay
+  dưới).
+- Thay đổi thành công **tự động vào nhật ký kiểm toán** (US 23) — xem ghi chú "Ghi log thay đổi"
+  ngay dưới.
+
+> **Vì sao trùng lịch chỉ cảnh báo mà không chặn?** Đây là luồng sự cố: chuyến đang chạy cần thay
+> xe/tài xế ngay, người điều hành có quyền cố ý chấp nhận trùng (ví dụ đổi xe giữa chừng khi chuyến
+> cũ sắp về bến). Cùng triết lý "cảnh báo trực quan, không chặn lưu" của modal phân công điều xe —
+> nhưng phép kiểm tra ở đây mạnh hơn cảnh báo phía client: nó soi **mọi tuyến**, không chỉ các
+> chuyến trong ngày của một tuyến.
+
+> **Vì sao chỉ soi tài nguyên được đổi?** Đổi mỗi tài xế thì vế xe hiện tại không đem ra soi: một
+> chuyến vướng lịch xe từ trước (dữ liệu cũ — `PUT /routes/{routeId}/trips/{id}` cố ý không kiểm
+> trùng) mà bị chặn luôn việc đổi tài xế thì vô lý. Phép kiểm tra trả lời đúng một câu: *"thay đổi
+> này có tạo xung đột MỚI không?"*.
+
+> **Ghi log thay đổi (US 23).** Mọi request thành công đi qua middleware nhật ký tự động: một dòng
+> hành động `Update`, đối tượng `Trips:{id}`, kèm người thực hiện + IP + thời điểm. Endpoint không
+> tự gọi ghi log — middleware phủ sẵn mọi thao tác thay đổi dữ liệu (đúng thiết kế: "không ai phải
+> nhớ thêm một dòng gọi log vào controller mới"). Request lỗi (400/404/409) không sinh dòng nào vì
+> dữ liệu chưa hề đổi.
+> ⚠️ Bảng `AuditLogs` **không có cột chi tiết cũ/mới** (A9): nhật ký trả lời được "ai đổi chuyến
+> nào lúc nào", không trả lời được "đổi từ xe nào sang xe nào". Muốn lưu chi tiết phải đổi bảng —
+> việc của Dăm (quy ước 2.3), không tự thêm cột.
+
+> **Cho task "API gán xe + tài xế vào từng chuyến" (Kiên):** bề mặt phân công điều xe nằm ở đây.
+> Khi làm API gán hàng loạt / gán cho chuyến chưa phân công, mở rộng trên cùng khuôn
+> `TripAssignment` + `conflicts` thay vì dựng endpoint thứ hai có hình dạng khác, và dùng chung
+> service kiểm tra trùng lịch của story 14 ("cùng một hàm kiểm tra, chỉ khác điểm gọi").
 
 ## Xe buýt — `/buses`
 
@@ -1382,6 +1477,11 @@ chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200
 > ⚠️ **`PUT /routes/{routeId}/trips/{id}` KHÔNG kiểm tra hai điều kiện này** — cố ý: task chỉ
 > phủ "khi tạo lịch trình". Sửa giờ một chuyến đã có vẫn lách được kiểm tra trùng; nếu nhóm
 > muốn chặn cả khi sửa thì bổ sung ở task sau (cùng một hàm kiểm tra, chỉ khác điểm gọi).
+>
+> ➡️ Task sau đó đã làm một phần: **`PATCH /trips/{id}/assignment`** (đổi xe/tài xế khi có sự cố —
+> mục "Chuyến xe — `/trips`") gọi đúng phép kiểm tra trùng lịch điều xe này, nhưng chỉ **cảnh
+> báo** trong `conflicts` chứ không chặn — chuyến có sự cố cần đổi được ngay. `PUT` giữ nguyên
+> hành vi cũ (không kiểm tra gì).
 
 #### `routeId` phải khớp
 
