@@ -670,7 +670,7 @@ trực tiếp lên hợp đồng API:
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
 | GET | `/trips` | Tra cứu danh sách chuyến theo ngày + lọc theo tuyến/trạng thái + phân trang | — | `TripLookupListResponse` |
-| GET | `/trips/search` | Tìm chuyến cho hành khách (**công khai**): giờ chạy, giá vé, số ghế còn trống | — | `TripSearchResult[]` |
+| GET | `/trips/search` | Tìm chuyến cho hành khách (**công khai**): giờ chạy, giá vé, số ghế còn trống — kết quả được đệm tối đa 60 giây | — | `TripSearchResult[]` |
 | GET | `/trips/{id}` | Chi tiết một chuyến: giờ chạy, xe, sức chứa, danh sách trạm dừng | — | `TripDetail` |
 | PATCH | `/trips/{id}/assignment` | Đổi xe/đổi tài xế một chuyến (luồng sự cố) — cảnh báo trùng lịch, không chặn | `ReassignTrip` | `TripAssignment` |
 
@@ -842,6 +842,20 @@ Tham số query:
 > trên: mỗi bề mặt một controller, hai task thuộc hai người. Route template khác nhau
 > (`api/trips/search` so với `api/trips` và `api/trips/{id:guid}`) nên không tranh chấp — đoạn
 > literal `search` không thể khớp `{id:guid}`.
+
+> **Kết quả được đệm trong bộ nhớ — cũ tối đa 60 giây** (task *"Cache kết quả tìm kiếm tuyến phổ
+> biến để giảm tải DB"*, Nguyễn Duy Kiên). Mỗi lượt gọi endpoint này tốn ba truy vấn CSDL (tuyến,
+> giá phổ thông, chuyến ⋈ xe) mà kết quả gần như không đổi trong vài chục giây, nên kết quả được
+> giữ lại trong bộ nhớ của máy chủ: **chỉ những truy vấn được hỏi lặp lại mới vào đệm** (tuyến phổ
+> biến), mỗi kết quả sống tối đa **60 giây** rồi tự hết hạn, tối đa 200 khoá. Hệ quả với người gọi:
+> hai lượt gọi cùng `routeId` + cùng `from`/`to` trong vòng 60 giây **có thể nhận cùng một kết quả**,
+> kể cả khi ở giữa hai lượt có chuyến vừa được thêm/xoá hoặc giá vừa đổi. **Tham số và hình dạng
+> response không đổi** — chỉ độ tươi của dữ liệu là có giới hạn. Chỉ kết quả thành công mới vào
+> đệm: `404` tuyến không tồn tại và `400` khoảng thời gian sai luôn được trả lời tươi từ CSDL.
+>
+> Ghi chú cho Sprint 3: khi bảng vé/giữ chỗ vào và `seatsRemaining` bắt đầu đổi theo từng lượt đặt,
+> 60 giây là quá cũ cho một con số mà hành khách quyết định theo nó — lúc đó phải giảm TTL hoặc huỷ
+> đệm cho tới khi có cơ chế huỷ theo sự kiện.
 
 #### `GET /trips/{id}`
 

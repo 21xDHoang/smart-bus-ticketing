@@ -65,6 +65,19 @@ builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 // routeId đã chọn và trả thêm giá vé + số ghế, không phân trang.
 builder.Services.AddScoped<ITripSearchService, TripSearchService>();
 
+// Đệm kết quả tìm chuyến cho endpoint công khai ở trên: GET /api/trips/search.
+// Task "Cache kết quả tìm kiếm tuyến phổ biến để giảm tải DB" (Sprint 2) — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Không sửa TripSearchService (file của Hoàng — quy ước E1): ITripSearchService được bọc bằng
+// CachedTripSearchService. DI lấy bản đăng ký SAU CÙNG nên ba dòng dưới đây phải nằm ngay sau dòng
+// của Hoàng — ai đăng ký thêm ITripSearchService ở dưới nữa thì bản có đệm bị thay thế im lặng
+// (TripSearchCacheApiTests ghim đúng chỗ nối này).
+builder.Services.AddScoped<TripSearchService>();
+builder.Services.AddSingleton<ITripSearchResultCache, TripSearchResultCache>();
+builder.Services.AddScoped<ITripSearchService>(provider => new CachedTripSearchService(
+    provider.GetRequiredService<TripSearchService>(),
+    provider.GetRequiredService<ITripSearchResultCache>()));
+
 // Kiểm tra trùng lịch điều xe: xe trùng chuyến, tài xế trùng chuyến (US 14 "Phân công điều xe").
 // Task story 14 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Chưa gắn endpoint — cùng một phép kiểm tra dùng cho API gán xe + tài xế vào chuyến (task 113 —
