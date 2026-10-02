@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { Key } from 'react';
 import {
   Button,
   Card,
@@ -27,6 +28,14 @@ import { fetchActiveBusOptions } from '../api/busApi';
 import type { BusOption } from '../api/busApi';
 import type { AppError } from '../api/axiosClient';
 import TripAssignmentModal from '../components/TripAssignmentModal';
+import {
+  bulkAssignDriver,
+  enrichTripsWithDriver,
+  fetchDriverOptions,
+} from '../api/tripAssignmentApi';
+import type { AssignableTrip, DriverOption } from '../api/tripAssignmentApi';
+import TripBulkAssignBar from '../components/TripBulkAssignBar';
+import UnassignedTripsFilter from '../components/UnassignedTripsFilter';
 
 const { Title, Text } = Typography;
 
@@ -63,7 +72,7 @@ export default function TripAssignmentPage() {
   // Mặc định lọc chuyến "Đã lên lịch" — phân công điều xe chỉ có nghĩa với chuyến chưa chạy.
   const [status, setStatus] = useState<TripStatus | undefined>('Scheduled');
 
-  const [data, setData] = useState<Trip[]>([]);
+  const [data, setData] = useState<AssignableTrip[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -77,6 +86,14 @@ export default function TripAssignmentPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [assigningTrip, setAssigningTrip] = useState<Trip | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Trạng thái cho phần phân công tài xế (task 120): danh sách tài xế cho ô chọn, bộ lọc
+  // "chỉ chưa phân công" và các chuyến đang chọn để gán hàng loạt.
+  const [driverOptions, setDriverOptions] = useState<DriverOption[]>([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(true);
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+  const [selectedTripIds, setSelectedTripIds] = useState<Key[]>([]);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   // Tải danh sách tuyến cho ô chọn, tự chọn tuyến đầu tiên khi mở trang — cùng khuôn
   // TripListByDayPage.
@@ -113,6 +130,23 @@ export default function TripAssignmentPage() {
     void loadBusOptions();
   }, [loadBusOptions]);
 
+  // Tải danh sách tài xế đang hoạt động cho ô chọn "phân công hàng loạt" — chỉ tải một lần
+  // khi mở trang. Hiện lấy từ nhánh dữ liệu giả (chờ backend task 113 của Kiên).
+  const loadDriverOptions = useCallback(async () => {
+    try {
+      setDriverOptions(await fetchDriverOptions());
+    } catch (error) {
+      message.error((error as Error).message || 'Không tải được danh sách tài xế.');
+    } finally {
+      setLoadingDrivers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
+    void loadDriverOptions();
+  }, [loadDriverOptions]);
+
   useEffect(() => {
     if (!selectedRouteId) return;
 
@@ -128,7 +162,10 @@ export default function TripAssignmentPage() {
     fetchTrips(selectedRouteId, { from, to, status, page, pageSize })
       .then((result) => {
         if (cancelled) return;
-        setData(result.items);
+        // Gắn thêm thông tin tài xế (driverId/driverName) vào từng chuyến — nhánh giả hiện
+        // so le có/không để demo bộ lọc "chỉ chưa phân công"; khi Kiên xong task 113 thì
+        // TripResponse tự mang sẵn và hàm này chỉ là chuyển kiểu.
+        setData(enrichTripsWithDriver(result.items));
         setTotal(result.total);
       })
       .catch((err: unknown) => {
@@ -177,7 +214,30 @@ export default function TripAssignmentPage() {
     }
   };
 
-  const columns: TableProps<Trip>['columns'] = [
+  // Phân công tài xế HÀNG LOẠT cho các chuyến đang chọn — task 120. Hiện gọi nhánh giả
+  // (bulkAssignDriver ghi vào bản đồ phiên) nên kết quả "dính" sau khi reload; khi Kiên
+  // xong task 113 thì hàm gọi endpoint thật và hành vi giữ nguyên.
+  const handleBulkAssign = async (driverId: string) => {
+    if (!selectedRouteId || selectedTripIds.length === 0) return;
+    setBulkSubmitting(true);
+    try {
+      const count = await bulkAssignDriver(
+        selectedRouteId,
+        selectedTripIds.map(String),
+        driverId,
+      );
+      message.success(`Đã phân công tài xế cho ${count} chuyến.`);
+      setSelectedTripIds([]);
+      setReloadKey((key) => key + 1);
+    } catch (error) {
+      const appError = error as AppError;
+      message.error(appError.customMessage || 'Phân công hàng loạt thất bại.');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
+  const columns: TableProps<AssignableTrip>['columns'] = [
     {
       title: 'Giờ khởi hành',
       dataIndex: 'departureTime',
@@ -206,9 +266,14 @@ export default function TripAssignmentPage() {
       title: 'Tài xế',
       key: 'driver',
       width: 150,
-      // Backend chưa trả thông tin tài xế (cột Trips.DriverId chưa có endpoint đọc — task của
-      // Kiên/Hiếu), nên cột này tạm hiển thị "Chưa phân công" cho tới khi có API.
-      render: () => <Tag color="default">Chưa phân công</Tag>,
+      // driverName/driverId do enrichTripsWithDriver gắn (nhánh giả). Khi Kiên xong task 113,
+      // TripResponse tự mang sẵn và cột này đọc trực tiếp mà không cần lớp làm giàu.
+      render: (_, trip) =>
+        trip.driverName ? (
+          <Tag color="geekblue">{trip.driverName}</Tag>
+        ) : (
+          <Tag color="default">Chưa phân công</Tag>
+        ),
     },
     {
       title: 'Trạng thái',
@@ -250,6 +315,10 @@ export default function TripAssignmentPage() {
     },
   ];
 
+  // Chỉ hiện chuyến chưa phân công khi bật bộ lọc — lọc phía client trên trang hiện tại
+  // (chờ backend thêm tham số `unassigned` ở task 113, khi đó chuyển sang lọc server-side).
+  const visibleData = onlyUnassigned ? data.filter((trip) => trip.driverId === null) : data;
+
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
@@ -257,7 +326,8 @@ export default function TripAssignmentPage() {
           Phân công điều xe theo chuyến
         </Title>
         <Text type="secondary">
-          Gán xe cho từng chuyến (chọn tài xế sẽ bổ sung khi có API).
+          Gán xe cho từng chuyến + phân công tài xế hàng loạt (phần tài xế đang dùng dữ liệu
+          giả, chờ API gán tài xế của Kiên).
         </Text>
       </div>
 
@@ -300,21 +370,47 @@ export default function TripAssignmentPage() {
             }}
           />
 
+          <UnassignedTripsFilter
+            value={onlyUnassigned}
+            onChange={(value) => {
+              setOnlyUnassigned(value);
+              setSelectedTripIds([]);
+            }}
+          />
+
           <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
             Làm mới
           </Button>
         </Space>
 
+        <TripBulkAssignBar
+          selectedCount={selectedTripIds.length}
+          drivers={driverOptions}
+          loadingDrivers={loadingDrivers}
+          submitting={bulkSubmitting}
+          onClear={() => setSelectedTripIds([])}
+          onAssign={handleBulkAssign}
+        />
+
         {!selectedRouteId && !loadingRoutes ? (
           <Empty description="Chưa có tuyến nào để phân công điều xe." />
         ) : (
-          <Table<Trip>
+          <Table<AssignableTrip>
             rowKey="id"
             columns={columns}
-            dataSource={data}
+            dataSource={visibleData}
             loading={loading}
             scroll={{ x: 820 }}
             locale={{ emptyText: 'Không có chuyến nào trong ngày này' }}
+            rowSelection={{
+              selectedRowKeys: selectedTripIds,
+              onChange: (keys) => setSelectedTripIds(keys),
+              getCheckboxProps: (record) => ({
+                // Chỉ chọn được chuyến đã lên lịch VÀ chưa có tài xế — phân công hàng loạt
+                // chỉ có nghĩa với chuyến chưa phân công.
+                disabled: record.status !== 'Scheduled' || record.driverId !== null,
+              }),
+            }}
             pagination={{
               current: page,
               pageSize,
