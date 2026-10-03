@@ -33,6 +33,7 @@ smart-bus-ticketing/
 ├─ backend/
 │  ├─ SmartBus.sln
 │  ├─ SmartBus.Api/          # API chính (toàn bộ nghiệp vụ nằm ở đây)
+│  ├─ SmartBus.Seed/         # Nạp dữ liệu nền cho CSDL chung (chạy tay — docs/25)
 │  └─ SmartBus.Tests/        # Kiểm thử xUnit
 ├─ frontend/                 # React + Vite + Ant Design
 └─ docs/                     # Tài liệu, sơ đồ
@@ -47,7 +48,7 @@ smart-bus-ticketing/
 |---|---|---|
 | .NET SDK | 10.0.x | `dotnet --version` |
 | Node.js | 24.x | `node --version` |
-| PostgreSQL | 15+ | hoặc dùng Supabase (không cần cài) |
+| PostgreSQL | 15+ | không cần cài — nhóm dùng chung Supabase (docs/25) |
 
 ## Chạy dự án
 
@@ -56,10 +57,12 @@ smart-bus-ticketing/
 ```bash
 cd backend
 cp SmartBus.Api/appsettings.Development.json.example SmartBus.Api/appsettings.Development.json
-# Mở file vừa tạo, điền chuỗi kết nối PostgreSQL và JWT key
+# Mở file vừa tạo, dán chuỗi kết nối CSDL chung (Supabase) — lấy ở chat nhóm. Hướng dẫn: docs/25-huong-dan-csdl-chung.md
 dotnet restore
 dotnet ef database update --project SmartBus.Api
 dotnet run --project SmartBus.Api
+# CSDL chung đã có sẵn dữ liệu nền + 4 tài khoản mẫu. Chỉ chạy lệnh seed khi CSDL trống:
+# dotnet run --project SmartBus.Seed -- --password "<mật khẩu seed trong chat nhóm>"
 ```
 
 API chạy ở `http://localhost:5080`, xem Swagger ở `/swagger`.
