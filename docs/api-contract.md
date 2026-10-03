@@ -2035,18 +2035,17 @@ cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc 
 
 ## Phản ánh — `/feedbacks`
 
-> 🚧 Story 24 đã có **phần quản lý xử lý** (Phùng Duy Hoàng) và **danh sách phản ánh của hành khách**
-> (Nguyễn Duy Kiên). Hợp đồng đã chốt nhưng **chưa chạy được trên CSDL thật**: hai bảng
-> `Feedbacks`/`FeedbackReplies` **chưa migrate** (Vàng Thị Dăm — hướng dẫn + checklist:
-> `docs/24-huong-dan-migrate-feedbacks.md`). Phần còn lại của story **chưa làm**: gửi phản ánh
-> (Trần Trung Hiếu), thống kê theo loại/tuyến (Nguyễn Duy Kiên). Ai làm phần nào thì bổ sung mục cho
-> phần đó vào đây.
+> 🚧 Story 24 đã có **phần quản lý xử lý** (Phùng Duy Hoàng), **danh sách phản ánh của hành khách**
+> và **thống kê theo loại/tuyến** (Nguyễn Duy Kiên). Hai bảng `Feedbacks`/`FeedbackReplies` **đã có
+> migration** (Vàng Thị Dăm — `20261003124532_Sprint2_Feedbacks_FeedbackReplies`); còn thiếu bước
+> chạy `dotnet ef database update` lên CSDL. Phần còn lại của story **chưa làm**: gửi phản ánh
+> (Trần Trung Hiếu). Ai làm phần nào thì bổ sung mục cho phần đó vào đây.
 >
 > **Toàn bộ endpoint `/admin/feedbacks` ở mục "Endpoints" dưới đây yêu cầu vai trò `Manager` hoặc
 > `Admin`** — xử lý phản ánh là nghiệp vụ vận hành của nhà xe. Người đã đăng nhập nhưng không đủ
-> quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`. Hai
-> endpoint `/feedbacks/me` ở mục cuối thì ngược lại — hành khách tự xem phản ánh của mình, xem
-> "Phản ánh của tôi".
+> quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`. Cùng
+> quyền đó cho mục "Thống kê phản ánh", còn hai endpoint `/feedbacks/me` ở mục cuối thì ngược lại —
+> hành khách tự xem phản ánh của mình, xem "Phản ánh của tôi".
 
 Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đây:
 
@@ -2223,6 +2222,70 @@ Ghi chú chung:
   `POST .../replies` → `Create`, cả hai đều `Target` = `Feedbacks:{id phản ánh}` (id đọc từ body trả
   về, chính là id phản ánh). Tra vết một phản ánh: lọc nhật ký theo `target`.
 - **`{id:guid}` có ràng buộc định dạng**: GUID sai định dạng không khớp route → **404**, không phải 500.
+
+### Thống kê phản ánh — `/admin/feedbacks/statistics`
+
+> Task *"API thống kê phản ánh theo loại và theo tuyến"* (US 24, Sprint 2, Nguyễn Duy Kiên).
+
+Một endpoint duy nhất, trả về hai bảng đếm của **toàn bộ** phản ánh trong hệ thống: theo **loại** và
+theo **tuyến**.
+
+| Method | Endpoint | Mô tả | Trả về |
+|---|---|---|---|
+| GET | `/admin/feedbacks/statistics` | Đếm phản ánh theo loại và theo tuyến | `FeedbackStatistics` |
+
+Yêu cầu vai trò `Manager` hoặc `Admin` như nhóm `/admin/feedbacks` ở trên — thống kê là số liệu vận
+hành của nhà xe, không phải dữ liệu của một hành khách. Không đăng nhập → **401**; không đủ quyền →
+**403**. Endpoint **không có tham số nào**, nên không có nhánh 400/404: đúng quyền là luôn **200**,
+kể cả khi hệ thống chưa có phản ánh nào (mọi con đếm bằng 0, `byType` vẫn đủ ba dòng).
+
+```json
+// FeedbackStatistics — ví dụ GET /admin/feedbacks/statistics
+{
+  "total": 42,
+  "byType": [
+    { "type": "Complaint", "count": 20 },
+    { "type": "Compliment", "count": 7 },
+    { "type": "Suggestion", "count": 15 }
+  ],
+  "byRoute": [
+    { "routeId": "b7c1d2e3-…", "routeCode": "01", "routeName": "Bến Thành — Chợ Lớn", "count": 12 },
+    { "routeId": "c8d2e3f4-…", "routeCode": "B10", "routeName": "Cầu Giấy — Bờ Hồ", "count": 9 }
+  ],
+  "withoutTrip": 21
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `total` | number | Tổng số phản ánh trong hệ thống |
+| `byType` | `{ type, count }[]` | Đếm theo `type` |
+| `byRoute` | `{ routeId, routeCode, routeName, count }[]` | Đếm theo tuyến của chuyến bị phản ánh |
+| `withoutTrip` | number | Số phản ánh **không gắn chuyến** (`tripId` null) nên không quy được về tuyến nào |
+
+Ba luật của hình dạng này:
+
+- **`byType` LUÔN đủ ba dòng**, kể cả loại chưa có phản ánh nào (`count: 0`). Biểu đồ theo loại có
+  trục cố định ba giá trị; tháng không có khiếu nại nào thì màn hình phải vẽ cột 0, chứ không phải
+  thiếu mất một cột. Thứ tự cố định: `Complaint` → `Compliment` → `Suggestion`.
+- **`byRoute` chỉ có những tuyến ĐÃ có phản ánh** — không liệt kê tuyến chưa từng bị phản ánh (đó là
+  câu hỏi khác: "mọi tuyến, kể cả tuyến sạch"). Sắp theo `count` giảm dần — tuyến bị phản ánh nhiều
+  nhất lên đầu, vì đó chính là điều bảng này để trả lời — trùng số thì theo `routeCode` tăng dần cho
+  thứ tự tất định.
+- **`tripId` null không quy được về tuyến** — phản ánh về giá vé/ứng dụng/dịch vụ chung không gắn
+  chuyến nào (A9 #20), nên chúng nằm ở `withoutTrip` chứ không thành một dòng `routeId: null` trong
+  `byRoute`: trộn hai loại khác nhau vào một mảng thì màn hình phải tự đoán cách vẽ.
+
+Hai đẳng thức luôn đúng — màn hình được phép dựa vào, test khoá lại:
+
+```
+sum(byType[].count)                 == total
+sum(byRoute[].count) + withoutTrip  == total
+```
+
+**Cố ý CHƯA có:** lọc theo khoảng thời gian, lọc theo trạng thái, phân trang. Task chỉ hỏi "theo loại
+và theo tuyến". Thêm tham số lọc là **đổi hình dạng API** — phải bàn ở nhóm rồi sửa mục này trước khi
+code (⛔5), đừng tự thêm.
 
 ### Phản ánh của tôi — `/feedbacks/me` (hành khách)
 

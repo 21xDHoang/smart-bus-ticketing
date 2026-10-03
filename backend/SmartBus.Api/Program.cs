@@ -175,6 +175,15 @@ builder.Services.AddScoped<IFeedbackAdminService, FeedbackAdminService>();
 // ⚠️ Cũng nằm trên hai bảng CHƯA có migration đó — xem docs/24-huong-dan-migrate-feedbacks.md.
 builder.Services.AddScoped<IFeedbackLookupService, FeedbackLookupService>();
 
+// Thống kê phản ánh theo loại và theo tuyến: GET /api/admin/feedbacks/statistics (US 24).
+// Task "API thống kê phản ánh theo loại và theo tuyến" (Sprint 2) — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Đặt ngay sau IFeedbackLookupService ở trên để ba service của story 24 đứng liền một mạch: quản lý
+// xử lý (Hoàng) → phản ánh của tôi → thống kê. Chỉ đọc và gộp nhóm ở tầng CSDL, không ghi gì.
+// Quyền: cùng policy ManagerOrAbove với IFeedbackAdminService (thống kê là số liệu toàn hệ thống),
+// KHÁC hẳn IFeedbackLookupService ở trên ([Authorize] trần cho hành khách).
+builder.Services.AddScoped<IFeedbackStatisticsService, FeedbackStatisticsService>();
+
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
