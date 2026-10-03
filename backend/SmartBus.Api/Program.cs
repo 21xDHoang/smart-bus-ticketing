@@ -165,6 +165,16 @@ builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 // docs/24-huong-dan-migrate-feedbacks.md. Test tích hợp chạy trên InMemory nên không chờ migration.
 builder.Services.AddScoped<IFeedbackAdminService, FeedbackAdminService>();
 
+// Phản ánh của hành khách: GET /api/feedbacks/me và GET /api/feedbacks/me/{id} (US 24).
+// Task "API danh sách phản ánh của hành khách + theo dõi trạng thái xử lý" (Sprint 2) — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Đặt ngay sau IFeedbackAdminService ở trên vì cùng story 24 và cùng hai bảng — nhưng KHÁC hẳn về
+// quyền: nhóm /admin/feedbacks nằm sau policy ManagerOrAbove, còn hai endpoint này là [Authorize]
+// trần cho hành khách tự xem phản ánh của mình, quyền sở hữu kiểm ngay trong truy vấn theo userId
+// (phản ánh của người khác trả 404 chứ không phải 403). Cùng lối IMonthlyPassLookupService.
+// ⚠️ Cũng nằm trên hai bảng CHƯA có migration đó — xem docs/24-huong-dan-migrate-feedbacks.md.
+builder.Services.AddScoped<IFeedbackLookupService, FeedbackLookupService>();
+
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
