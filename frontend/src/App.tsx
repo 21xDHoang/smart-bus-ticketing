@@ -12,6 +12,7 @@ import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
 import TripAssignmentPage from './pages/TripAssignmentPage';
+import TripFrequencyPage from './pages/TripFrequencyPage';
 import MyFeedbackPage from './pages/MyFeedbackPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
@@ -70,6 +71,7 @@ function App() {
     { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
     { to: '/trips-by-day', label: 'Chuyến theo ngày', roles: ['Admin', 'Manager'] },
     { to: '/trip-schedule', label: 'Lịch trình', roles: ['Admin', 'Manager'] },
+    { to: '/trip-frequency', label: 'Tần suất chạy xe', roles: ['Admin', 'Manager'] },
     { to: '/trip-assignment', label: 'Phân công điều xe', roles: ['Admin', 'Manager'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
@@ -240,6 +242,17 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <TripAssignmentPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /trip-frequency là màn hình cấu hình tần suất chạy xe theo khung giờ
+                    trong ngày (US 13, task của Hoàng Văn Thịnh) — chỉ Admin và Manager vào
+                    được (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/trip-frequency"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <TripFrequencyPage />
                     </RouteGuard>
                   }
                 />
