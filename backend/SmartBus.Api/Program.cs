@@ -51,6 +51,18 @@ builder.Services.AddScoped<ITripService, TripService>();
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
 builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 
+// Job sinh chuyến tự động cho những ngày sắp tới (US 13).
+// Task "BackgroundService sinh chuyến tự động từ lịch trình theo ngày" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// ITripGenerationService đăng ký ngay dưới — hosted service là singleton còn AppDbContext là scoped
+// nên nó mở scope riêng cho mỗi lượt chạy; giải thích đầy đủ ở đầu TripGenerationBackgroundService.
+// Đặt ngay sau IRouteTripsService vì cùng story 13 và cùng bàn về lịch trình: API sinh chuyến hàng
+// loạt "gieo" lịch trình một lần, job này nhân bản nó sang những ngày sau — quy ước A8.3 không có
+// bảng mẫu nên ngày đã có chuyến chính là mẫu (xem TripGenerationService).
+builder.Services.AddScoped<ITripGenerationService, TripGenerationService>();
+builder.Services.AddHostedService<TripGenerationBackgroundService>();
+
 // Tra cứu danh sách chuyến theo ngày + lọc theo tuyến: GET /api/trips.
 // Task story 13 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Cùng bề mặt /trips với ITripService ở trên nhưng khác bề mặt nghiệp vụ (bộ lọc thay vì định
@@ -118,6 +130,16 @@ builder.Services.AddScoped<IMonthlyPassRenewalService, MonthlyPassRenewalService
 // Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — cùng lối IMonthlyPassRenewalService ở trên.
 builder.Services.AddScoped<IMonthlyPassLookupService, MonthlyPassLookupService>();
 
+// Job quét vé tháng hết hạn: lật Status Active → Expired cho vé đã qua ValidTo (US 16).
+// Task "BackgroundService tự động chuyển vé tháng hết hạn sang trạng thái Expired" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// IMonthlyPassExpiryService ở trên — hosted service là singleton còn AppDbContext là scoped nên nó
+// mở scope riêng cho mỗi lượt quét; giải thích đầy đủ ở đầu MonthlyPassExpiryBackgroundService.
+// Đặt ngay sau nhóm vé tháng để đọc cùng một mạch.
+builder.Services.AddScoped<IMonthlyPassExpiryService, MonthlyPassExpiryService>();
+builder.Services.AddHostedService<MonthlyPassExpiryBackgroundService>();
+
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -133,6 +155,15 @@ builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
 // nhau nên hai đường dẫn không đụng nhau (đoạn literal "export" thắng đoạn tham số).
 builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 
+
+// Xử lý phản ánh phía quản trị: GET/PATCH /api/admin/feedbacks, GET /api/admin/feedbacks/{id},
+// POST /api/admin/feedbacks/{id}/replies (US 24).
+// Task "API Admin phản hồi và đổi trạng thái phản ánh" (Sprint 2) — Phùng Duy Hoàng (file này
+// cũng của Hoàng).
+// ⚠️ Hai bảng Feedbacks/FeedbackReplies đã có entity + cấu hình (Data/AppDbContext.Feedback.cs)
+// nhưng CHƯA có migration — việc sinh migration là của Vàng Thị Dăm, xem
+// docs/24-huong-dan-migrate-feedbacks.md. Test tích hợp chạy trên InMemory nên không chờ migration.
+builder.Services.AddScoped<IFeedbackAdminService, FeedbackAdminService>();
 
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.

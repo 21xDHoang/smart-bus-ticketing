@@ -22,6 +22,7 @@ public partial class AppDbContext : DbContext
         ConfigureAuditLog(modelBuilder);
         ConfigureDiscountRequest(modelBuilder);
         ConfigureMonthlyPass(modelBuilder);
+        ConfigureFeedback(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -37,4 +38,8 @@ public partial class AppDbContext : DbContext
     partial void ConfigureDiscountRequest(ModelBuilder modelBuilder);
 
     partial void ConfigureMonthlyPass(ModelBuilder modelBuilder);
+
+    // US 24 (Feedbacks + FeedbackReplies): entity + cấu hình đã có, migration còn thiếu —
+    // việc của Vàng Thị Dăm, xem docs/24-huong-dan-migrate-feedbacks.md.
+    partial void ConfigureFeedback(ModelBuilder modelBuilder);
 }

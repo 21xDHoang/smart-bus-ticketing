@@ -13,6 +13,7 @@ import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
 import TripAssignmentPage from './pages/TripAssignmentPage';
 import TripFrequencyPage from './pages/TripFrequencyPage';
+import MyFeedbackPage from './pages/MyFeedbackPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -63,6 +64,7 @@ function App() {
   const navItems = [
     { to: '/', label: 'Trang chủ', roles: [] as string[] },
     { to: '/route-lookup', label: 'Tra cứu tuyến', roles: [] as string[] },
+    { to: '/my-feedback', label: 'Phản ánh của tôi', roles: [] as string[] },
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
     { to: '/buses', label: 'Đội xe', roles: ['Admin', 'Manager'] },
@@ -169,6 +171,10 @@ function App() {
                     sách chuyến + sắp xếp theo giờ/giá. Cũng dành cho mọi người đã đăng nhập,
                     không giới hạn vai trò như các màn hình quản trị. */}
                 <Route path="/trip-results" element={<TripSearchResultPage />} />
+                {/* /my-feedback là màn hình danh sách phản ánh của tôi (US 24, Sprint 2) —
+                    mọi người đã đăng nhập đều dùng được, không giới hạn vai trò như các màn
+                    hình quản trị. */}
+                <Route path="/my-feedback" element={<MyFeedbackPage />} />
                 {/* /stops là màn hình quản trị — chỉ Admin và Manager vào được
                     (docs/api-contract.md). Vai trò khác nhận trang 403. */}
                 <Route
