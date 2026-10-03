@@ -51,6 +51,18 @@ builder.Services.AddScoped<ITripService, TripService>();
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
 builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
 
+// Job sinh chuyến tự động cho những ngày sắp tới (US 13).
+// Task "BackgroundService sinh chuyến tự động từ lịch trình theo ngày" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// ITripGenerationService đăng ký ngay dưới — hosted service là singleton còn AppDbContext là scoped
+// nên nó mở scope riêng cho mỗi lượt chạy; giải thích đầy đủ ở đầu TripGenerationBackgroundService.
+// Đặt ngay sau IRouteTripsService vì cùng story 13 và cùng bàn về lịch trình: API sinh chuyến hàng
+// loạt "gieo" lịch trình một lần, job này nhân bản nó sang những ngày sau — quy ước A8.3 không có
+// bảng mẫu nên ngày đã có chuyến chính là mẫu (xem TripGenerationService).
+builder.Services.AddScoped<ITripGenerationService, TripGenerationService>();
+builder.Services.AddHostedService<TripGenerationBackgroundService>();
+
 // Tra cứu danh sách chuyến theo ngày + lọc theo tuyến: GET /api/trips.
 // Task story 13 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Cùng bề mặt /trips với ITripService ở trên nhưng khác bề mặt nghiệp vụ (bộ lọc thay vì định
