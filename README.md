@@ -65,7 +65,7 @@ dotnet run --project SmartBus.Api
 # dotnet run --project SmartBus.Seed -- --password "<mật khẩu seed trong chat nhóm>"
 ```
 
-API chạy ở `http://localhost:5080`, xem Swagger ở `/swagger`.
+API chạy ở `http://localhost:5080`; đặc tả OpenAPI ở `/openapi/v1.json` (không kèm giao diện Swagger).
 
 ### Frontend
 

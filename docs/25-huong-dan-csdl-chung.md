@@ -26,7 +26,7 @@
    dotnet run --project backend/SmartBus.Api
    ```
 
-   API ở `http://localhost:5080`, Swagger ở `/swagger`.
+   API ở `http://localhost:5080`, đặc tả OpenAPI ở `/openapi/v1.json`.
 
 Không cần cài PostgreSQL trên máy.
 
