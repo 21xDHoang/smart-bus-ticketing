@@ -118,6 +118,16 @@ builder.Services.AddScoped<IMonthlyPassRenewalService, MonthlyPassRenewalService
 // Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — cùng lối IMonthlyPassRenewalService ở trên.
 builder.Services.AddScoped<IMonthlyPassLookupService, MonthlyPassLookupService>();
 
+// Job quét vé tháng hết hạn: lật Status Active → Expired cho vé đã qua ValidTo (US 16).
+// Task "BackgroundService tự động chuyển vé tháng hết hạn sang trạng thái Expired" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// IMonthlyPassExpiryService ở trên — hosted service là singleton còn AppDbContext là scoped nên nó
+// mở scope riêng cho mỗi lượt quét; giải thích đầy đủ ở đầu MonthlyPassExpiryBackgroundService.
+// Đặt ngay sau nhóm vé tháng để đọc cùng một mạch.
+builder.Services.AddScoped<IMonthlyPassExpiryService, MonthlyPassExpiryService>();
+builder.Services.AddHostedService<MonthlyPassExpiryBackgroundService>();
+
 // Nhật ký hoạt động: ghi tự động mọi thao tác thay đổi dữ liệu (US 23).
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
