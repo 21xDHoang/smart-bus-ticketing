@@ -42,10 +42,13 @@ if (connectionString is null)
 {
     Console.Error.WriteLine(
         """
-        Không tìm thấy chuỗi kết nối CSDL. Chọn một trong hai cách:
+        Không tìm thấy chuỗi kết nối CSDL (hoặc file cấu hình còn nguyên chỗ dán mẫu).
+        Nhanh nhất — copy chuỗi kết nối trong tin nhắn ghim ở chat nhóm rồi chạy:
+          bash scripts/setup-csdl.sh
+        Hoặc làm tay:
           1. Tạo backend/SmartBus.Api/appsettings.Development.json từ file .example (xem README),
              rồi dán chuỗi kết nối CSDL chung — lấy ở chat nhóm — vào ConnectionStrings:Default.
-          2. Đặt biến môi trường ConnectionStrings__Default.
+          2. Hoặc đặt biến môi trường ConnectionStrings__Default.
         """);
     return 1;
 }
@@ -166,7 +169,7 @@ static (string? ConnectionString, string Nguon) ResolveConnectionString()
 
             if (json.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
                 && connectionStrings.TryGetProperty("Default", out var macDinh)
-                && !string.IsNullOrWhiteSpace(macDinh.GetString()))
+                && ChuoiKetNoiCsdl.DaCauHinh(macDinh.GetString()))
             {
                 return (macDinh.GetString(), duongDan);
             }

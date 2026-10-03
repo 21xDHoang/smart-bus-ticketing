@@ -16,6 +16,15 @@
    cp SmartBus.Api/appsettings.Development.json.example SmartBus.Api/appsettings.Development.json
    ```
 
+   **Cách nhanh hơn** — chuỗi kết nối đang trong clipboard, chạy:
+
+   ```bash
+   bash scripts/setup-csdl.sh
+   ```
+
+   Script tự tạo file từ mẫu và điền chuỗi vào (không in chuỗi ra màn hình; chạy lại thì bỏ qua).
+   Ai dùng PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\setup-csdl.ps1`.
+
    Mở file vừa tạo, dán chuỗi vào `ConnectionStrings:Default`. **Đừng tự sửa** Host/Port/Username —
    chuỗi đó là session pooler của Supabase (chuỗi "direct" chỉ chạy được trên mạng IPv6).
 3. Chạy:
@@ -97,6 +106,7 @@ quy tắc bắt buộc". CSDL chung không đổi quy tắc đó, chỉ đổi c
 | Kết nối treo / timeout | Đang dùng chuỗi direct (chỉ IPv6) | Dùng đúng chuỗi trong chat nhóm — đó là session pooler |
 | Seed báo "đã có sẵn bỏ qua 4" | Tài khoản đã tồn tại từ lần seed trước | Bình thường — seed là idempotent |
 | Màn "Tra cứu tuyến" báo không đủ quyền (403) | Màn này đọc `GET /routes` — chỉ Manager/Admin | Đăng nhập `0900000001`/`0900000002`; tìm chuyến công khai nằm ở màn "Kết quả tìm kiếm" |
+| API thoát ngay khi khởi động, in hướng dẫn cấu hình CSDL | Máy chưa có `appsettings.Development.json` (hoặc còn nguyên chỗ dán mẫu) | Làm theo hướng dẫn in ra — nhanh nhất: `bash scripts/setup-csdl.sh` (mục 1) |
 
 ## 6. Chạy demo toàn bộ tính năng đã có
 
