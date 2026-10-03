@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -34,16 +35,22 @@ function formatVnd(price: number): string {
 
 // Màn hình tra cứu tuyến (User Story 1): form "điểm đi - điểm đến - ngày" + kết quả tuyến.
 // Đây là màn hình cho HÀNH KHÁCH — không giới hạn vai trò như các màn hình quản trị.
-// Phần "Component autocomplete chọn trạm dừng" (Hoàng Văn Thịnh) và "Màn hình kết quả
-// tìm kiếm chi tiết" (Nguyễn Đình Băng) là task riêng, nên ở đây điểm đi/điểm đến dùng
-// Input thường và kết quả hiển thị gọn ở mức tuyến.
+// Phần "Component autocomplete chọn trạm dừng" (Hoàng Văn Thịnh) là task riêng, nên ở đây
+// điểm đi/điểm đến dùng Input thường và kết quả hiển thị gọn ở mức tuyến. Mỗi tuyến có nút
+// "Xem chuyến" mở màn "Kết quả tìm kiếm" (Nguyễn Đình Băng) — mang theo routeId để màn đó
+// gọi thẳng GET /trips/search (công khai, không cần đăng nhập).
 export default function RouteLookupPage() {
   const [form] = Form.useForm<SearchFormValues>();
+  const navigate = useNavigate();
 
   const [results, setResults] = useState<RouteLookupResult[]>([]);
   const [loading, setLoading] = useState(false);
   // Chưa từng tìm kiếm thì hiện lời mời nhập; đã tìm mà rỗng thì hiện "không tìm thấy".
   const [hasSearched, setHasSearched] = useState(false);
+
+  // Tiêu chí của lần tìm gần nhất (đã chuẩn hoá về chuỗi) — nguyên liệu để mở màn
+  // "Kết quả tìm kiếm" từ nút "Xem chuyến" trên từng tuyến.
+  const [lastCriteria, setLastCriteria] = useState<{ destination: string; date: string } | null>(null);
 
   const handleSearch = async ({ origin, destination, date }: SearchFormValues) => {
     // Hai đầu mút giống nhau thì không có chuyến hợp lệ — chặn sớm thay vì trả kết quả rỗng.
@@ -60,6 +67,7 @@ export default function RouteLookupPage() {
         date: date.format('YYYY-MM-DD'),
       });
       setResults(found);
+      setLastCriteria({ destination: destination.trim(), date: date.format('YYYY-MM-DD') });
       setHasSearched(true);
     } catch (error) {
       const appError = error as AppError;
@@ -69,6 +77,19 @@ export default function RouteLookupPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Mở màn "Kết quả tìm kiếm" cho một tuyến. Điểm đi/điểm đến lấy theo tuyến (đúng chuẩn
+  // hiển thị), routeId để màn kết quả gọi thẳng GET /trips/search của tuyến đó.
+  const handleViewTrips = (route: RouteLookupResult) => {
+    const params = new URLSearchParams({
+      origin: route.origin,
+      destination: route.destination,
+      routeId: route.routeId,
+    });
+    if (lastCriteria) params.set('date', lastCriteria.date);
+
+    navigate(`/trip-results?${params.toString()}`);
   };
 
   return (
@@ -155,6 +176,9 @@ export default function RouteLookupPage() {
                         Giá từ {formatVnd(route.minPrice)}
                       </Text>
                     )}
+                    <Button type="primary" block onClick={() => handleViewTrips(route)}>
+                      Xem chuyến
+                    </Button>
                   </Space>
                 </Card>
               </List.Item>

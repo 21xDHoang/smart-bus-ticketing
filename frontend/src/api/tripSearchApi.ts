@@ -1,14 +1,17 @@
+import axiosClient from './axiosClient';
+import routeLookupApi from './routeLookupApi';
+
 // -----------------------------------------------------------------------------
 // API kết quả tìm kiếm chuyến — màn hình "Kết quả tìm kiếm" (User Story 1, Sprint 2).
 //
-// Backend CHƯA có hai endpoint phục vụ màn hình này, đều ghi "Chưa làm" ở sheet Sprint 2:
-//   - "API tìm kiếm chuyến theo điểm đi, điểm đến, ngày giờ" (Trần Trung Hiếu)
-//   - "API trả về kết quả gồm giá vé, giờ chạy, số ghế còn trống" (Phùng Duy Hoàng)
-// docs/api-contract.md (mục "Chuyến xe — /trips") cũng ghi rõ chưa có GET /trips (danh sách)
-// và chưa có seatsRemaining. Vì vậy module này TẠM dùng dữ liệu giả để dựng giao diện
-// trước — đúng pha "dựng giao diện bằng dữ liệu giả" trong quy ước nhóm, cùng lối
-// routeLookupApi.ts. Khi API công khai xong và đã ghi vào api-contract.md, thay nhánh
-// giả bằng lời gọi thật rồi xoá dữ liệu giả.
+// Endpoint chính đã có trên main: GET /trips/search — "API trả về kết quả gồm giá vé, giờ
+// chạy, số ghế còn trống" (Phùng Duy Hoàng), CÔNG KHAI không cần đăng nhập; hợp đồng ở mục
+// "GET /trips/search" của docs/api-contract.md.
+//
+// Việc tìm RA TUYẾN từ điểm đi/điểm đến vẫn chưa có endpoint công khai (task của Trần Trung
+// Hiếu), nên khi thiếu `routeId` module nhờ routeLookupApi ghép tạm từ GET /routes — đường
+// đó cần vai trò Manager/Admin. Có `routeId` (đi từ màn hình tra cứu tuyến) thì gọi thẳng
+// endpoint công khai, không cần quyền gì.
 // -----------------------------------------------------------------------------
 
 /** Tham số tìm chuyến — được truyền từ màn hình "Tra cứu tuyến" (form của Dương Thị Hạnh). */
@@ -19,7 +22,7 @@ export interface TripSearchParams {
   /** Điểm đến — khớp `Route.destination`. */
   destination: string;
 
-  /** Ngày đi (yyyy-MM-dd). Mock dùng để gán ngày cho giờ khởi hành. */
+  /** Ngày đi (yyyy-MM-dd). Ghép thành `from`/`to` của TRỌN ngày đó (giờ Việt Nam) khi gọi API. */
   date?: string;
 
   /** Tuyến đã chọn — nếu có thì chỉ liệt kê chuyến của tuyến đó. */
@@ -42,8 +45,8 @@ export interface TripSearchResult {
   /** Giờ dự kiến tới bến cuối. null khi chưa chốt. */
   arrivalTime: string | null;
 
-  /** Giá vé phổ thông (VND) — "giá vé" trong task. */
-  price: number;
+  /** Giá vé phổ thông (VND) — "giá vé" trong task. null khi tuyến chưa cấu hình giá. */
+  price: number | null;
 
   /** Số ghế còn trống — "số ghế còn trống" trong task. */
   seatsRemaining: number;
@@ -60,20 +63,47 @@ export interface TripSearchApi {
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì API tìm chuyến công khai
-// chưa có — xem ghi chú đầu file. Đổi thành `false` khi backend xong và đã ghi contract.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Đã bật API thật — GET /trips/search có trên main
+// (xem ghi chú đầu file). Nhánh giả giữ lại làm đường lùi khi cần dựng giao diện lúc mất
+// mạng; đổi cờ này thành `true` là quay lại được.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Khoảng thời gian của TRỌN một ngày (giờ Việt Nam) — cùng quy ước "lọc theo ngày = gửi
+ * from/to của trọn ngày" của GET /trips/search và GET /trips (docs/api-contract.md).
+ * Không có ngày thì không gửi khoảng nào — endpoint trả mọi chuyến Scheduled của tuyến.
+ */
+function searchRange(date: string | undefined): Record<string, string> {
+  if (!date) return {};
+
+  return { from: `${date}T00:00:00+07:00`, to: `${date}T23:59:59+07:00` };
+}
+
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
 const api: TripSearchApi = {
-  async search() {
-    // TODO(story 1): khi Hiếu có "API tìm kiếm chuyến theo điểm đi/điểm đến/ngày giờ" và
-    // Hoàng có "API trả về giá vé/giờ chạy/số ghế còn trống" — đã ghi vào api-contract.md —
-    // thì gọi endpoint đó ở đây. Chưa có contract nên không dựng lời gọi để tránh đặt tên
-    // endpoint bịa (quy ước D1: danh từ số nhiều, kebab-case).
-    throw new Error('Chưa có API tìm kiếm chuyến công khai. Xem docs/api-contract.md.');
+  async search({ origin, destination, date, routeId }) {
+    // Có routeId (đi từ màn hình tra cứu tuyến) → gọi thẳng endpoint công khai.
+    // Thiếu routeId → nhờ màn tra cứu tuyến tìm các tuyến khớp điểm đi/điểm đến trước;
+    // đó là đường Manager/Admin vì GET /routes còn sau policy (xem ghi chú đầu file).
+    const routeIds = routeId
+      ? [routeId]
+      : (await routeLookupApi.search({ origin, destination })).map((route) => route.routeId);
+
+    const range = searchRange(date);
+
+    const lists = await Promise.all(
+      routeIds.map((id) =>
+        axiosClient.get<TripSearchResult[], TripSearchResult[]>('/trips/search', {
+          params: { routeId: id, ...range },
+        }),
+      ),
+    );
+
+    // Gộp nhiều tuyến rồi sắp theo giờ khởi hành tăng dần — cùng thứ tự backend trả cho
+    // một tuyến. Màn hình còn sắp lại theo lựa chọn của hành khách (giờ/giá).
+    return lists.flat().sort((a, b) => a.departureTime.localeCompare(b.departureTime));
   },
 };
 

@@ -7,17 +7,17 @@ import type { Fare } from './fareApi';
 // -----------------------------------------------------------------------------
 // API tra cứu tuyến — màn hình "Tra cứu tuyến" (User Story 1).
 //
-// Backend CHƯA có endpoint "tìm chuyến theo điểm đi - điểm đến - ngày giờ" (task của
-// Trần Trung Hiếu, Sprint 2). Nhánh API THẬT bên dưới tạm ghép từ 3 endpoint đã có sẵn
-// ở Sprint 1 để màn hình chạy được phần "tìm tuyến":
+// Endpoint "tìm tuyến theo điểm đi - điểm đến" vẫn CHƯA có (task của Trần Trung Hiếu,
+// Sprint 2), nên nhánh API THẬT bên dưới ghép từ 3 endpoint đã có sẵn ở Sprint 1:
 //   GET /routes                → lọc tuyến theo điểm đi/điểm đến (Route.origin/destination)
 //   GET /routes/{id}/stops     → danh sách trạm của tuyến
 //   GET /routes/{id}/fares     → giá vé thấp nhất
 //
 // ⚠️ Giới hạn hiện tại: 3 endpoint trên đều đòi vai trò Admin/Manager (docs/api-contract.md),
-// nên hành khách (Passenger) gọi nhánh thật sẽ nhận 403 cho tới khi Hiếu có API tìm chuyến
-// công khai. Vì vậy cờ mặc định là `USE_MOCK_DATA = true` — đúng pha "dựng giao diện bằng
-// dữ liệu giả trước" trong quy ước nhóm. Khi API công khai xong, đổi cờ này thành false.
+// nên màn "Tra cứu tuyến" phải đăng nhập bằng tài khoản Manager/Admin mới xem được kết quả.
+// Phần TÌM CHUYẾN của hành khách thì đã có đường công khai: từ kết quả tra cứu bấm "Xem
+// chuyến" → màn "Kết quả tìm kiếm" gọi GET /trips/search (công khai, không cần đăng nhập).
+// Khi Hiếu có API tìm tuyến công khai thì thay ruột hàm `search` dưới đây là xong.
 // -----------------------------------------------------------------------------
 
 /** Tham số tìm tuyến từ form "điểm đi - điểm đến - ngày". */
@@ -63,9 +63,10 @@ export interface RouteLookupApi {
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì API tìm chuyến công khai
-// chưa có — xem ghi chú đầu file. Đổi thành `false` khi backend xong.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Đã bật API thật — màn "Tra cứu tuyến" cần đăng
+// nhập bằng tài khoản Manager/Admin (xem ghi chú đầu file). Nhánh giả giữ làm đường lùi:
+// đổi cờ này thành `true` là quay lại được, không phải chạm phần nào khác.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -44,8 +44,9 @@ Cả 4 tài khoản dùng chung **một mật khẩu** — mật khẩu seed tro
 ## 3. Dữ liệu nền
 
 CSDL chung đã được nạp sẵn: 7 trạm ở TP.HCM, 2 tuyến (`01` Bến Thành — Chợ Lớn, `02` Bến Thành —
-Suối Tiên), 3 xe, và các chuyến của hôm nay + 2 ngày kế tiếp. Khi API chạy, một job nền tự nhân
-chuyến thêm cho các ngày sau — cứ để nó chạy.
+Suối Tiên), 3 xe, các chuyến của hôm nay + 2 ngày kế tiếp, và 3 phản ánh mẫu của tài khoản hành
+khách (đủ 3 trạng thái, có phản hồi của quản lý — màn "Phản ánh của tôi" mở lên là có dữ liệu).
+Khi API chạy, một job nền tự nhân chuyến thêm cho các ngày sau — cứ để nó chạy.
 
 (Chưa có bảng vé/ghế — Sprint 3 mới làm — nên `seatsRemaining` trong kết quả tìm chuyến luôn bằng
 sức chứa. Đúng thiết kế hiện tại, không phải lỗi.)
@@ -95,3 +96,54 @@ quy tắc bắt buộc". CSDL chung không đổi quy tắc đó, chỉ đổi c
 | `password authentication failed` (28P01) | Chuỗi kết nối dán sai hoặc thiếu | Copy lại nguyên chuỗi trong chat nhóm — đừng gõ tay |
 | Kết nối treo / timeout | Đang dùng chuỗi direct (chỉ IPv6) | Dùng đúng chuỗi trong chat nhóm — đó là session pooler |
 | Seed báo "đã có sẵn bỏ qua 4" | Tài khoản đã tồn tại từ lần seed trước | Bình thường — seed là idempotent |
+| Màn "Tra cứu tuyến" báo không đủ quyền (403) | Màn này đọc `GET /routes` — chỉ Manager/Admin | Đăng nhập `0900000001`/`0900000002`; tìm chuyến công khai nằm ở màn "Kết quả tìm kiếm" |
+
+## 6. Chạy demo toàn bộ tính năng đã có
+
+Chạy ngay trên máy bạn, dữ liệu là CSDL chung — **hai terminal**:
+
+```bash
+# Terminal 1 — API (để nguyên suốt buổi demo; job nền tự nhân chuyến cho ngày sau)
+dotnet run --project backend/SmartBus.Api
+```
+
+```bash
+# Terminal 2 — giao diện
+cd frontend
+npm install     # chỉ lần đầu
+npm run dev
+```
+
+Mở `http://localhost:5173` (Vite in địa chỉ chính xác ở terminal 2). Giao diện gọi API ở
+`http://localhost:5080/api`; chỉ khi API chạy địa chỉ khác mới cần tạo `frontend/.env.local` với
+dòng `VITE_API_URL=<địa chỉ API>`.
+
+Một lượt demo gợi ý, đi theo thứ tự:
+
+1. **Đăng nhập `0900000002` (Manager)**
+   - **Tra cứu tuyến**: điểm đi "Bến Thành", điểm đến "Chợ Lớn", chọn ngày hôm nay → **Tìm tuyến**.
+     ⚠️ Màn này đọc danh sách tuyến từ `GET /routes` nên **cần Manager/Admin** cho tới khi có API
+     tra cứu công khai (task của Hiếu).
+   - Bấm **Xem chuyến** trên một tuyến → màn **Kết quả tìm kiếm**: chuyến thật của ngày đã chọn
+     (giá, ghế còn trống, loại xe), sắp xếp theo giờ/giá. Bước này gọi `GET /trips/search` công
+     khai — hành khách cũng xem được.
+   - Các màn quản trị: **Tuyến đường · Trạm dừng · Đội xe · Gán trạm vào tuyến · Cấu hình giá vé ·
+     Chuyến theo ngày · Lịch trình · Tần suất chạy xe · Phân công điều xe**.
+2. **Đăng xuất, đăng nhập `0900000004` (Passenger)**
+   - **Phản ánh của tôi**: 3 phản ánh mẫu đủ 3 trạng thái — mở rộng một dòng để xem luồng phản hồi
+     của nhà xe (dòng "Khiếu nại · Đã xử lý" có 2 phản hồi).
+   - **Gửi phản ánh**, **Vé tháng**: giao diện chạy được nhưng hai nút gửi còn dùng **dữ liệu giả** —
+     backend chưa có `POST /feedbacks` và `POST /monthly-passes` (task của Hiếu).
+3. **Đăng xuất, đăng nhập `0900000001` (Admin)** — thêm hai màn riêng của Admin: **Người dùng**,
+   **Nhật ký**.
+
+Màn nào gọi API thật, màn nào còn giả:
+
+| Màn hình | Nguồn dữ liệu |
+|---|---|
+| Phản ánh của tôi (kèm luồng phản hồi) | **API thật** — `GET /feedbacks/me`, `GET /feedbacks/me/{id}` |
+| Kết quả tìm kiếm chuyến | **API thật** — `GET /trips/search` (công khai) |
+| Các màn quản trị (tuyến, trạm, xe, giá vé, chuyến, người dùng, nhật ký) | **API thật** |
+| Tra cứu tuyến | **API thật nhưng cần Manager/Admin** (chờ API tra cứu công khai của Hiếu) |
+| Gửi phản ánh (nút Gửi) | Dữ liệu giả — chờ `POST /feedbacks` |
+| Vé tháng (đăng ký) | Dữ liệu giả — chờ `POST /monthly-passes` |

@@ -15,10 +15,8 @@ import axiosClient from './axiosClient';
 //   POST /feedbacks → gửi một phản ánh mới → Feedback (201, status khởi tạo là `New`)
 //
 // Hình dạng entity khớp mục "Phản ánh — /feedbacks" trong docs/api-contract.md — nguồn
-// chân lý duy nhất. LƯU Ý khác với feedbackApi.ts (màn "Phản ánh của tôi" của Băng, đang
-// chạy dữ liệu giả cũ): loại đúng theo contract là `Complaint` / `Compliment` / `Suggestion`
-// và trạng thái là `New` / `InProgress` / `Resolved`. File này bám theo contract, không bám
-// theo dữ liệu giả của màn hình danh sách.
+// chân lý duy nhất (feedbackApi.ts của màn "Phản ánh của tôi" cũng đã bám cùng contract:
+// loại `Complaint` / `Compliment` / `Suggestion`, trạng thái `New` / `InProgress` / `Resolved`).
 // -----------------------------------------------------------------------------
 
 /** Loại phản ánh — khớp cột varchar Type của bảng Feedbacks (docs/api-contract.md). */

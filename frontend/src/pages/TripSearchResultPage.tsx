@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, Empty, List, Segmented, Space, Tag, Typography } from 'antd';
+import { Button, Card, Empty, List, Segmented, Space, Tag, Typography, message } from 'antd';
 import { ArrowLeftOutlined, CarOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import tripSearchApi from '../api/tripSearchApi';
 import type { TripSearchResult } from '../api/tripSearchApi';
+import type { AppError } from '../api/axiosClient';
 
 const { Title, Text } = Typography;
 
@@ -29,14 +30,25 @@ function seatsMeta(seatsRemaining: number): { label: string; color: string } {
   return { label: `Còn ${seatsRemaining} ghế`, color: 'green' };
 }
 
+/**
+ * So sánh theo giá — chuyến CHƯA có giá (`price` null) luôn xếp cuối ở cả hai chiều,
+ * không bị coi là 0 đồng. `direction` 1 = thấp trước, -1 = cao trước.
+ */
+function comparePrice(a: number | null, b: number | null, direction: 1 | -1): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return (a - b) * direction;
+}
+
 /** Sắp xếp một bản sao của kết quả theo khoá đang chọn, không đổi mảng gốc. */
 function sortResults(results: TripSearchResult[], sortKey: SortKey): TripSearchResult[] {
   const copy = [...results];
 
   if (sortKey === 'priceAsc') {
-    copy.sort((a, b) => a.price - b.price);
+    copy.sort((a, b) => comparePrice(a.price, b.price, 1));
   } else if (sortKey === 'priceDesc') {
-    copy.sort((a, b) => b.price - a.price);
+    copy.sort((a, b) => comparePrice(a.price, b.price, -1));
   } else {
     // Cùng ngày, cùng múi giờ (+07:00) nên so chuỗi ISO là so đúng thứ tự giờ.
     copy.sort((a, b) => a.departureTime.localeCompare(b.departureTime));
@@ -83,8 +95,10 @@ export default function TripSearchResultPage() {
         if (cancelled) return;
         setResults(found);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
+        const appError = err as AppError;
+        message.error(appError.customMessage || 'Không thể tải kết quả tìm kiếm chuyến.');
         setResults([]);
       })
       .finally(() => {
@@ -193,11 +207,17 @@ export default function TripSearchResultPage() {
                     </div>
                   </div>
 
-                  {/* Giá + số ghế còn trống */}
+                  {/* Giá + số ghế còn trống — tuyến chưa cấu hình giá thì ghi rõ thay vì hiện 0 đ */}
                   <div style={{ textAlign: 'right', minWidth: 128 }}>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#4361ee' }}>
-                      {formatVnd(trip.price)}
-                    </div>
+                    {trip.price === null ? (
+                      <Text type="secondary" style={{ fontWeight: 600 }}>
+                        Chưa có giá
+                      </Text>
+                    ) : (
+                      <div style={{ fontSize: 16, fontWeight: 700, color: '#4361ee' }}>
+                        {formatVnd(trip.price)}
+                      </div>
+                    )}
                     <Tag color={seats.color} style={{ marginTop: 4, marginInlineEnd: 0 }}>
                       {seats.label}
                     </Tag>

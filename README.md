@@ -78,6 +78,9 @@ npm run dev
 
 Web chạy ở `http://localhost:5173`.
 
+> Muốn xem **toàn bộ tính năng đã có** trong một lượt? Kịch bản demo từng bước (đăng nhập vai trò
+> nào, bấm gì, màn nào còn dữ liệu giả) nằm ở **mục 6 của `docs/25-huong-dan-csdl-chung.md`**.
+
 ## Quy tắc làm việc nhóm
 
 ### Git — 5 quy tắc bắt buộc

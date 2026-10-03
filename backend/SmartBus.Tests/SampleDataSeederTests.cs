@@ -12,6 +12,7 @@ namespace SmartBus.Tests;
 /// Chạy trên InMemory nên nhánh TRUNCATE của <c>--reset</c> (SQL của PostgreSQL) không chạy ở đây —
 /// thứ được ghim là hành vi nghiệp vụ, đúng những gì cả nhóm phụ thuộc:
 ///   - 4 tài khoản mỗi vai trò một cái, mật khẩu băm bằng đúng PasswordService của API (đăng nhập được);
+///   - phản ánh mẫu của hành khách: đủ ba trạng thái, có phản hồi của quản lý, một phản ánh không gắn chuyến;
 ///   - chạy lại không nhân bản dữ liệu (seed là idempotent — cả nhóm chạy chung một CSDL);
 ///   - --reset dọn sạch dữ liệu nghiệp vụ rồi dựng lại dữ liệu nền.
 /// </summary>
@@ -64,6 +65,50 @@ public class SampleDataSeederTests
     }
 
     [Fact]
+    public async Task Seed_tao_ba_phan_anh_mau_cho_hanh_khach()
+    {
+        await using var db = MoDb();
+
+        var ketQua = await SampleDataSeeder.RunAsync(db, reset: false, MatKhau);
+
+        Assert.Equal(3, ketQua.FeedbacksCreated);
+
+        var hanhKhach = await db.Users.SingleAsync(u => u.PhoneNumber == "0900000004");
+        var phanAnh = await db.Feedbacks
+            .Where(f => f.UserId == hanhKhach.Id)
+            .Include(f => f.Replies)
+            .ToListAsync();
+
+        Assert.Equal(3, phanAnh.Count);
+
+        // Đủ ba trạng thái và đủ ba loại — màn "Phản ánh của tôi" có dữ liệu cho mọi nhánh lọc.
+        Assert.Equal(
+            new[] { FeedbackStatus.New, FeedbackStatus.InProgress, FeedbackStatus.Resolved },
+            phanAnh.Select(f => f.Status).OrderBy(s => s).ToArray());
+        Assert.Equal(
+            new[] { FeedbackType.Complaint, FeedbackType.Compliment, FeedbackType.Suggestion },
+            phanAnh.Select(f => f.Type).OrderBy(t => t).ToArray());
+
+        // Một phản ánh KHÔNG gắn chuyến (nhánh "Không kèm chuyến"), hai phản ánh gắn chuyến mẫu
+        // (chuyến đã seed nên tripId phải trỏ vào chuyến có thật).
+        Assert.Single(phanAnh, f => f.TripId is null);
+        Assert.Equal(2, phanAnh.Count(f => f.TripId is not null));
+
+        // Phản hồi của quản lý mẫu: 2 + 1 + 0, và đều thuộc tài khoản quản lý.
+        var quanLy = await db.Users.SingleAsync(u => u.PhoneNumber == "0900000002");
+        Assert.Equal(3, phanAnh.Sum(f => f.Replies.Count));
+        Assert.All(
+            phanAnh.SelectMany(f => f.Replies),
+            reply => Assert.Equal(quanLy.Id, reply.UserId));
+
+        // Chỉ đổi khi trạng thái đổi: phản ánh New chưa ai chạm thì updatedAt phải trống.
+        Assert.Null(phanAnh.Single(f => f.Status == FeedbackStatus.New).UpdatedAt);
+        Assert.All(
+            phanAnh.Where(f => f.Status != FeedbackStatus.New),
+            f => Assert.NotNull(f.UpdatedAt));
+    }
+
+    [Fact]
     public async Task Chay_lai_lan_hai_khong_nhan_ban_du_lieu()
     {
         await using var db = MoDb();
@@ -78,6 +123,7 @@ public class SampleDataSeederTests
         Assert.Equal(0, ketQua.RoutesCreated);
         Assert.Equal(0, ketQua.BusesCreated);
         Assert.Equal(0, ketQua.TripsCreated);
+        Assert.Equal(0, ketQua.FeedbacksCreated);
         Assert.Equal(4, ketQua.AccountsSkipped);
 
         Assert.Equal(soLuongTruoc, await DemAsync(db));
@@ -101,10 +147,12 @@ public class SampleDataSeederTests
         Assert.Equal(7, ketQua.StopsCreated);
         Assert.Equal(2, ketQua.RoutesCreated);
         Assert.Equal(3, ketQua.BusesCreated);
+        Assert.Equal(3, ketQua.FeedbacksCreated);
 
         Assert.False(await db.Stops.AnyAsync(s => s.Name == "Trạm tự thêm"));
         Assert.Equal(7, await db.Stops.CountAsync());
         Assert.Equal(4, await db.Users.CountAsync());
+        Assert.Equal(3, await db.Feedbacks.CountAsync());
     }
 
     [Fact]
@@ -116,10 +164,12 @@ public class SampleDataSeederTests
             () => SampleDataSeeder.RunAsync(db, reset: false, "ngan"));
     }
 
-    private static async Task<(int Users, int Stops, int Routes, int Buses, int Trips)> DemAsync(AppDbContext db)
+    private static async Task<(int Users, int Stops, int Routes, int Buses, int Trips, int Feedbacks)>
+        DemAsync(AppDbContext db)
         => (await db.Users.CountAsync(),
             await db.Stops.CountAsync(),
             await db.Routes.CountAsync(),
             await db.Buses.CountAsync(),
-            await db.Trips.CountAsync());
+            await db.Trips.CountAsync(),
+            await db.Feedbacks.CountAsync());
 }

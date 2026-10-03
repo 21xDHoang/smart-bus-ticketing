@@ -2,60 +2,88 @@ import type { TagProps } from 'antd';
 import axiosClient from './axiosClient';
 
 // -----------------------------------------------------------------------------
-// API phản ánh — nối với story 24 "Gửi phản ánh" (Sprint 2).
+// API phản ánh — phục vụ màn hình "Phản ánh của tôi" (story 24, Nguyễn Đình Băng).
+// Màn "Gửi phản ánh" của Dương Thị Hạnh dùng feedbackSubmitApi.ts — hai file dùng
+// CHUNG bộ nhãn/màu dưới đây (giá trị khớp nhau, cùng bám docs/api-contract.md).
 //
-// Backend CHƯA có bảng Feedbacks/FeedbackReplies cũng như endpoint phản ánh: migrate
-// bảng là task của Vàng Thị Dăm, API danh sách phản ánh của hành khách là task của
-// Nguyễn Duy Kiên. Vì vậy file này dựng theo đúng mẫu của monthlyPassApi.ts: khai báo
-// kiểu + bảng nhãn/màu trạng thái, có nhánh dữ liệu giả để màn hình chạy được ngay, và
-// nhánh API thật viết sẵn để khi backend xong chỉ cần đổi cờ `USE_MOCK_DATA`.
+// Endpoint đã có trên main — mục "Phản ánh của tôi — /feedbacks/me" của docs/api-contract.md:
+//   GET /feedbacks/me?status=…   → MyFeedback[] (mảng trần, mới nhất trước;
+//                                  danh sách có `replyCount`, KHÔNG có `replies`)
+//   GET /feedbacks/me/{id}       → chi tiết: mảng `replies` (cũ → mới) thay cho `replyCount`
 //
-// Hợp đồng endpoint DỰ KIẾN (kebab-case, danh từ số nhiều — quy ước D của nhóm):
-//   GET /api/feedbacks/me?status=<FeedbackStatus> → Feedback[] (mảng trần, mới nhất trước)
+// Cả hai chỉ cần ĐĂNG NHẬP ([Authorize] trần, không giới hạn vai trò) và backend tự đọc
+// userId từ JWT — hành khách chỉ thấy phản ánh của chính mình, không có tham số nào dò
+// phản ánh của người khác. Phản ánh không tồn tại hoặc của người khác đều trả 404 như nhau.
 //
-// "Mảng trần" chứ không phải { items, total } cùng lý do GET /monthly-passes/me: một
-// hành khách chỉ có vài phản ánh, phân trang là nghi thức thừa. `status` bỏ trống = lấy
-// tất cả trạng thái.
+// Loại/trạng thái đúng theo contract: Complaint / Compliment / Suggestion và
+// New / InProgress / Resolved.
 // -----------------------------------------------------------------------------
 
-/** Loại phản ánh — khớp cột varchar Type của bảng Feedbacks (dự kiến). */
-export type FeedbackType = 'Complaint' | 'Review' | 'Suggestion' | 'Other';
+/** Loại phản ánh — khớp cột varchar Type của bảng Feedbacks. */
+export type FeedbackType = 'Complaint' | 'Compliment' | 'Suggestion';
 
-/** Trạng thái xử lý — vòng đời của một phản ánh từ lúc gửi tới khi nhà xe phản hồi. */
-export type FeedbackStatus = 'Pending' | 'Processing' | 'Resolved' | 'Rejected';
+/** Trạng thái xử lý — vòng đời từ lúc gửi tới khi nhà xe xử lý xong. */
+export type FeedbackStatus = 'New' | 'InProgress' | 'Resolved';
 
-/** Một phản ánh của hành khách, trả về bởi GET /feedbacks/me. */
-export interface Feedback {
+/** Một dòng trong luồng phản hồi của nhà xe — chỉ có ở chi tiết. */
+export interface FeedbackReply {
   id: string;
 
-  /** Chuyến được phản ánh. null khi phản ánh không gắn với chuyến cụ thể. */
+  /** Quản lý đã phản hồi — ghép từ Users, chỉ để hiển thị. */
+  userId: string;
+
+  /** Chỉ để hiển thị. null khi không tìm thấy tài khoản. */
+  userFullName: string | null;
+
+  content: string;
+
+  /** Bảng chỉ ghi thêm nên không có updatedAt. */
+  createdAt: string;
+}
+
+/** Một phản ánh của hành khách — dòng trong GET /feedbacks/me. */
+export interface MyFeedback {
+  id: string;
+
+  /** Chuyến bị phản ánh. null là hợp lệ — phản ánh về tuyến/dịch vụ/ứng dụng. */
   tripId: string | null;
 
-  /** Tên tuyến của chuyến được phản ánh — chỉ để HIỂN THỊ, ghép từ bảng Trips/Routes
-   *  (cùng lối `userFullName` của GET /audit-logs). null khi `tripId` là null. */
+  /** Mã tuyến của chuyến bị phản ánh — chỉ để HIỂN THỊ, ghép từ Trips → Routes.
+   *  Cả ba trường chuyến đều null khi `tripId` là null (hành khách không tự tra được
+   *  chuyến vì GET /trips/{id} nằm sau policy ManagerOrAbove). */
+  routeCode: string | null;
+
   routeName: string | null;
 
-  /** Giờ khởi hành của chuyến (ISO 8601) — chỉ để hiển thị. null khi `tripId` là null. */
+  /** Giờ khởi hành của chuyến (ISO 8601). null khi `tripId` là null. */
   departureTime: string | null;
 
   type: FeedbackType;
 
+  content: string;
+
+  /** Ảnh đính kèm do hành khách gửi. null khi không đính kèm. */
+  attachmentUrl: string | null;
+
   /** Mức độ hài lòng 1..5. null khi khách không chấm sao. */
   rating: number | null;
 
-  /** Nội dung phản ánh — text tự do. */
-  content: string;
-
   status: FeedbackStatus;
-
-  /** Phản hồi mới nhất từ nhà xe. null khi chưa được phản hồi. */
-  adminReply: string | null;
 
   createdAt: string;
 
-  /** null khi phản ánh chưa từng được sửa (đổi trạng thái / phản hồi). */
+  /** Chỉ đổi khi `status` đổi; thêm phản hồi không chạm dòng này. null khi chưa từng đổi. */
   updatedAt: string | null;
+
+  /** Số phản hồi của nhà xe — danh sách chỉ có con đếm, muốn đọc nội dung thì gọi `getMine`. */
+  replyCount: number;
 }
+
+/** Chi tiết một phản ánh — GET /feedbacks/me/{id}: mang `replies` THAY CHO `replyCount`. */
+export type MyFeedbackDetail = Omit<MyFeedback, 'replyCount'> & {
+  /** Toàn bộ luồng phản hồi, sắp cũ → mới. Rỗng khi nhà xe chưa trả lời. */
+  replies: FeedbackReply[];
+};
 
 interface FeedbackMeta {
   label: string;
@@ -65,16 +93,14 @@ interface FeedbackMeta {
 
 export const FEEDBACK_TYPE_META: Record<FeedbackType, FeedbackMeta> = {
   Complaint: { label: 'Khiếu nại', color: 'red' },
-  Review: { label: 'Đánh giá', color: 'geekblue' },
-  Suggestion: { label: 'Góp ý', color: 'green' },
-  Other: { label: 'Khác', color: 'default' },
+  Compliment: { label: 'Khen ngợi', color: 'green' },
+  Suggestion: { label: 'Góp ý', color: 'geekblue' },
 };
 
 export const FEEDBACK_STATUS_META: Record<FeedbackStatus, FeedbackMeta> = {
-  Pending: { label: 'Chờ xử lý', color: 'default' },
-  Processing: { label: 'Đang xử lý', color: 'processing' },
+  New: { label: 'Mới', color: 'processing' },
+  InProgress: { label: 'Đang xử lý', color: 'warning' },
   Resolved: { label: 'Đã xử lý', color: 'success' },
-  Rejected: { label: 'Từ chối', color: 'error' },
 };
 
 /** Danh sách trạng thái cho bộ lọc, theo đúng thứ tự vòng đời phản ánh. */
@@ -94,26 +120,33 @@ export function getFeedbackStatusMeta(status: string): FeedbackMeta {
 
 export interface FeedbackApi {
   /** Danh sách phản ánh của chính người gọi, mới nhất trước. `status` bỏ trống = tất cả. */
-  listMyFeedbacks: (status?: FeedbackStatus) => Promise<Feedback[]>;
+  listMyFeedbacks: (status?: FeedbackStatus) => Promise<MyFeedback[]>;
+
+  /** Chi tiết một phản ánh của chính người gọi, kèm luồng phản hồi cũ → mới. */
+  getMine: (id: string) => Promise<MyFeedbackDetail>;
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì endpoint phản ánh chưa có
-// (xem ghi chú đầu file). Đổi thành `false` khi Kiên xong API danh sách phản ánh.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Đã bật API thật — hai endpoint đã có trên main
+// (xem ghi chú đầu file). Nhánh giả giữ làm đường lùi khi cần dựng giao diện lúc mất mạng:
+// đổi cờ này thành `true` là quay lại được, không phải chạm phần nào khác.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
 const api: FeedbackApi = {
-  // GET /feedbacks/me?status=… — danh sách phản ánh của chính người gọi. Backend tự đọc
-  // userId từ JWT nên không cần truyền; chỉ gửi `status` khi thực sự có lọc.
+  // Backend tự đọc userId từ JWT nên không cần truyền; chỉ gửi `status` khi thực sự có lọc.
   listMyFeedbacks: (status) => {
     const params: Record<string, string> = {};
     if (status) params.status = status;
 
-    return axiosClient.get<Feedback[], Feedback[]>('/feedbacks/me', { params });
+    return axiosClient.get<MyFeedback[], MyFeedback[]>('/feedbacks/me', { params });
   },
+
+  // 404 kèm "Không tìm thấy phản ánh" cho cả ca id không tồn tại lẫn ca của hành khách khác —
+  // hai ca cố ý trả cùng một câu (không phân biệt để khỏi xác nhận id nào có thật trên hệ thống).
+  getMine: (id) => axiosClient.get<MyFeedbackDetail, MyFeedbackDetail>(`/feedbacks/me/${id}`),
 };
 
 // -------- Dữ liệu giả (dùng khi USE_MOCK_DATA = true) --------
@@ -124,90 +157,103 @@ function mockDate(daysAgo: number, hoursAgo = 0): string {
   return date.toISOString();
 }
 
-// Vài phản ánh giả phủ đủ 4 trạng thái và các loại, để màn hình "phản ánh của tôi" dựng
-// được giao diện kể cả khi backend chưa xong. Tên tuyến khớp monthlyPassApi để nhất quán.
-const MOCK_FEEDBACKS: Feedback[] = [
+// Vài phản ánh giả phủ đủ 3 trạng thái và 3 loại, để màn hình dựng được giao diện kể cả
+// khi backend chưa sẵn sàng. Tên tuyến khớp monthlyPassApi để nhất quán khi demo.
+const MOCK_FEEDBACKS: MyFeedback[] = [
   {
     id: 'fb-1',
     tripId: 'trip-1',
+    routeCode: '01',
     routeName: 'Bến xe Mỹ Đình — Bến xe Gia Lâm',
     departureTime: mockDate(6, 1),
     type: 'Complaint',
-    rating: null,
     content: 'Xe xuất phát trễ 25 phút so với lịch, không có thông báo gì tại trạm.',
+    attachmentUrl: null,
+    rating: null,
     status: 'Resolved',
-    adminReply:
-      'Cảm ơn bạn đã phản ánh. Chúng tôi đã làm việc với tài xế và điều chỉnh lịch chạy để hạn chế trễ giờ.',
     createdAt: mockDate(6, 1),
     updatedAt: mockDate(4),
+    replyCount: 2,
   },
   {
     id: 'fb-2',
     tripId: 'trip-2',
+    routeCode: '08',
     routeName: 'Cầu Giấy — Bờ Hồ Hoàn Kiếm',
     departureTime: mockDate(3),
-    type: 'Review',
-    rating: 4,
+    type: 'Compliment',
     content: 'Tài xế lái êm, xe sạch sẽ. Sẽ tiếp tục sử dụng dịch vụ.',
-    status: 'Processing',
-    adminReply: null,
+    attachmentUrl: null,
+    rating: 5,
+    status: 'InProgress',
     createdAt: mockDate(3),
-    updatedAt: null,
+    updatedAt: mockDate(2),
+    replyCount: 1,
   },
   {
     id: 'fb-3',
     tripId: null,
+    routeCode: null,
     routeName: null,
     departureTime: null,
     type: 'Suggestion',
-    rating: null,
     content: 'Đề xuất thêm trạm dừng gần khu đô thị Đại học Quốc gia Hà Nội.',
-    status: 'Pending',
-    adminReply: null,
+    attachmentUrl: null,
+    rating: null,
+    status: 'New',
     createdAt: mockDate(1, 2),
     updatedAt: null,
-  },
-  {
-    id: 'fb-4',
-    tripId: 'trip-4',
-    routeName: 'Bến xe Yên Nghĩa — Bến xe Mỹ Đình',
-    departureTime: mockDate(12),
-    type: 'Complaint',
-    rating: 1,
-    content: 'Máy lạnh không hoạt động, thái độ phục vụ của phụ xe chưa tốt.',
-    status: 'Rejected',
-    adminReply:
-      'Chúng tôi đã kiểm tra và không ghi nhận sự cố máy lạnh trên chuyến này. Phản ánh chưa đủ cơ sở để tiếp nhận.',
-    createdAt: mockDate(12),
-    updatedAt: mockDate(10),
-  },
-  {
-    id: 'fb-5',
-    tripId: 'trip-5',
-    routeName: 'Bến xe Mỹ Đình — Bến xe Nước Ngầm',
-    departureTime: mockDate(8, 3),
-    type: 'Review',
-    rating: 5,
-    content: 'Rất hài lòng với dịch vụ, xe đúng giờ và nhân viên thân thiện.',
-    status: 'Resolved',
-    adminReply: 'Cảm ơn bạn đã tin tưởng sử dụng dịch vụ của chúng tôi.',
-    createdAt: mockDate(8, 3),
-    updatedAt: mockDate(7),
-  },
-  {
-    id: 'fb-6',
-    tripId: null,
-    routeName: null,
-    departureTime: null,
-    type: 'Other',
-    rating: null,
-    content: 'Muốn hỏi về chính sách giảm giá cho sinh viên.',
-    status: 'Processing',
-    adminReply: 'Chúng tôi đang kiểm tra hồ sơ ưu đãi và sẽ phản hồi trong 24 giờ.',
-    createdAt: mockDate(0, 5),
-    updatedAt: mockDate(0, 3),
+    replyCount: 0,
   },
 ];
+
+/** Luồng phản hồi giả theo id — chỉ trả ở `getMine`, đúng như contract (danh sách không có). */
+const MOCK_REPLIES: Record<string, FeedbackReply[]> = {
+  'fb-1': [
+    {
+      id: 'reply-1a',
+      userId: 'user-manager',
+      userFullName: 'Trần Thị B',
+      content: 'Nhà xe xin lỗi vì sự cố hôm đó, đã nhắc nhở tài xế và hoàn 20% giá vé.',
+      createdAt: mockDate(5),
+    },
+    {
+      id: 'reply-1b',
+      userId: 'user-manager',
+      userFullName: 'Trần Thị B',
+      content: 'Đã hoàn tiền vào ví của bạn. Cảm ơn bạn đã kiên nhẫn chờ.',
+      createdAt: mockDate(4),
+    },
+  ],
+  'fb-2': [
+    {
+      id: 'reply-2a',
+      userId: 'user-manager',
+      userFullName: 'Trần Thị B',
+      content: 'Cảm ơn bạn đã tin tưởng và dành lời khen cho tài xế. Chúc bạn nhiều chuyến đi vui vẻ!',
+      createdAt: mockDate(2),
+    },
+  ],
+};
+
+/** Bỏ `replyCount`, gắn `replies` — dựng đúng hình dạng chi tiết của nhánh giả. */
+function toDetail(item: MyFeedback, replies: FeedbackReply[]): MyFeedbackDetail {
+  return {
+    id: item.id,
+    tripId: item.tripId,
+    routeCode: item.routeCode,
+    routeName: item.routeName,
+    departureTime: item.departureTime,
+    type: item.type,
+    content: item.content,
+    attachmentUrl: item.attachmentUrl,
+    rating: item.rating,
+    status: item.status,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    replies,
+  };
+}
 
 const mock: FeedbackApi = {
   async listMyFeedbacks(status) {
@@ -217,6 +263,15 @@ const mock: FeedbackApi = {
 
     // Trả bản sao để màn hình không vô tình sửa mảng gốc.
     return list.map((item) => ({ ...item }));
+  },
+
+  async getMine(id) {
+    await delay(300);
+
+    const found = MOCK_FEEDBACKS.find((item) => item.id === id);
+    if (!found) throw new Error('Không tìm thấy phản ánh');
+
+    return toDetail(found, MOCK_REPLIES[id] ?? []);
   },
 };
 
