@@ -2035,16 +2035,18 @@ cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc 
 
 ## Phản ánh — `/feedbacks`
 
-> 🚧 Story 24 mới có **phần quản lý xử lý** (Phùng Duy Hoàng). Hợp đồng đã chốt nhưng **chưa chạy
-> được**: hai bảng `Feedbacks`/`FeedbackReplies` **chưa migrate** (Vàng Thị Dăm — hướng dẫn + checklist:
-> `docs/24-huong-dan-migrate-feedbacks.md`) — frontend chưa
-> nối được. Phần còn lại của story **chưa làm**: gửi phản ánh (Trần Trung Hiếu), danh sách phản ánh
-> của tôi (Nguyễn Duy Kiên), thống kê theo loại/tuyến (Nguyễn Duy Kiên). Ai làm phần nào thì bổ
-> sung mục cho phần đó vào đây.
+> 🚧 Story 24 đã có **phần quản lý xử lý** (Phùng Duy Hoàng) và **danh sách phản ánh của hành khách**
+> (Nguyễn Duy Kiên). Hợp đồng đã chốt nhưng **chưa chạy được trên CSDL thật**: hai bảng
+> `Feedbacks`/`FeedbackReplies` **chưa migrate** (Vàng Thị Dăm — hướng dẫn + checklist:
+> `docs/24-huong-dan-migrate-feedbacks.md`). Phần còn lại của story **chưa làm**: gửi phản ánh
+> (Trần Trung Hiếu), thống kê theo loại/tuyến (Nguyễn Duy Kiên). Ai làm phần nào thì bổ sung mục cho
+> phần đó vào đây.
 >
-> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Manager` hoặc `Admin`** — xử lý phản ánh là nghiệp vụ
-> vận hành của nhà xe. Người đã đăng nhập nhưng không đủ quyền nhận **403** kèm body
-> `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+> **Toàn bộ endpoint `/admin/feedbacks` ở mục "Endpoints" dưới đây yêu cầu vai trò `Manager` hoặc
+> `Admin`** — xử lý phản ánh là nghiệp vụ vận hành của nhà xe. Người đã đăng nhập nhưng không đủ
+> quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`. Hai
+> endpoint `/feedbacks/me` ở mục cuối thì ngược lại — hành khách tự xem phản ánh của mình, xem
+> "Phản ánh của tôi".
 
 Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đây:
 
@@ -2221,3 +2223,83 @@ Ghi chú chung:
   `POST .../replies` → `Create`, cả hai đều `Target` = `Feedbacks:{id phản ánh}` (id đọc từ body trả
   về, chính là id phản ánh). Tra vết một phản ánh: lọc nhật ký theo `target`.
 - **`{id:guid}` có ràng buộc định dạng**: GUID sai định dạng không khớp route → **404**, không phải 500.
+
+### Phản ánh của tôi — `/feedbacks/me` (hành khách)
+
+Hai endpoint dưới đây **KHÔNG** nằm sau policy `ManagerOrAbove` như nhóm `/admin/feedbacks` ở trên:
+đây là hành khách tự xem phản ánh của chính mình. Yêu cầu **đăng nhập** (`[Authorize]` trần — RBAC
+của dự án chỉ có `AdminOnly`/`ManagerOrAbove`, không có policy `Passenger`), và **phạm vi "của tôi"
+nằm ngay trong truy vấn theo `userId` đọc từ JWT** — không có tham số nào để dò phản ánh của người
+khác. Cùng lối `GET /monthly-passes/me`.
+
+| Method | Endpoint | Mô tả | Trả về |
+|---|---|---|---|
+| GET | `/feedbacks/me` | Phản ánh của chính người gọi — lọc theo trạng thái | `MyFeedback[]` (mảng trần) |
+| GET | `/feedbacks/me/{id:guid}` | Chi tiết một phản ánh của chính người gọi, kèm luồng phản hồi | `MyFeedback` (đầy đủ) |
+
+#### `GET /feedbacks/me`
+
+Danh sách phản ánh của chính người gọi, **mới nhất trước** (`createdAt` giảm dần, phụ `id` cho ổn
+định). Trả **mảng trần** — không bọc `{ items, total, page, pageSize }` và **không phân trang**: một
+hành khách chỉ có vài phản ánh, phân trang là nghi thức thừa, cùng lối `GET /monthly-passes/me`.
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `status` | `string` | — | Chỉ lấy một trạng thái — `New` / `InProgress` / `Resolved`. Bỏ trống = mọi trạng thái |
+
+```json
+// ví dụ GET /feedbacks/me?status=InProgress
+[
+  {
+    "id": "3f2a1b0c-…",
+    "tripId": "b7c1d2e3-…",
+    "routeCode": "01",
+    "routeName": "Bến Thành — Chợ Lớn",
+    "departureTime": "2026-10-01T22:00:00Z",
+    "type": "Complaint",
+    "content": "Xe chạy trễ 30 phút so với giờ trên vé.",
+    "attachmentUrl": null,
+    "rating": null,
+    "status": "InProgress",
+    "createdAt": "2026-10-03T02:11:00Z",
+    "updatedAt": "2026-10-03T04:00:00Z",
+    "replyCount": 1
+  }
+]
+```
+
+Dòng danh sách khác hình dạng `Feedback` của nhóm admin đúng hai chỗ:
+
+- **Thêm `routeCode` / `routeName` / `departureTime`** — thông tin chuyến bị phản ánh, ghép từ
+  `Trips` → `Routes`, chỉ để hiển thị. Cả ba đều `null` khi `tripId` là `null`, và cũng `null` khi
+  không tìm thấy chuyến. Phải có ở đây vì hành khách **không tự tra được**: `GET /api/trips/{id}`
+  nằm sau policy `ManagerOrAbove`, họ chỉ có `tripId` thô, không cách nào biết đó là tuyến nào.
+- **Không có `userId` / `userFullName`** — với phản ánh của chính mình thì hai trường này là hằng số
+  (luôn là người đang gọi); mang theo chỉ tổ thừa.
+
+`replyCount` giữ đúng luật của mục "Entity `Feedback`": **danh sách chỉ có con đếm, KHÔNG có
+`replies`**. Muốn đọc nội dung nhà xe trả lời thì gọi `GET /feedbacks/me/{id}`.
+
+Không có phản ánh nào khớp → **200** kèm `[]`, **không** phải 404. `status` gõ sai **không** lỗi —
+cũng trả `[]`, cùng lối `GET /routes?status=` và `GET /admin/feedbacks?status=` (mã lạ có thể là giá
+trị hợp lệ trong tương lai).
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token | 401 | |
+| `status` dài quá 20 ký tự | 400 | `errors.status` |
+
+#### `GET /feedbacks/me/{id:guid}`
+
+Chi tiết một phản ánh **của chính người gọi**, kèm **toàn bộ** luồng phản hồi sắp **cũ → mới** —
+khác dòng danh sách đúng một chỗ: mang mảng `replies` thay cho con đếm `replyCount`. Các trường
+chuyến (`routeCode` / `routeName` / `departureTime`) như ở dòng danh sách.
+
+Phản ánh **không tồn tại HOẶC thuộc hành khách khác** → **404** kèm
+`{ "message": "Không tìm thấy phản ánh" }` — **không** phải 403. Hai ca trả về cùng một câu là cố ý:
+phân biệt chúng là xác nhận với người đang dò rằng id đó có thật trên hệ thống.
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token | 401 | |
+| `{id}` không tồn tại, hoặc thuộc hành khách khác | 404 | `{ "message": "Không tìm thấy phản ánh" }` |
