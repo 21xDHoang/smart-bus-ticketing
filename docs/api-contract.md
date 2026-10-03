@@ -2032,3 +2032,192 @@ Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin`
 `responseType: 'blob'`. Khi đó body lỗi cũng về dưới dạng `Blob`, khiến `error.response.data.message`
 trong `axiosClient.ts` là `undefined` và người dùng chỉ thấy câu thông báo chung. Màn hình tải file
 cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc được `message`.
+
+## Phản ánh — `/feedbacks`
+
+> 🚧 Story 24 mới có **phần quản lý xử lý** (Phùng Duy Hoàng). Hợp đồng đã chốt nhưng **chưa chạy
+> được**: hai bảng `Feedbacks`/`FeedbackReplies` **chưa migrate** (Vàng Thị Dăm — hướng dẫn + checklist:
+> `docs/24-huong-dan-migrate-feedbacks.md`) — frontend chưa
+> nối được. Phần còn lại của story **chưa làm**: gửi phản ánh (Trần Trung Hiếu), danh sách phản ánh
+> của tôi (Nguyễn Duy Kiên), thống kê theo loại/tuyến (Nguyễn Duy Kiên). Ai làm phần nào thì bổ
+> sung mục cho phần đó vào đây.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Manager` hoặc `Admin`** — xử lý phản ánh là nghiệp vụ
+> vận hành của nhà xe. Người đã đăng nhập nhưng không đủ quyền nhận **403** kèm body
+> `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đây:
+
+- **Phản ánh có thể KHÔNG gắn với chuyến nào** — `tripId` cho phép `null` (A9 #20). Khách khiếu nại
+  về tuyến, về giá vé, hay về ứng dụng thì không có chuyến để trỏ vào; bắt buộc `tripId` là chặn
+  luôn các ca đó.
+- **Phản hồi là bảng chỉ ghi thêm, không sửa** (`FeedbackReplies`). Một phản ánh có thể được trả
+  lời nhiều lần; sửa tại chỗ thì mất lịch sử đối thoại — cùng lối "ghi thêm dòng mới" của gia hạn
+  vé tháng.
+
+### Entity `Feedback`
+
+```json
+{
+  "id": "3f2a1b0c-0000-0000-0000-000000000000",
+  "userId": "9d8c7b6a-0000-0000-0000-000000000000",
+  "userFullName": "Nguyễn Văn A",
+  "tripId": null,
+  "type": "Complaint",
+  "content": "Xe chạy trễ 30 phút so với giờ trên vé, tài xế không thông báo gì.",
+  "attachmentUrl": null,
+  "rating": null,
+  "status": "InProgress",
+  "createdAt": "2026-10-03T02:11:00Z",
+  "updatedAt": "2026-10-03T04:00:00Z",
+  "replies": [
+    {
+      "id": "c1a2b3d4-0000-0000-0000-000000000000",
+      "userId": "77aa66bb-0000-0000-0000-000000000000",
+      "userFullName": "Trần Thị B",
+      "content": "Nhà xe xin lỗi vì sự cố hôm đó, đã nhắc nhở tài xế và hoàn 20% giá vé.",
+      "createdAt": "2026-10-03T04:00:00Z"
+    }
+  ]
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | GUID | |
+| `userId` / `userFullName` | GUID / string | Hành khách gửi phản ánh. `userFullName` chỉ để hiển thị, ghép từ `Users` — `null` khi không tìm thấy tài khoản |
+| `tripId` | GUID \| null | Chuyến bị phản ánh. **`null` là hợp lệ** — phản ánh về tuyến/dịch vụ/ứng dụng |
+| `type` | string | `Complaint` (khiếu nại) · `Compliment` (khen ngợi) · `Suggestion` (góp ý) |
+| `content` | string | Nội dung phản ánh — cột `text` |
+| `attachmentUrl` | string \| null | Ảnh đính kèm do hành khách gửi |
+| `rating` | number \| null | 1–5 sao, mức độ hài lòng. `null` với phản ánh không chấm điểm |
+| `status` | string | `New` / `InProgress` / `Resolved` — xem bảng nghĩa bên dưới |
+| `createdAt` / `updatedAt` | ISO 8601 UTC | `updatedAt` chỉ đổi khi `status` đổi. **Thêm phản hồi không chạm vào dòng `Feedbacks`** — dòng đó là bản ghi của hành khách |
+| `replyCount` | number | **Chỉ có ở dòng danh sách** (thay cho `replies`) |
+| `replies` | `FeedbackReply[]` | **Chỉ có ở chi tiết** và ở response của `POST .../replies`; sắp **cũ → mới** |
+
+Nghĩa ba giá trị trạng thái — cột `Status` lưu chuỗi tiếng Anh, màn hình hiển thị nhãn tiếng Việt:
+
+| Giá trị | Nhãn hiển thị | Nghĩa |
+|---|---|---|
+| `New` | Mới | Vừa tiếp nhận, chưa ai xử lý — giá trị khởi tạo |
+| `InProgress` | Đang xử lý | Có người đã nhận, đang xử lý |
+| `Resolved` | Đã xử lý | Đã trả lời / xử lý xong |
+
+### Entity `FeedbackReply`
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | GUID | |
+| `userId` / `userFullName` | GUID / string | Quản lý đã phản hồi — ghép từ `Users`, chỉ để hiển thị |
+| `content` | string | Nội dung phản hồi của nhà xe — cột `text` |
+| `createdAt` | ISO 8601 UTC | Bảng chỉ ghi thêm nên **không có** `UpdatedAt` (A4) |
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/admin/feedbacks` | Danh sách phản ánh — lọc theo trạng thái/loại, có phân trang | — | `{ items, total, page, pageSize }` |
+| GET | `/admin/feedbacks/{id:guid}` | Chi tiết một phản ánh kèm toàn bộ luồng phản hồi | — | `Feedback` (đầy đủ) |
+| POST | `/admin/feedbacks/{id:guid}/replies` | Phản hồi hành khách — ghi thêm một dòng vào luồng | `{ content }` | `Feedback` (kèm phản hồi mới) |
+| PATCH | `/admin/feedbacks/{id:guid}` | Đổi trạng thái xử lý | `{ status }` | `Feedback` (đầy đủ) |
+
+#### `GET /admin/feedbacks`
+
+Danh sách phản ánh khớp bộ lọc, **mới nhất trước** (`createdAt` giảm dần, phụ `id` cho ổn định),
+có phân trang — cùng khuôn `GET /routes` và `GET /audit-logs`.
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `status` | `string` | — | Chỉ lấy một trạng thái — `New` / `InProgress` / `Resolved` |
+| `type` | `string` | — | Chỉ lấy một loại — `Complaint` / `Compliment` / `Suggestion` |
+| `page` | số nguyên ≥ 1 | `1` | Trang hiện tại |
+| `pageSize` | số nguyên 1..100 | `10` | Số dòng mỗi trang |
+
+```json
+// FeedbackListResponse — ví dụ GET /admin/feedbacks?status=New&page=1&pageSize=10
+{
+  "items": [
+    {
+      "id": "3f2a1b0c-…",
+      "userId": "9d8c7b6a-…",
+      "userFullName": "Nguyễn Văn A",
+      "tripId": null,
+      "type": "Complaint",
+      "content": "Xe chạy trễ 30 phút…",
+      "attachmentUrl": null,
+      "rating": null,
+      "status": "New",
+      "createdAt": "2026-10-03T02:11:00Z",
+      "updatedAt": null,
+      "replyCount": 0
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+Dòng trong `items` là `Feedback` **không kèm `replies`**, thay bằng `replyCount`. Luồng phản hồi đầy
+đủ nằm ở `GET /admin/feedbacks/{id}` — kéo cả luồng vào mọi dòng danh sách thì một trang 10 dòng có
+thể kèm hàng trăm phản hồi mà bảng không hiển thị.
+
+Không khớp phản ánh nào → **200** kèm `items: []`, `total: 0` — **không** phải 404.
+
+Lỗi thường gặp: không đăng nhập → **401** · không đủ quyền → **403** · `page` < 1 hoặc `pageSize`
+ngoài 1..100 → **400** `errors.page` / `errors.pageSize`. `status`/`type` gõ sai **không** lỗi — trả
+danh sách rỗng, cùng lối `GET /routes?status=` (mã lạ có thể là giá trị hợp lệ trong tương lai).
+
+#### `GET /admin/feedbacks/{id:guid}`
+
+Chi tiết một phản ánh, kèm **toàn bộ** luồng phản hồi sắp **cũ → mới**. Không tìm thấy → **404**
+kèm `{ "message": "Không tìm thấy phản ánh" }`.
+
+#### `POST /admin/feedbacks/{id:guid}/replies` — phản hồi hành khách
+
+Ghi thêm **một dòng mới** vào luồng phản hồi; **không sửa** phản ánh cũng như các phản hồi trước —
+chúng ở lại làm lịch sử đối thoại. Endpoint **không tự đổi trạng thái**: trả lời xong mà còn chờ
+khách phản hồi lại là ca có thật, muốn chuyển trạng thái thì gọi `PATCH` — tự đổi là nói sai giúp
+người dùng.
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `content` | ✅ | 1–2000 ký tự |
+
+Trả **200** kèm `Feedback` **đầy đủ** (danh sách `replies` đã có dòng mới) để màn hình chi tiết cập
+nhật ngay, không phải gọi lại `GET`.
+
+> **Vì sao 200 mà không phải 201?** Chưa có endpoint tra một phản hồi theo id để trỏ `Location` —
+> cùng lối `POST /monthly-passes/{id}/renew` và `POST /routes/{routeId}/trips/generate`.
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token | 401 | |
+| Không đủ quyền | 403 | |
+| `{id}` không tồn tại | 404 | `{ "message": "Không tìm thấy phản ánh" }` |
+| `content` trống hoặc quá 2000 ký tự | 400 | `errors.content` |
+
+#### `PATCH /admin/feedbacks/{id:guid}` — đổi trạng thái xử lý
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `status` | ✅ | Một trong `New` / `InProgress` / `Resolved` |
+
+Trả **200** kèm `Feedback` đầy đủ. **Không có máy trạng thái**: mọi chiều chuyển đều được, kể cả mở
+lại `Resolved` → `InProgress` khi khách phản hồi thêm — story không yêu cầu chặn chiều nào, mà chặn
+sai chiều thì màn hình không còn đường sửa.
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token | 401 | |
+| Không đủ quyền | 403 | |
+| `{id}` không tồn tại | 404 | |
+| `status` thiếu hoặc không thuộc ba giá trị | 400 | `errors.status` |
+
+Ghi chú chung:
+
+- **Nhật ký kiểm toán**: middleware tự ghi, không ai phải gọi log tay — `PATCH` → `Update` và
+  `POST .../replies` → `Create`, cả hai đều `Target` = `Feedbacks:{id phản ánh}` (id đọc từ body trả
+  về, chính là id phản ánh). Tra vết một phản ánh: lọc nhật ký theo `target`.
+- **`{id:guid}` có ràng buộc định dạng**: GUID sai định dạng không khớp route → **404**, không phải 500.
