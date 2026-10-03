@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using SmartBus.Api.Data;
 using SmartBus.Api.Entities;
@@ -320,6 +322,9 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
 
             // Nạp controller test vào app thật.
             services.AddControllers().AddApplicationPart(typeof(TestProtectedController).Assembly);
+
+            // Job nền của app không được chạy thật trong host test — lý do đầy đủ ở ThayJobNenBangBanNoop.
+            ThayJobNenBangBanNoop(services);
         });
     }
 
@@ -339,5 +344,80 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         seed(db);
 
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Đổi hai job nền của app sang bản chạy RỖNG trong host test
+    /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>).
+    ///
+    /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
+    /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
+    /// host test. Lượt quét đầu của job chạy liền khi host khởi động (Task.Yield rồi quét luôn), tức
+    /// là ĐUA với lúc test seed dữ liệu: khi nó đọc CSDL sau lúc test seed xong chuyến ngày quá khứ,
+    /// nó nhân bản mẫu đó sang 7 ngày tới và làm vỡ các assert. Log CI là bằng chứng khớp từng con
+    /// số: "Đã sinh 14 chuyến" ×2 + "Đã sinh 7 chuyến" ứng đúng 16, 16, 8 của ba test đỏ; còn bản
+    /// xanh của main chỉ là lần đó may thắng đua.
+    ///
+    /// Vì sao KHÔNG <c>RemoveAll&lt;IHostedService&gt;()</c>: hai test wiring
+    /// (<see cref="TripGenerationWiringTests"/>, <see cref="MonthlyPassExpiryWiringTests"/>) khẳng
+    /// định job được đăng ký đúng một lần qua
+    /// <c>GetServices&lt;IHostedService&gt;().OfType&lt;job thật&gt;()</c>. Gỡ hẳn thì chúng đỏ oan;
+    /// thay bằng subclass giữ nguyên hình dạng đăng ký nên chúng vẫn bắt được nếu Program.cs lỡ xoá
+    /// hoặc đăng ký trùng AddHostedService. Chép đúng số lượng descriptor bị gỡ (vòng lặp chứ không
+    /// Add một lần) để phép đếm đó không bị làm mờ.
+    /// </summary>
+    private static void ThayJobNenBangBanNoop(IServiceCollection services)
+    {
+        var jobThat = services
+            .Where(d => d.ServiceType == typeof(IHostedService)
+                && (d.ImplementationType == typeof(TripGenerationBackgroundService)
+                    || d.ImplementationType == typeof(MonthlyPassExpiryBackgroundService)))
+            .ToList();
+
+        foreach (var descriptor in jobThat)
+        {
+            services.Remove(descriptor);
+
+            services.Add(ServiceDescriptor.Singleton(
+                typeof(IHostedService),
+                descriptor.ImplementationType == typeof(TripGenerationBackgroundService)
+                    ? typeof(NoopTripGenerationJob)
+                    : typeof(NoopMonthlyPassExpiryJob)));
+        }
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="TripGenerationBackgroundService"/> cho host test — lý do đầy
+    /// đủ ở <see cref="ThayJobNenBangBanNoop"/>. Vẫn là subclass nên
+    /// <c>OfType&lt;TripGenerationBackgroundService&gt;()</c> của test wiring vẫn thấy nó; chỉ khác
+    /// là <c>ExecuteAsync</c> trả về ngay, không có vòng lặp nền nào thức dậy giữa lúc test chạy.
+    /// </summary>
+    private sealed class NoopTripGenerationJob : TripGenerationBackgroundService
+    {
+        public NoopTripGenerationJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<TripGenerationBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="MonthlyPassExpiryBackgroundService"/> cho host test — cùng lý
+    /// do với <see cref="NoopTripGenerationJob"/>; job vé tháng cũng chạy trong mọi host test từ
+    /// Sprint 1 và cùng kiểu đua, chỉ là chưa vỡ test nào.
+    /// </summary>
+    private sealed class NoopMonthlyPassExpiryJob : MonthlyPassExpiryBackgroundService
+    {
+        public NoopMonthlyPassExpiryJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<MonthlyPassExpiryBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
     }
 }
