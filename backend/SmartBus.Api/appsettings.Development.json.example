@@ -1,14 +1,15 @@
 {
-  "//": "Copy file này thành appsettings.Development.json rồi điền giá trị thật. File đó đã bị .gitignore chặn, KHÔNG commit lên GitHub.",
+  "//": "Copy file này thành appsettings.Development.json rồi điền giá trị thật. File đó đã bị .gitignore chặn, KHÔNG commit lên GitHub. Hướng dẫn đầy đủ: docs/25-huong-dan-csdl-chung.md",
 
   "ConnectionStrings": {
-    "Default": "Host=localhost;Port=5432;Database=smartbus;Username=postgres;Password=DIEN_MAT_KHAU_VAO_DAY"
+    "//": "Dán NGUYÊN chuỗi kết nối CSDL chung (Supabase) từ tin nhắn ghim ở chat nhóm — đừng tự đoán, đừng tự sửa Host/Port. Repo public nên chuỗi thật không bao giờ nằm trong file này.",
+    "Default": "DAN_CHUOI_KET_NOI_CSDL_CHUNG_VAO_DAY"
   },
 
   "Jwt": {
     "Issuer": "SmartBus",
     "Audience": "SmartBusClient",
-    "Key": "DIEN_CHUOI_BI_MAT_TOI_THIEU_32_KY_TU_VAO_DAY",
+    "Key": "TU_DAT_CHUOI_BI_MAT_TOI_THIEU_32_KY_TU",
     "AccessTokenMinutes": 30,
     "RefreshTokenDays": 7
   },

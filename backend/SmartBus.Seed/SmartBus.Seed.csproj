@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Vỏ mỏng quanh SampleDataSeeder (nằm trong SmartBus.Api/Seed) — nhờ vậy bộ test chạm
+       tới được toàn bộ logic seed qua ProjectReference sẵn có, không cần thêm gì. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pin EF Core Relational đúng bản API đang dùng (kéo theo cả EF Core 10.0.12). Vì sao cần
+         tường minh: bên SmartBus.Api, bản 10.0.12 đến từ Microsoft.EntityFrameworkCore.Design
+         (PrivateAssets=all) — gói riêng tư nên bản nâng đó KHÔNG chảy sang project tham chiếu;
+         không pin thì project này chỉ thấy EF/Npgsql kéo bản 10.0.4 và vỡ CS1705 với
+         SmartBus.Api.dll (bộ Tests cũng pin cùng kiểu qua InMemory/Relational 10.0.12). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Cố ý KHÔNG tham chiếu framework Microsoft.AspNetCore.App: project này chỉ cần
+         System.Text.Json (base framework) để đọc một giá trị cấu hình, còn EF Core/Npgsql đi
+         bắc cầu từ SmartBus.Api. -->
+    <ProjectReference Include="..\SmartBus.Api\SmartBus.Api.csproj" />
+  </ItemGroup>
+
+</Project>
