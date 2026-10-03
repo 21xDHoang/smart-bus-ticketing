@@ -134,6 +134,15 @@ builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
 builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 
 
+// Xử lý phản ánh phía quản trị: GET/PATCH /api/admin/feedbacks, GET /api/admin/feedbacks/{id},
+// POST /api/admin/feedbacks/{id}/replies (US 24).
+// Task "API Admin phản hồi và đổi trạng thái phản ánh" (Sprint 2) — Phùng Duy Hoàng (file này
+// cũng của Hoàng).
+// ⚠️ Hai bảng Feedbacks/FeedbackReplies đã có entity + cấu hình (Data/AppDbContext.Feedback.cs)
+// nhưng CHƯA có migration — việc sinh migration là của Vàng Thị Dăm, xem
+// docs/24-huong-dan-migrate-feedbacks.md. Test tích hợp chạy trên InMemory nên không chờ migration.
+builder.Services.AddScoped<IFeedbackAdminService, FeedbackAdminService>();
+
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();

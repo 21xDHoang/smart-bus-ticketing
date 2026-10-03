@@ -105,6 +105,13 @@ public class AuditLogCoverageTests
         // về, không phải vé cũ trên đường dẫn — ca này cố ý để lộ điều đó ra test Phần 2.
         ("POST",   "/api/monthly-passes/{id:guid}/renew",        CachGhi.Middleware),
 
+        // Xử lý phản ánh — story 24, Phùng Duy Hoàng. Middleware tự ghi (PATCH → Update,
+        // POST → Create); tên bảng suy từ đoạn tĩnh ngay trước {id} là "Feedbacks" — kể cả POST
+        // .../{id}/replies (KHÔNG phải "FeedbackReplies": đây là endpoint con của phản ánh, nhật
+        // ký trỏ về phản ánh để tra vết cả luồng đối thoại — ghi chú ở docs/api-contract.md).
+        ("PATCH",  "/api/admin/feedbacks/{id:guid}",             CachGhi.Middleware),
+        ("POST",   "/api/admin/feedbacks/{id:guid}/replies",     CachGhi.Middleware),
+
         ("POST",   "/api/stops",                                 CachGhi.Middleware),
         ("PUT",    "/api/stops/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/stops/{id:guid}",                       CachGhi.Middleware),
@@ -659,6 +666,45 @@ public class AuditLogCoverageTests
         await AssertMotBanGhiAsync(factory, AuditAction.Create, $"MonthlyPasses:{veMoi}", chuVe);
     }
 
+    // ------------------------------------------------- Phản ánh — Admin phản hồi (story 24)
+
+    // Story 24, Phùng Duy Hoàng: Admin/Manager xử lý phản ánh. Hai endpoint ghi đều đi qua
+    // AuditLogMiddleware; người thực hiện là quản lý đang đăng nhập (policy ManagerOrAbove).
+    [Fact]
+    public async Task Patch_admin_feedbacks_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        var hanhKhach = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var phanAnh = await SeedFeedbackAsync(factory, hanhKhach.Id);
+
+        var response = await client.PatchAsJsonAsync(
+            $"{AdminFeedbacksUrl}/{phanAnh.Id}", new { status = "InProgress" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"Feedbacks:{phanAnh.Id}", quanLy);
+    }
+
+    [Fact]
+    public async Task Post_admin_feedbacks_replies_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        var hanhKhach = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var phanAnh = await SeedFeedbackAsync(factory, hanhKhach.Id);
+
+        var response = await client.PostAsJsonAsync(
+            $"{AdminFeedbacksUrl}/{phanAnh.Id}/replies", new { content = "Nhà xe xin lỗi vì sự cố." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target là id PHẢN ÁNH dù dòng vừa sinh nằm ở bảng FeedbackReplies:
+        // middleware suy tên bảng từ đoạn đường dẫn trước {id} ("feedbacks") và ưu tiên id đọc từ
+        // body trả về cho POST — body ở đây là phản ánh đầy đủ nên id đó chính là id phản ánh.
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"Feedbacks:{phanAnh.Id}", quanLy);
+    }
+
     // ------------------------------------------------------------------------------------ Auth
 
     [Fact]
@@ -910,6 +956,18 @@ public class AuditLogCoverageTests
         return (ClientWith(factory, factory.CreateTokenFor(admin)), admin);
     }
 
+    /// <summary>
+    /// Quản lý đăng nhập — cần cho story 24: endpoint xử lý phản ánh đòi policy ManagerOrAbove.
+    /// Token phát thẳng bằng ITokenService để nền nhật ký sạch, cùng lý do SignInAsAdminAsync.
+    /// </summary>
+    private static async Task<(HttpClient Client, UserEntity User)> SignInAsManagerAsync(TestAppFactory factory)
+    {
+        await EnsureAllRolesAsync(factory);
+        var manager = await SeedUserAsync(factory, RoleIds.Manager, RoleCodes.Manager, fullName: "Quản Lý Vận Hành");
+
+        return (ClientWith(factory, factory.CreateTokenFor(manager)), manager);
+    }
+
     /// <summary>Bốn vai trò migration seed sẵn — InMemory KHÔNG chạy <c>HasData</c>.</summary>
     private static readonly (Guid Id, string Code)[] CanonicalRoles =
     [
@@ -1114,6 +1172,25 @@ public class AuditLogCoverageTests
         return pass;
     }
 
+    /// <summary>
+    /// Phản ánh mới ở trạng thái New — đủ để PATCH trạng thái và ghi phản hồi (story 24). API không
+    /// join bảng Trips nên chuyến để trống; tripId null là hợp lệ theo A9 #20.
+    /// </summary>
+    private static async Task<Feedback> SeedFeedbackAsync(TestAppFactory factory, Guid userId)
+    {
+        var feedback = new Feedback
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Type = FeedbackType.Complaint,
+            Content = "Xe chạy trễ 30 phút so với giờ trên vé.",
+        };
+
+        await factory.SeedAsync(db => db.Feedbacks.Add(feedback));
+
+        return feedback;
+    }
+
     private const string LoginUrl = "/api/auth/login";
 
     private const string LogoutUrl = "/api/auth/logout";
@@ -1133,6 +1210,8 @@ public class AuditLogCoverageTests
     private const string TripsUrl = "/api/trips";
 
     private const string MonthlyPassesUrl = "/api/monthly-passes";
+
+    private const string AdminFeedbacksUrl = "/api/admin/feedbacks";
 
     private const string AuditLogsUrl = "/api/audit-logs";
 
