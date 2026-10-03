@@ -14,6 +14,11 @@ import TripSchedulePage from './pages/TripSchedulePage';
 import TripAssignmentPage from './pages/TripAssignmentPage';
 import TripFrequencyPage from './pages/TripFrequencyPage';
 import MyFeedbackPage from './pages/MyFeedbackPage';
+import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
+import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
+import FareConfigPage from './pages/FareConfigPage';
+import AdminUserListPage from './pages/AdminUserListPage';
+import AuditLogPage from './pages/AuditLogPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -64,15 +69,20 @@ function App() {
   const navItems = [
     { to: '/', label: 'Trang chủ', roles: [] as string[] },
     { to: '/route-lookup', label: 'Tra cứu tuyến', roles: [] as string[] },
+    { to: '/monthly-passes', label: 'Vé tháng', roles: [] as string[] },
+    { to: '/feedback-submit', label: 'Gửi phản ánh', roles: [] as string[] },
     { to: '/my-feedback', label: 'Phản ánh của tôi', roles: [] as string[] },
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
     { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
     { to: '/buses', label: 'Đội xe', roles: ['Admin', 'Manager'] },
     { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
+    { to: '/fares', label: 'Cấu hình giá vé', roles: ['Admin', 'Manager'] },
     { to: '/trips-by-day', label: 'Chuyến theo ngày', roles: ['Admin', 'Manager'] },
     { to: '/trip-schedule', label: 'Lịch trình', roles: ['Admin', 'Manager'] },
     { to: '/trip-frequency', label: 'Tần suất chạy xe', roles: ['Admin', 'Manager'] },
     { to: '/trip-assignment', label: 'Phân công điều xe', roles: ['Admin', 'Manager'] },
+    { to: '/admin-users', label: 'Người dùng', roles: ['Admin'] },
+    { to: '/audit-logs', label: 'Nhật ký', roles: ['Admin'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
@@ -95,10 +105,16 @@ function App() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '24px',
+              // Đủ 16 mục điều hướng (Admin) nên thanh menu phải xuống dòng thay vì tràn
+              // ngang: bỏ chiều cao cứng 64px của AntD, cho phép cao theo nội dung.
+              flexWrap: 'wrap',
+              height: 'auto',
+              minHeight: 64,
+              lineHeight: 'normal',
+              gap: '12px',
               background: '#ffffff',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              padding: '0 24px',
+              padding: '8px 24px',
               position: 'sticky',
               top: 0,
               zIndex: 10,
@@ -119,15 +135,16 @@ function App() {
               </span>
             </div>
 
-            <nav style={{ flex: 1, display: 'flex', gap: '8px' }}>
+            <nav style={{ flex: 1, display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
               {navItems.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   end={item.to === '/'}
                   style={({ isActive }) => ({
-                    padding: '8px 16px',
+                    padding: '6px 12px',
                     borderRadius: 8,
+                    fontSize: 14,
                     fontWeight: 600,
                     color: isActive ? '#4361ee' : '#64748b',
                     background: isActive ? '#eef1ff' : 'transparent',
@@ -253,6 +270,44 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <TripFrequencyPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /monthly-passes là màn hình đăng ký vé tháng (US 10) — mọi người đã đăng
+                    nhập đều dùng được. Backend đăng ký vé tháng chưa có nên màn hình đang
+                    chạy dữ liệu giả (xem monthlyPassApi.ts). */}
+                <Route path="/monthly-passes" element={<MonthlyPassRegistrationPage />} />
+                {/* /feedback-submit là màn hình gửi phản ánh (US 24, task của Dương Thị Hạnh) —
+                    mọi người đã đăng nhập đều dùng được. Backend gửi phản ánh chưa có nên màn
+                    hình đang chạy dữ liệu giả (xem feedbackSubmitApi.ts). */}
+                <Route path="/feedback-submit" element={<FeedbackSubmitPage />} />
+                {/* /fares là màn hình cấu hình giá vé theo tuyến — chỉ Admin và Manager vào
+                    được (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/fares"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <FareConfigPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /admin-users là màn hình quản lý người dùng — chỉ Admin vào được
+                    (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/admin-users"
+                  element={
+                    <RouteGuard allowedRoles={['Admin']}>
+                      <AdminUserListPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /audit-logs là màn hình nhật ký kiểm toán — chỉ Admin vào được
+                    (docs/api-contract.md). Vai trò khác nhận trang 403. */}
+                <Route
+                  path="/audit-logs"
+                  element={
+                    <RouteGuard allowedRoles={['Admin']}>
+                      <AuditLogPage />
                     </RouteGuard>
                   }
                 />

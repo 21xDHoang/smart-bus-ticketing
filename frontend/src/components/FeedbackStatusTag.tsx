@@ -1,15 +1,14 @@
 import { Tag } from 'antd';
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleFilled, SyncOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, ClockCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import type { FeedbackStatus } from '../api/feedbackApi';
 import { getFeedbackStatusMeta } from '../api/feedbackApi';
 
 /** Icon cho từng trạng thái xử lý — cùng thứ tự với FEEDBACK_STATUS_META. */
 const STATUS_ICONS: Record<FeedbackStatus, ReactNode> = {
-  Pending: <ClockCircleOutlined />,
-  Processing: <SyncOutlined />,
+  New: <ClockCircleOutlined />,
+  InProgress: <SyncOutlined />,
   Resolved: <CheckCircleFilled />,
-  Rejected: <CloseCircleFilled />,
 };
 
 interface FeedbackStatusTagProps {

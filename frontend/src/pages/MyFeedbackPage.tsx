@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Card, Rate, Segmented, Table, Tag, Typography, message } from 'antd';
+import { Card, Rate, Segmented, Space, Spin, Table, Tag, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
+import { MessageOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import feedbackApi from '../api/feedbackApi';
-import type { Feedback, FeedbackStatus } from '../api/feedbackApi';
+import type { FeedbackStatus, MyFeedback, MyFeedbackDetail } from '../api/feedbackApi';
 import { FEEDBACK_STATUS_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackApi';
 import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
@@ -15,13 +16,85 @@ type StatusFilter = 'all' | FeedbackStatus;
 
 const STATUS_FILTER_OPTIONS = [{ label: 'Tất cả', value: 'all' as const }, ...FEEDBACK_STATUS_OPTIONS];
 
+/**
+ * Luồng phản hồi của một phản ánh — nạp chi tiết khi hành khách mở rộng dòng.
+ *
+ * Danh sách chỉ có `replyCount` (contract cố ý không mang `replies` theo từng dòng), nên
+ * nội dung phản hồi phải gọi `GET /feedbacks/me/{id}` — chỉ nạp khi thực sự mở rộng, không
+ * kéo chi tiết của mọi dòng.
+ */
+function FeedbackReplies({ feedbackId }: { feedbackId: string }) {
+  const [detail, setDetail] = useState<MyFeedbackDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // oxlint-disable-next-line react/set-state-in-effect
+    setLoading(true);
+    feedbackApi
+      .getMine(feedbackId)
+      .then((item) => {
+        if (cancelled) return;
+        setDetail(item);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const appError = err as AppError;
+        setError(appError.customMessage || 'Không tải được phản hồi.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [feedbackId]);
+
+  if (loading) return <Spin size="small" style={{ marginTop: 8 }} />;
+
+  if (error) {
+    return (
+      <Paragraph type="danger" style={{ margin: '8px 0 0' }}>
+        {error}
+      </Paragraph>
+    );
+  }
+
+  if (!detail || detail.replies.length === 0) {
+    return (
+      <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
+        Nhà xe chưa phản hồi.
+      </Paragraph>
+    );
+  }
+
+  return (
+    <>
+      {detail.replies.map((reply) => (
+        <div key={reply.id} style={{ marginTop: 8 }}>
+          <Space size={8}>
+            <Text strong>{reply.userFullName ?? 'Nhà xe'}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {dayjs(reply.createdAt).format('HH:mm DD/MM/YYYY')}
+            </Text>
+          </Space>
+          <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{reply.content}</Paragraph>
+        </div>
+      ))}
+    </>
+  );
+}
+
 // Màn hình "Phản ánh của tôi" (story 24): danh sách phản ánh của chính người đang đăng
 // nhập kèm trạng thái xử lý của nhà xe. Đây là màn hình cho HÀNH KHÁCH — không giới hạn
-// vai trò như các màn hình quản trị. Backend phản ánh chưa có nên đang chạy trên dữ liệu
-// giả (xem feedbackApi.ts); khi API xong chỉ cần đổi cờ USE_MOCK_DATA trong file đó.
+// vai trò như các màn hình quản trị. Dữ liệu thật từ GET /feedbacks/me; mở rộng một dòng
+// để xem luồng phản hồi (GET /feedbacks/me/{id}).
 export default function MyFeedbackPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
+  const [feedbacks, setFeedbacks] = useState<MyFeedback[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,7 +124,7 @@ export default function MyFeedbackPage() {
     };
   }, [statusFilter]);
 
-  const columns: TableProps<Feedback>['columns'] = [
+  const columns: TableProps<MyFeedback>['columns'] = [
     {
       title: 'Ngày gửi',
       dataIndex: 'createdAt',
@@ -64,7 +137,7 @@ export default function MyFeedbackPage() {
       dataIndex: 'type',
       key: 'type',
       width: 130,
-      render: (type: Feedback['type']) => {
+      render: (type: MyFeedback['type']) => {
         const meta = getFeedbackTypeMeta(type);
         return <Tag color={meta.color}>{meta.label}</Tag>;
       },
@@ -82,12 +155,15 @@ export default function MyFeedbackPage() {
     {
       title: 'Chuyến xe',
       key: 'trip',
-      width: 240,
+      width: 260,
       render: (_, record) => {
         if (!record.routeName) return <Text type="secondary">Không kèm chuyến</Text>;
         return (
           <div>
-            <div style={{ fontWeight: 600 }}>{record.routeName}</div>
+            <div style={{ fontWeight: 600 }}>
+              {record.routeCode && <Tag style={{ marginRight: 6 }}>{record.routeCode}</Tag>}
+              {record.routeName}
+            </div>
             {record.departureTime && (
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {dayjs(record.departureTime).format('HH:mm DD/MM/YYYY')}
@@ -104,6 +180,21 @@ export default function MyFeedbackPage() {
       width: 170,
       render: (rating: number | null) =>
         rating === null ? <Text type="secondary">—</Text> : <Rate disabled value={rating} />,
+    },
+    {
+      title: 'Phản hồi',
+      dataIndex: 'replyCount',
+      key: 'replyCount',
+      width: 110,
+      align: 'center',
+      render: (replyCount: number) =>
+        replyCount === 0 ? (
+          <Text type="secondary">—</Text>
+        ) : (
+          <Tag color="blue" icon={<MessageOutlined />}>
+            {replyCount}
+          </Tag>
+        ),
     },
     {
       title: 'Trạng thái xử lý',
@@ -136,13 +227,13 @@ export default function MyFeedbackPage() {
           style={{ marginBottom: 16 }}
         />
 
-        <Table<Feedback>
+        <Table<MyFeedback>
           rowKey="id"
           columns={columns}
           dataSource={feedbacks}
           loading={loading}
           pagination={false}
-          scroll={{ x: 980 }}
+          scroll={{ x: 1100 }}
           locale={{ emptyText: 'Không có phản ánh nào' }}
           expandable={{
             expandedRowRender: (record) => (
@@ -150,12 +241,8 @@ export default function MyFeedbackPage() {
                 <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{record.content}</Paragraph>
 
                 <div style={{ marginTop: 12 }}>
-                  <Text strong>Phản hồi từ nhà xe: </Text>
-                  {record.adminReply ? (
-                    <Text>{record.adminReply}</Text>
-                  ) : (
-                    <Text type="secondary">Chưa có phản hồi.</Text>
-                  )}
+                  <Text strong>Phản hồi từ nhà xe</Text>
+                  <FeedbackReplies feedbackId={record.id} />
                 </div>
 
                 {record.updatedAt && (

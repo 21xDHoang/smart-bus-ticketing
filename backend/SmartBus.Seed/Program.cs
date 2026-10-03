@@ -71,7 +71,8 @@ try
     Console.WriteLine($"Tài khoản: tạo mới {ketQua.AccountsCreated}, đã có sẵn bỏ qua {ketQua.AccountsSkipped}");
     Console.WriteLine(
         $"Trạm: {ketQua.StopsCreated} · Tuyến: {ketQua.RoutesCreated} · " +
-        $"Xe: {ketQua.BusesCreated} · Chuyến: {ketQua.TripsCreated}");
+        $"Xe: {ketQua.BusesCreated} · Chuyến: {ketQua.TripsCreated} · " +
+        $"Phản ánh: {ketQua.FeedbacksCreated}");
     Console.WriteLine();
     Console.WriteLine("Đăng nhập bằng 4 số điện thoại 0900000001–0900000004 (xem bảng vai trò ở docs/25).");
     Console.WriteLine("Mật khẩu: mật khẩu seed trong chat nhóm.");

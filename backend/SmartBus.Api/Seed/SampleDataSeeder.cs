@@ -8,7 +8,8 @@ namespace SmartBus.Api.Seed;
 
 /// <summary>
 /// Bộ dữ liệu nền cho CSDL dùng chung của nhóm (chốt 01/10/2026, mục 3): 4 tài khoản — mỗi vai
-/// trò một cái — cộng bộ trạm/tuyến/giá vé/xe/chuyến tối thiểu để mở app lên là có việc để làm.
+/// trò một cái — cộng bộ trạm/tuyến/giá vé/xe/chuyến và vài phản ánh mẫu của hành khách, để mở
+/// app lên là có việc để làm.
 ///
 /// Logic nằm trong project API (chứ không nằm trong project console) để bộ test chạm tới được:
 /// <c>backend/SmartBus.Seed</c> chỉ là vỏ mỏng đọc chuỗi kết nối rồi gọi vào đây. Nhờ vậy mọi
@@ -43,6 +44,14 @@ public static class SampleDataSeeder
     private const double TocDoTrungBinhKmH = 25;
 
     /// <summary>
+    /// Số điện thoại của hai tài khoản mẫu mà phản ánh mẫu cần: hành khách gửi và quản lý trả lời.
+    /// Đặt thành hằng số vì <see cref="SeedFeedbacksAsync"/> phải tra lại đúng hai tài khoản này.
+    /// </summary>
+    private const string SoDienThoaiQuanLy = "0900000002";
+
+    private const string SoDienThoaiHanhKhach = "0900000004";
+
+    /// <summary>
     /// Bốn tài khoản mẫu, mỗi vai trò một cái. Số điện thoại cố định để tài liệu và chat nhóm
     /// chỉ đúng "đăng nhập bằng số này" mà không cần tra CSDL. Mật khẩu dùng chung một giá trị
     /// truyền vào lúc chạy — đây là tài khoản dev của CSDL dev, không phải tài khoản thật.
@@ -50,9 +59,9 @@ public static class SampleDataSeeder
     private static readonly (string PhoneNumber, string FullName, Guid RoleId)[] TaiKhoanMau =
     [
         ("0900000001", "Quản trị viên", RoleIds.Admin),
-        ("0900000002", "Quản lý mẫu", RoleIds.Manager),
+        (SoDienThoaiQuanLy, "Quản lý mẫu", RoleIds.Manager),
         ("0900000003", "Tài xế mẫu", RoleIds.Driver),
-        ("0900000004", "Hành khách mẫu", RoleIds.Passenger),
+        (SoDienThoaiHanhKhach, "Hành khách mẫu", RoleIds.Passenger),
     ];
 
     /// <summary>
@@ -153,7 +162,8 @@ public static class SampleDataSeeder
         }
 
         // Thứ tự có nghĩa: vai trò trước tài khoản, trạm trước tuyến (gán trạm tra theo tên),
-        // xe trước chuyến (chuyến cần xe đang khai thác).
+        // xe trước chuyến (chuyến cần xe đang khai thác), chuyến trước phản ánh (phản ánh mẫu
+        // trỏ vào chuyến mẫu).
         await EnsureRolesAsync(db, cancellationToken);
 
         var (taiKhoanTao, taiKhoanDaCo) = await SeedAccountsAsync(db, password, cancellationToken);
@@ -161,8 +171,10 @@ public static class SampleDataSeeder
         var tuyenTao = await SeedRoutesAsync(db, cancellationToken);
         var xeTao = await SeedBusesAsync(db, cancellationToken);
         var chuyenTao = await SeedTripsAsync(db, cancellationToken);
+        var phanAnhTao = await SeedFeedbacksAsync(db, cancellationToken);
 
-        return new SeedResult(reset, taiKhoanTao, taiKhoanDaCo, tramTao, tuyenTao, xeTao, chuyenTao);
+        return new SeedResult(
+            reset, taiKhoanTao, taiKhoanDaCo, tramTao, tuyenTao, xeTao, chuyenTao, phanAnhTao);
     }
 
     /// <summary>
@@ -442,6 +454,124 @@ public static class SampleDataSeeder
     }
 
     /// <summary>
+    /// Ba phản ánh mẫu của tài khoản hành khách mẫu, có quản lý mẫu trả lời — màn "Phản ánh của tôi"
+    /// (US 24) mở lên là có dữ liệu thật để xem, không phải màn trống.
+    ///
+    /// Cố ý phủ đủ các nhánh hiển thị chỉ trong ba dòng:
+    ///   - đủ ba trạng thái New / InProgress / Resolved và đủ ba loại Complaint / Compliment / Suggestion;
+    ///   - một phản ánh gắn chuyến (có routeCode/routeName/giờ chạy) và một phản ánh KHÔNG gắn chuyến
+    ///     (tripId null — nhánh "Không kèm chuyến" của màn hình);
+    ///   - số phản hồi 2 / 1 / 0 — đủ để thấy cả ca "Nhà xe chưa phản hồi" lẫn luồng nhiều lượt.
+    ///
+    /// Cùng luật idempotent với các phần khác: hành khách mẫu đã có phản ánh nào thì bỏ qua trọn cụm,
+    /// không chép thêm đè lên phản ánh thật mà người dùng đã gửi qua API.
+    /// </summary>
+    private static async Task<int> SeedFeedbacksAsync(AppDbContext db, CancellationToken cancellationToken)
+    {
+        var hanhKhach = await db.Users
+            .FirstOrDefaultAsync(u => u.PhoneNumber == SoDienThoaiHanhKhach, cancellationToken);
+        var quanLy = await db.Users
+            .FirstOrDefaultAsync(u => u.PhoneNumber == SoDienThoaiQuanLy, cancellationToken);
+
+        if (hanhKhach is null || quanLy is null)
+        {
+            return 0;
+        }
+
+        if (await db.Feedbacks.AnyAsync(f => f.UserId == hanhKhach.Id, cancellationToken))
+        {
+            return 0;
+        }
+
+        // Phản ánh gắn vào chuyến sớm nhất theo giờ khởi hành của mỗi tuyến mẫu. Chuyến chưa được
+        // seed (CSDL lạ) thì để tripId null — phản ánh không gắn chuyến vẫn là dữ liệu hợp lệ.
+        var maTuyen = TuyenDuongMau.Select(t => t.Code).ToList();
+        var tuyenTheoMa = await db.Routes
+            .Where(r => maTuyen.Contains(r.Code))
+            .ToDictionaryAsync(r => r.Code, r => r.Id, cancellationToken);
+
+        var chuyenDauTien = new Dictionary<string, Guid>();
+        foreach (var (ma, routeId) in tuyenTheoMa)
+        {
+            var chuyenId = await db.Trips
+                .Where(t => t.RouteId == routeId)
+                .OrderBy(t => t.DepartureTime)
+                .Select(t => (Guid?)t.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (chuyenId is not null)
+            {
+                chuyenDauTien[ma] = chuyenId.Value;
+            }
+        }
+
+        Guid? ChuyenCua(string maTuyenCanTim) =>
+            chuyenDauTien.TryGetValue(maTuyenCanTim, out var id) ? id : null;
+
+        var bayGio = DateTime.UtcNow;
+
+        var khieuNai = new Feedback
+        {
+            UserId = hanhKhach.Id,
+            TripId = ChuyenCua("01"),
+            Type = FeedbackType.Complaint,
+            Content = "Xe chạy trễ 30 phút so với giờ trên vé, tài xế không thông báo gì cho hành khách.",
+            Status = FeedbackStatus.Resolved,
+            CreatedAt = bayGio.AddDays(-6),
+            UpdatedAt = bayGio.AddDays(-4),
+        };
+        khieuNai.Replies.Add(new FeedbackReply
+        {
+            FeedbackId = khieuNai.Id,
+            UserId = quanLy.Id,
+            Content = "Nhà xe xin lỗi vì sự cố chuyến này. Chúng tôi đã nhắc nhở tài xế và rà soát lại lịch chạy.",
+            CreatedAt = bayGio.AddDays(-5),
+        });
+        khieuNai.Replies.Add(new FeedbackReply
+        {
+            FeedbackId = khieuNai.Id,
+            UserId = quanLy.Id,
+            Content = "Đã hoàn 20% giá vé vào ví của bạn. Cảm ơn bạn đã phản ánh để nhà xe cải thiện.",
+            CreatedAt = bayGio.AddDays(-4),
+        });
+
+        var khenNgoi = new Feedback
+        {
+            UserId = hanhKhach.Id,
+            TripId = ChuyenCua("02"),
+            Type = FeedbackType.Compliment,
+            Content = "Xe sạch sẽ, tài xế thân thiện và chạy đúng giờ. Chuyến đi rất thoải mái.",
+            Rating = 5,
+            Status = FeedbackStatus.InProgress,
+            CreatedAt = bayGio.AddDays(-3),
+            UpdatedAt = bayGio.AddDays(-2),
+        };
+        khenNgoi.Replies.Add(new FeedbackReply
+        {
+            FeedbackId = khenNgoi.Id,
+            UserId = quanLy.Id,
+            Content = "Cảm ơn bạn đã dành lời khen cho tài xế. Nhà xe sẽ tiếp tục giữ chất lượng phục vụ.",
+            CreatedAt = bayGio.AddDays(-2),
+        });
+
+        var gopY = new Feedback
+        {
+            UserId = hanhKhach.Id,
+            // Phản ánh chung về tuyến — không gắn chuyến nào (A9 #20), đúng nhánh tripId null.
+            TripId = null,
+            Type = FeedbackType.Suggestion,
+            Content = "Đề xuất thêm chuyến muộn sau 21 giờ để phục vụ khách đi làm ca đêm.",
+            Status = FeedbackStatus.New,
+            CreatedAt = bayGio.AddDays(-1),
+            UpdatedAt = null,
+        };
+
+        db.Feedbacks.AddRange(khieuNai, khenNgoi, gopY);
+        await db.SaveChangesAsync(cancellationToken);
+        return 3;
+    }
+
+    /// <summary>
     /// Ước lượng thời gian chạy hết tuyến: tốc độ trung bình 25 km/h, làm tròn LÊN bội số 5 phút,
     /// tối thiểu 15 phút. Chỉ để giờ tới bến hiển thị hợp lý — số liệu vận hành thật không nằm ở đây.
     /// </summary>
@@ -477,4 +607,5 @@ public sealed record SeedResult(
     int StopsCreated,
     int RoutesCreated,
     int BusesCreated,
-    int TripsCreated);
+    int TripsCreated,
+    int FeedbacksCreated);
