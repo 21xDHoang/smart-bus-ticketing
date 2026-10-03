@@ -14,8 +14,19 @@ builder.Services.Configure<ApiBehaviorOptions>(o => o.SuppressModelStateInvalidF
 builder.Services.AddOpenApi();
 
 // CSDL PostgreSQL (Supabase). Chuỗi kết nối nằm ở appsettings.Development.json — không commit.
+// KiemTra đặt trong lambda vì lambda chỉ chạy khi app thật dựng AppDbContext — host test gỡ đăng
+// ký này rồi thay bằng InMemory (TestAppFactory) nên không đi qua đây. Máy mới kéo repo về chưa
+// cấu hình thì nhận thông báo nêu đúng cách sửa thay vì lỗi Npgsql khó hiểu.
 builder.Services.AddDbContext<AppDbContext>(o =>
-    o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    o.UseNpgsql(ChuoiKetNoiCsdl.KiemTra(builder.Configuration.GetConnectionString("Default"))));
+
+// Kiểm tra sớm ngay lúc dựng service: thiếu chuỗi kết nối thì app thoát ngay với hướng dẫn 3 bước
+// thay vì chạy lên rồi job nền thử lại + mọi request cùng lỗi — người mới không biết đường sửa.
+// Bỏ qua ở môi trường Testing: host test thay CSDL bằng InMemory nên không cần chuỗi thật.
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    ChuoiKetNoiCsdl.KiemTra(builder.Configuration.GetConnectionString("Default"));
+}
 
 // Cấu hình JWT — xem appsettings.Development.json.example
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));

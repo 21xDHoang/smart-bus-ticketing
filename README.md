@@ -36,6 +36,7 @@ smart-bus-ticketing/
 │  ├─ SmartBus.Seed/         # Nạp dữ liệu nền cho CSDL chung (chạy tay — docs/25)
 │  └─ SmartBus.Tests/        # Kiểm thử xUnit
 ├─ frontend/                 # React + Vite + Ant Design
+├─ scripts/                  # Script tiện ích (setup-csdl: điền chuỗi kết nối CSDL chung)
 └─ docs/                     # Tài liệu, sơ đồ
 ```
 
@@ -58,6 +59,7 @@ smart-bus-ticketing/
 cd backend
 cp SmartBus.Api/appsettings.Development.json.example SmartBus.Api/appsettings.Development.json
 # Mở file vừa tạo, dán chuỗi kết nối CSDL chung (Supabase) — lấy ở chat nhóm. Hướng dẫn: docs/25-huong-dan-csdl-chung.md
+# Nhanh hơn (khỏi mở file): copy chuỗi kết nối rồi chạy  bash scripts/setup-csdl.sh
 dotnet restore
 dotnet ef database update --project SmartBus.Api
 dotnet run --project SmartBus.Api

@@ -1,5 +1,5 @@
 {
-  "//": "Copy file này thành appsettings.Development.json rồi điền giá trị thật. File đó đã bị .gitignore chặn, KHÔNG commit lên GitHub. Hướng dẫn đầy đủ: docs/25-huong-dan-csdl-chung.md",
+  "//": "Copy file này thành appsettings.Development.json rồi điền giá trị thật. Nhanh hơn: copy chuỗi kết nối (tin nhắn ghim ở chat nhóm) rồi chạy 'bash scripts/setup-csdl.sh' — script tự tạo file. File đó đã bị .gitignore chặn, KHÔNG commit lên GitHub. Hướng dẫn đầy đủ: docs/25-huong-dan-csdl-chung.md",
 
   "ConnectionStrings": {
     "//": "Dán NGUYÊN chuỗi kết nối CSDL chung (Supabase) từ tin nhắn ghim ở chat nhóm — đừng tự đoán, đừng tự sửa Host/Port. Repo public nên chuỗi thật không bao giờ nằm trong file này.",
