@@ -1,4 +1,6 @@
 import { ConfigProvider, Layout, Avatar, Dropdown, message } from 'antd';
+// Locale tiếng Việt cho các chuỗi dựng sẵn của antd (phân trang, Empty, DatePicker…).
+import viVN from 'antd/locale/vi_VN';
 import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
@@ -22,6 +24,7 @@ import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import RouteGuard from './components/RouteGuard';
+import { appTheme } from './components/ui/theme';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
 
@@ -90,15 +93,7 @@ function App() {
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          colorPrimary: '#4361ee',
-          borderRadius: 10,
-          fontFamily: "'Plus Jakarta Sans', sans-serif",
-        },
-      }}
-    >
+    <ConfigProvider theme={appTheme} locale={viVN}>
       {!user ? (
         // NẾU CHƯA ĐĂNG NHẬP: Hiển thị Màn hình Auth (Login / Register)
         <AuthPage />
