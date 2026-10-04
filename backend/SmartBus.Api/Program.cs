@@ -80,6 +80,13 @@ builder.Services.AddHostedService<TripGenerationBackgroundService>();
 // danh) nên đứng riêng — cùng khuôn cặp IStopService / IRouteStopService.
 builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 
+// Tìm tuyến cho hành khách theo điểm đi/điểm đến: GET /api/routes/search (US 1 "Tra cứu tuyến").
+// Task story 1 — Trần Trung Hiếu (file này của Hoàng nên nhờ Hoàng xem qua trong PR).
+// Công khai có chủ đích — đặt ngay trước ITripSearchService bên dưới vì hai endpoint công khai
+// của story 1 đứng liền một mạch (tìm tuyến → tìm chuyến), khác hẳn IRouteService ở trên (CRUD
+// tuyến của quản lý, sau policy Admin/Manager).
+builder.Services.AddScoped<IRouteSearchService, RouteSearchService>();
+
 // Tìm chuyến cho hành khách: GET /api/trips/search (giá vé phổ thông + giờ chạy + số ghế còn trống).
 // Task story 1 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Công khai có chủ đích: story 1 là luồng tra cứu của hành khách, đăng nhập là bước của màn hình
