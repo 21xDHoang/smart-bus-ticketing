@@ -11,7 +11,8 @@
   trả file `.xlsx` nhị phân — xem mục "Nhật ký kiểm toán". Riêng đường **lỗi** của endpoint
   đó vẫn theo đúng định dạng JSON bên dưới.
 - Xác thực: gửi header `Authorization: Bearer <accessToken>` cho mọi endpoint, trừ
-  `/auth/login` và `/auth/register`.
+  `/auth/login`, `/auth/register` và hai endpoint tra cứu công khai của story 1:
+  `GET /routes/search` (tìm tuyến) và `GET /trips/search` (tìm chuyến).
 - Lỗi trả về thống nhất:
 
   ```json
@@ -638,6 +639,98 @@ Mọi endpoint đều kiểm tra trạm có **thuộc đúng** tuyến đó khô
 > là hai trạm cùng thứ tự; `GET` xếp tiếp theo `id` nên thứ tự hiển thị vẫn ổn định, và gọi
 > `PUT /stops/order` một lần là về đúng thứ tự. Thêm unique index cần migration — việc của chủ CSDL.
 
+## Tra cứu tuyến — `/routes/search`
+
+> ✅ Backend đã có (`RouteSearchController` — Trần Trung Hiếu, story 1, task *"API tìm kiếm chuyến
+> theo điểm đi, điểm đến, ngày giờ"*). Frontend đang ghép tạm từ `GET /routes` + `/stops` +
+> `/fares` (cần vai trò Manager/Admin) — đổi sang endpoint này thì màn "Tra cứu tuyến" thành công
+> khai hoàn toàn (xem ghi chú đầu `frontend/src/api/routeLookupApi.ts`).
+>
+> **Endpoint CÔNG KHAI** — hành khách tra cứu trước khi đăng nhập, cùng nhóm với
+> `GET /trips/search` ở mục "Chuyến xe" bên dưới. Khác hẳn `GET /routes` của mục "Tuyến đường":
+> đường kia là CRUD của quản lý (Admin/Manager), đường này trả lời câu hỏi của hành khách
+> *"điểm đi A, điểm đến B, ngày D → những tuyến nào?"*.
+
+### Endpoint
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes/search` | Tìm tuyến cho hành khách (**công khai**): điểm đi, điểm đến, ngày đi | — | `RouteSearchResult[]` |
+
+Tham số query:
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `origin` | `string` | — | **Bắt buộc.** Tên điểm đi — khớp tên trạm dừng (`Stop.name`), **không phân biệt hoa thường** |
+| `destination` | `string` | — | **Bắt buộc.** Tên điểm đến — cùng lối khớp trên |
+| `date` | `string` (`yyyy-MM-dd`) | — | Ngày đi. Có ngày thì chỉ trả tuyến có ít nhất một chuyến `Scheduled` khởi hành trong **trọn ngày đó giờ Việt Nam** |
+
+```json
+// RouteSearchResult[] — ví dụ GET /routes/search?origin=Bến+Thành&destination=Chợ+Lớn
+[
+  {
+    "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+    "routeCode": "01",
+    "routeName": "Bến Thành — Chợ Lớn",
+    "origin": "Bến Thành",
+    "destination": "Chợ Lớn",
+    "distanceKm": 7.0,
+    "stops": [
+      { "stopId": "9d2f5c33-0000-0000-0000-000000000000", "stopName": "Bến Thành", "stopOrder": 1 },
+      { "stopId": "a1b2c3d4-0000-0000-0000-000000000000", "stopName": "Công viên 23/9", "stopOrder": 2 },
+      { "stopId": "b7e4c9a1-0000-0000-0000-000000000000", "stopName": "Đại học Y Dược", "stopOrder": 3 },
+      { "stopId": "c8f5d0b2-0000-0000-0000-000000000000", "stopName": "Chợ Lớn", "stopOrder": 4 }
+    ],
+    "minPrice": 3500
+  }
+]
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `routeId` | `string` (GUID) | Khoá tuyến — màn hình gửi thẳng cho `GET /trips/search` để xem chuyến |
+| `routeCode` | `string` | Mã tuyến hiển thị — "01" |
+| `routeName` | `string` | Tên tuyến |
+| `origin` | `string` | Điểm đầu của tuyến (để hiển thị, không phải kết quả khớp — xem ghi chú dưới) |
+| `destination` | `string` | Điểm cuối của tuyến |
+| `distanceKm` | `number` | Tổng chiều dài tuyến (km) |
+| `stops[]` | `RouteSearchStop[]` | Trạm của tuyến theo đúng thứ tự chạy (`stopOrder` tăng dần) |
+| `minPrice` | `number` \| `null` | Giá vé **thấp nhất** trong bảng giá của tuyến (VND) — màn hình hiển thị "giá từ …". Tuyến chưa cấu hình giá → `null` |
+
+- **Khớp theo TÊN TRẠM, không phải theo `origin`/`destination` của tuyến**: hành khách tìm từ trạm
+  giữa tuyến ("Công viên 23/9" → "Chợ Lớn") vẫn ra tuyến 01. Tuyến khớp khi chứa **CẢ** trạm đi
+  lẫn trạm đến, và trạm đi đứng **TRƯỚC** trạm đến theo `stopOrder` — chiều chạy xác định bằng
+  thứ tự trạm, không bằng toạ độ (quy ước A8.6). Truy vấn này chạy trên chỉ mục
+  `RouteStops(StopId, RouteId, StopOrder)` mà task *"Tối ưu truy vấn tìm tuyến"* (Dăm) đã chuẩn bị.
+- Chỉ trả tuyến `Active` — tuyến ngừng khai thác không phải lựa chọn cho hành khách.
+- `origin`/`destination` thiếu hoặc toàn khoảng trắng → **400**; hai điểm trùng nhau (sau khi bỏ
+  khoảng trắng thừa, không phân biệt hoa thường) → **400** `errors.destination` "Điểm đi và điểm
+  đến không được trùng nhau" — cùng lối chặn sớm của form tra cứu.
+- `date` sai định dạng → **400** `errors.date`. Không có `date` thì không lọc theo chuyến — trả
+  mọi tuyến khớp điểm đi/điểm đến.
+- Không có tuyến nào khớp → `[]`, **không** phải 404 — bộ lọc mềm, cùng lối `GET /trips/search`.
+- Thứ tự: mã tuyến tăng dần, trùng mã xếp theo `routeId` để hai lần gọi ra cùng một kết quả.
+  Màn hình có thể sắp xếp lại theo ý hành khách.
+- Trả về **mảng trần**, không phân trang: một truy vấn tra cứu chỉ ra số tuyến nhỏ — màn hình đọc
+  hết để hiển thị lưới kết quả, cùng lối `GET /routes/{routeId}/stops`.
+
+> **Ranh giới với `GET /trips/search` (Phùng Duy Hoàng):** endpoint này trả **TUYẾN** — kết quả
+> của việc tìm tuyến từ điểm đi/điểm đến; endpoint kia trả **CHUYẾN** của một tuyến đã chọn kèm
+> giá phổ thông và số ghế còn trống. Màn "Kết quả tìm kiếm" (Băng, đã xong) ghép hai bước lại:
+> lấy `routeId` từ đây rồi gọi `GET /trips/search?routeId=…&from=…&to=…` của trọn ngày đã chọn.
+
+> **Vì sao đứng ở controller riêng (`RouteSearchController`)?** Cùng lối `TripSearchController`
+> ở mục dưới: mỗi bề mặt một controller, hai task thuộc hai người. Route template đầy đủ khác
+> nhau (`api/routes/search` so với `api/routes` và `api/routes/{id:guid}`) nên không tranh chấp —
+> đoạn literal `search` không thể khớp `{id:guid}`.
+
+> **Vì sao không gộp vào `GET /routes` (có sẵn tham số `search`)?** Hai câu hỏi khác nhau về
+> quyền và hình dạng. `GET /routes` là bộ lọc phân trang cho màn hình quản lý, khớp một từ khoá
+> với mã/tên/điểm đầu/điểm cuối và yêu cầu Admin/Manager. `GET /routes/search` khớp **hai** điểm
+> với các trạm trên tuyến, trả mảng trần kèm trạm và giá để hành khách lựa chọn, và phải công
+> khai cho người chưa đăng nhập. Trộn hai thứ vào một endpoint thì hình dạng response phải biến
+> đổi theo người gọi — trái lối "mỗi bề mặt một controller" của dự án.
+
 ## Chuyến xe — `/trips`
 
 > ✅ Backend **đã có `GET /trips/{id}`** (`TripsController` — Vàng Thị Dăm, story 13) và
@@ -834,9 +927,10 @@ Tham số query:
 > **Ranh giới với task *"API tìm kiếm chuyến theo điểm đi, điểm đến, ngày giờ"* (Trần Trung Hiếu,
 > story 1):** endpoint này **không** nhận điểm đi/điểm đến — nó nhận thẳng `routeId` đã chọn. Hai
 > task chia nhau hai nửa của một luồng: task của Hiếu trả lời *"điểm đi A, điểm đến B, ngày D →
-> những tuyến nào?"*, endpoint này trả lời *"tuyến X trong khoảng ngày → những chuyến nào, giá bao
-> nhiêu, còn mấy ghế?"*. Màn hình kết quả (Băng, đã xong) ghép hai bước lại. Làm gộp cả hai vào một
-> endpoint thì task của Hiếu không còn gì để làm — và ngược lại; mỗi bên giữ đúng phần mình.
+> những tuyến nào?"* — đã có: `GET /routes/search` ở mục "Tra cứu tuyến" phía trên — endpoint này
+> trả lời *"tuyến X trong khoảng ngày → những chuyến nào, giá bao nhiêu, còn mấy ghế?"*. Màn hình
+> kết quả (Băng, đã xong) ghép hai bước lại. Làm gộp cả hai vào một endpoint thì task của Hiếu
+> không còn gì để làm — và ngược lại; mỗi bên giữ đúng phần mình.
 
 > **Vì sao đứng ở controller riêng (`TripSearchController`)?** Cùng lối `TripLookupController` ở
 > trên: mỗi bề mặt một controller, hai task thuộc hai người. Route template khác nhau
