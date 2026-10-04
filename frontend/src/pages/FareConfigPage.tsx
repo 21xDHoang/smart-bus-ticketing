@@ -7,8 +7,8 @@ import fareApi from '../api/fareApi';
 import { PASSENGER_TYPE_META, PASSENGER_TYPE_OPTIONS } from '../api/fareApi';
 import type { Fare, FarePayload, PassengerType, RouteOption } from '../api/fareApi';
 import FareFormModal from '../components/FareFormModal';
-
-const { Title } = Typography;
+import { PageCard, PageHeader } from '../components/ui';
+import { formatVnd } from '../components/ui/format';
 
 export default function FareConfigPage() {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -128,9 +128,7 @@ export default function FareConfigPage() {
       dataIndex: 'price',
       key: 'price',
       align: 'right',
-      render: (price: number) => (
-        <span style={{ fontWeight: 600 }}>{price.toLocaleString('vi-VN')} ₫</span>
-      ),
+      render: (price: number) => <span style={{ fontWeight: 600 }}>{formatVnd(price)}</span>,
     },
     {
       title: 'Cập nhật lần cuối',
@@ -172,63 +170,51 @@ export default function FareConfigPage() {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <Title level={4} style={{ margin: 0 }}>
-            Cấu hình bảng giá vé
-          </Title>
-          <span style={{ color: '#94a3b8' }}>
-            Đặt giá vé cho từng đối tượng hành khách trên mỗi tuyến.
-          </span>
-        </div>
+      <PageHeader
+        title="Cấu hình bảng giá vé"
+        subtitle="Đặt giá vé cho từng đối tượng hành khách trên mỗi tuyến."
+        extra={
+          <Space wrap>
+            <Select
+              placeholder="Chọn tuyến"
+              style={{ minWidth: 280 }}
+              value={selectedRouteId}
+              loading={loadingRoutes}
+              onChange={(value) => setSelectedRouteId(value)}
+              options={routes.map((route) => ({
+                value: route.id,
+                label: `${route.code} — ${route.name}`,
+              }))}
+            />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+              Làm mới
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+              disabled={!selectedRouteId || allConfigured}
+            >
+              Thêm giá
+            </Button>
+          </Space>
+        }
+      />
 
-        <Space wrap>
-          <Select
-            placeholder="Chọn tuyến"
-            style={{ minWidth: 280 }}
-            value={selectedRouteId}
-            loading={loadingRoutes}
-            onChange={(value) => setSelectedRouteId(value)}
-            options={routes.map((route) => ({
-              value: route.id,
-              label: `${route.code} — ${route.name}`,
-            }))}
+      <PageCard>
+        {!selectedRouteId && !loadingRoutes ? (
+          <Empty description="Chưa có tuyến nào để cấu hình giá vé." />
+        ) : (
+          <Table<Fare>
+            rowKey="id"
+            columns={columns}
+            dataSource={fares}
+            loading={loadingFares}
+            pagination={false}
+            locale={{ emptyText: 'Tuyến này chưa cấu hình giá vé nào' }}
           />
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Làm mới
-          </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={openCreate}
-            disabled={!selectedRouteId || allConfigured}
-          >
-            Thêm giá
-          </Button>
-        </Space>
-      </div>
-
-      {!selectedRouteId && !loadingRoutes ? (
-        <Empty description="Chưa có tuyến nào để cấu hình giá vé." />
-      ) : (
-        <Table<Fare>
-          rowKey="id"
-          columns={columns}
-          dataSource={fares}
-          loading={loadingFares}
-          pagination={false}
-          locale={{ emptyText: 'Tuyến này chưa cấu hình giá vé nào' }}
-        />
-      )}
+        )}
+      </PageCard>
 
       <FareFormModal
         open={modalOpen}

@@ -1,21 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Alert,
-  Button,
-  Card,
-  Empty,
-  List,
-  Popconfirm,
-  Result,
-  Space,
-  Spin,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import { Alert, Button, List, Popconfirm, Space, Tag, Typography, message, theme } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import myMonthlyPassApi from '../api/myMonthlyPassApi';
 import { findPassType } from '../api/monthlyPassApi';
 import type { MonthlyPass } from '../api/monthlyPassApi';
@@ -24,8 +10,10 @@ import type { AppError } from '../api/axiosClient';
 import MonthlyPassExpiryReminder from '../components/MonthlyPassExpiryReminder';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
 import { getExpiringSoonPasses } from '../components/monthlyPassReminder';
+import { EmptyState, ErrorState, FilterBar, LoadingState, PageCard, PageHeader } from '../components/ui';
+import { formatDate, formatVnd } from '../components/ui/format';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /** Trần `pageSize` của GET /routes là 100 — cùng con số monthlyPassApi.ts đang dùng. */
 const ROUTE_PAGE_SIZE = 100;
@@ -35,16 +23,6 @@ type RouteLookup = Record<string, { code: string; name: string }>;
 
 /** Mảng rỗng dùng chung — giữ nguyên tham chiếu để không sinh mảng mới mỗi lần render. */
 const NO_PASSES: MonthlyPass[] = [];
-
-/** Định dạng tiền VND — ví dụ 200000 → "200.000 đ". */
-function formatVnd(price: number): string {
-  return `${price.toLocaleString('vi-VN')} đ`;
-}
-
-/** Ngày hiển thị cho hành khách — hợp đồng trả ISO 8601 UTC, chỉ cần phần ngày. */
-function formatDate(iso: string): string {
-  return dayjs(iso).format('DD/MM/YYYY');
-}
 
 /**
  * Rút mã tuyến từ mã vé tháng.
@@ -119,6 +97,8 @@ function RouteLine({ pass, route }: { pass: MonthlyPass; route?: { code: string;
 // từ menu — xem báo cáo kèm PR.
 export default function MyMonthlyPassPage() {
   const navigate = useNavigate();
+  // Màu lấy từ token của theme chung — không viết hex tay trong màn hình.
+  const { token } = theme.useToken();
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
@@ -220,15 +200,15 @@ export default function MyMonthlyPassPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Vé tháng của tôi
-        </Title>
-        <Text type="secondary">
-          Vé tháng đang có hiệu lực của bạn. Vé đã hết hạn và kỳ gia hạn chưa tới ngày không
-          hiện ở đây.
-        </Text>
-      </div>
+      <PageHeader
+        title="Vé tháng của tôi"
+        subtitle={
+          <>
+            Vé tháng đang có hiệu lực của bạn. Vé đã hết hạn và kỳ gia hạn chưa tới ngày không
+            hiện ở đây.
+          </>
+        }
+      />
 
       {expiring.length > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -236,19 +216,25 @@ export default function MyMonthlyPassPage() {
         </div>
       )}
 
-      <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }} wrap>
-          <Text type="secondary">
-            {view.kind === 'passes' && (
-              <>
-                Đang có <Text strong>{view.passes.length}</Text> vé tháng hoạt động
-              </>
-            )}
-          </Text>
-          <Button icon={<PlusOutlined />} onClick={() => navigate('/monthly-passes')}>
-            Đăng ký vé tháng
-          </Button>
-        </Space>
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <Button icon={<PlusOutlined />} onClick={() => navigate('/monthly-passes')}>
+                Đăng ký vé tháng
+              </Button>
+            }
+          >
+            <Text type="secondary">
+              {view.kind === 'passes' && (
+                <>
+                  Đang có <Text strong>{view.passes.length}</Text> vé tháng hoạt động
+                </>
+              )}
+            </Text>
+          </FilterBar>
+        }
+      >
 
         {/* Nói một lần ở đầu danh sách thay vì lặp ở từng dòng vé. */}
         {routesFailed && view.kind === 'passes' && (
@@ -262,36 +248,31 @@ export default function MyMonthlyPassPage() {
         )}
 
         {/* Đang tải — spinner riêng, không mượn danh sách của lượt trước và không hiện số đếm. */}
-        {view.kind === 'loading' && (
-          <div style={{ padding: '56px 0', textAlign: 'center' }}>
-            <Spin size="large" />
-            <div style={{ marginTop: 12 }}>
-              <Text type="secondary">Đang tải danh sách vé tháng…</Text>
-            </div>
-          </div>
-        )}
+        {view.kind === 'loading' && <LoadingState description="Đang tải danh sách vé tháng…" />}
 
         {/* Gọi API hỏng — trạng thái riêng, có lối thoát, KHÔNG mạo nhận là "chưa có vé nào". */}
         {view.kind === 'error' && (
-          <Result
-            status="warning"
+          <ErrorState
             title="Không tải được danh sách vé tháng"
-            subTitle={view.message}
-            extra={
-              <Button icon={<ReloadOutlined />} onClick={() => setReloadToken((n) => n + 1)}>
-                Thử lại
-              </Button>
-            }
+            description={view.message}
+            onRetry={() => setReloadToken((n) => n + 1)}
           />
         )}
 
         {/* Tải xong nhưng không có vé nào đang hoạt động — mảng rỗng là câu trả lời hợp lệ. */}
         {view.kind === 'empty' && (
-          <Empty description="Bạn chưa có vé tháng nào đang hoạt động. Vé đã hết hạn hoặc kỳ gia hạn chưa tới ngày cũng không hiện ở đây.">
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/monthly-passes')}>
-              Đăng ký vé tháng
-            </Button>
-          </Empty>
+          <EmptyState
+            description="Bạn chưa có vé tháng nào đang hoạt động. Vé đã hết hạn hoặc kỳ gia hạn chưa tới ngày cũng không hiện ở đây."
+            action={
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => navigate('/monthly-passes')}
+              >
+                Đăng ký vé tháng
+              </Button>
+            }
+          />
         )}
 
         {view.kind === 'passes' && (
@@ -302,7 +283,7 @@ export default function MyMonthlyPassPage() {
               const nextPeriod = nextPeriods[pass.id];
 
               return (
-                <List.Item style={{ padding: '14px 0', borderBlockEnd: '1px solid #f1f5f9' }}>
+                <List.Item style={{ padding: '14px 0', borderBlockEnd: `1px solid ${token.colorSplit}` }}>
                   <div
                     style={{
                       display: 'flex',
@@ -345,7 +326,7 @@ export default function MyMonthlyPassPage() {
 
                     {/* Giá đã trả + nút gia hạn */}
                     <div style={{ textAlign: 'right', minWidth: 150 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#4361ee' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: token.colorPrimary }}>
                         {formatVnd(pass.price)}
                       </div>
                       <Popconfirm
@@ -378,7 +359,7 @@ export default function MyMonthlyPassPage() {
             }}
           />
         )}
-      </Card>
+      </PageCard>
     </div>
   );
 }

@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Input, Popconfirm, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Input, Popconfirm, Space, Table, Tag, message } from 'antd';
 import { EnvironmentOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import stopApi from '../api/stopApi';
 import type { Stop, StopPayload } from '../api/stopApi';
 import StopFormModal from '../components/StopFormModal';
-
-const { Title } = Typography;
+import { PageCard, PageHeader } from '../components/ui';
 
 export default function StopManagePage() {
   const [stops, setStops] = useState<Stop[]>([]);
@@ -146,48 +145,36 @@ export default function StopManagePage() {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
-        <div>
-          <Title level={4} style={{ margin: 0 }}>
-            Quản lý Trạm dừng
-          </Title>
-          <span style={{ color: '#94a3b8' }}>
-            Thêm, sửa trạm dừng và chọn toạ độ trên bản đồ.
-          </span>
-        </div>
-
-        <Space wrap>
-          <Input.Search
-            placeholder="Tìm theo tên / địa chỉ…"
-            allowClear
-            style={{ width: 260 }}
-            onChange={(event) => setKeyword(event.target.value)}
-          />
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Làm mới
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            Thêm trạm
-          </Button>
-        </Space>
-      </div>
-
-      <Table<Stop>
-        rowKey="id"
-        columns={columns}
-        dataSource={filtered}
-        loading={loading}
-        pagination={{ pageSize: 6, showSizeChanger: true }}
+      <PageHeader
+        title="Quản lý Trạm dừng"
+        subtitle="Thêm, sửa trạm dừng và chọn toạ độ trên bản đồ."
+        extra={
+          <Space wrap>
+            <Input.Search
+              placeholder="Tìm theo tên / địa chỉ…"
+              allowClear
+              style={{ width: 260 }}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+              Làm mới
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              Thêm trạm
+            </Button>
+          </Space>
+        }
       />
+
+      <PageCard>
+        <Table<Stop>
+          rowKey="id"
+          columns={columns}
+          dataSource={filtered}
+          loading={loading}
+          pagination={{ pageSize: 6, showSizeChanger: true }}
+        />
+      </PageCard>
 
       <StopFormModal
         open={modalOpen}
