@@ -130,3 +130,15 @@ export function buildNavItems(role: string | null): MenuProps['items'] {
 export function navKeyOf(pathname: string): string {
   return pathname === '/trip-results' ? '/route-lookup' : pathname;
 }
+
+/** Danh sách điểm đến (mọi mục lá) theo vai trò — dùng cho lối vào nhanh ở màn Trang chủ. */
+export function navLeafLinks(role: string | null): { to: string; label: string }[] {
+  return NAV.flatMap((entry) => {
+    if ('children' in entry) {
+      return entry.children
+        .filter((leaf) => canSee(leaf, role))
+        .map((leaf) => ({ to: leaf.to, label: leaf.label }));
+    }
+    return canSee(entry, role) ? [{ to: entry.to, label: entry.label }] : [];
+  });
+}

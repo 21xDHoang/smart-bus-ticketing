@@ -22,3 +22,10 @@ body {
      Đặt ở đây để lúc trang vừa tải chưa kịp có theme vẫn không nháy nền trắng. */
   background: #f8fafc;
 }
+
+/* Màn hẹp: giấu tên người dùng cạnh avatar trong header để nhường chỗ cho menu. */
+@media (max-width: 640px) {
+  .app-user-name {
+    display: none;
+  }
+}

@@ -1,8 +1,19 @@
-import { ConfigProvider, Layout, Avatar, Dropdown, message } from 'antd';
+import {
+  App as AntApp,
+  Avatar,
+  Button,
+  ConfigProvider,
+  Dropdown,
+  Layout,
+  Menu,
+  Space,
+  Tag,
+  message,
+} from 'antd';
 // Locale tiếng Việt cho các chuỗi dựng sẵn của antd (phân trang, Empty, DatePicker…).
 import viVN from 'antd/locale/vi_VN';
 import { UserOutlined, LogoutOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
-import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import AuthPage from './pages/AuthPage';
 import BusManagePage from './pages/BusManagePage';
 import StopManagePage from './pages/StopManagePage';
@@ -24,28 +35,44 @@ import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import RouteGuard from './components/RouteGuard';
-import { appTheme } from './components/ui/theme';
+import { PageCard, PageHeader } from './components/ui';
+import { buildNavItems, navKeyOf, navLeafLinks } from './components/ui/navItems';
+import { appTheme, BRAND, SLATE } from './components/ui/theme';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
 
 const { Header, Content, Footer } = Layout;
 
-// Màn hình chào sau khi đăng nhập — tạm thời, sẽ thay bằng dashboard thật sau.
+// Màn hình chào sau khi đăng nhập — lời chào + lối vào nhanh các màn hình. Chỉ là điều
+// hướng tới các màn đã có, không gọi API và không thêm chức năng nào.
 function HomeContent() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const quickLinks = navLeafLinks(user?.role ?? null);
 
   return (
-    <div
-      style={{
-        background: '#ffffff',
-        padding: '30px',
-        borderRadius: '16px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-        textAlign: 'center',
-      }}
-    >
-      <h2>Xin chào, {user?.fullName || 'Bạn'}! 👋</h2>
-      <p>Bạn đã đăng nhập thành công vào Hệ thống Đặt vé Xe Chất lượng cao.</p>
+    <div>
+      <PageHeader
+        title={`Xin chào, ${user?.fullName || 'Bạn'}! 👋`}
+        subtitle={
+          <Space size={8}>
+            <span>Bạn đang đăng nhập với vai trò</span>
+            <Tag color="blue" style={{ marginInlineEnd: 0 }}>
+              {user?.role ?? '—'}
+            </Tag>
+          </Space>
+        }
+      />
+
+      <PageCard title="Lối vào nhanh">
+        <Space wrap size={12}>
+          {quickLinks.map((link) => (
+            <Button key={link.to} onClick={() => navigate(link.to)} style={{ height: 40 }}>
+              {link.label}
+            </Button>
+          ))}
+        </Space>
+      </PageCard>
     </div>
   );
 }
@@ -54,6 +81,7 @@ function App() {
   // Trạng thái đăng nhập do AuthProvider giữ; App chỉ đọc ra để hiển thị.
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   // Xử lý Đăng xuất
   const handleLogout = async () => {
@@ -64,117 +92,94 @@ function App() {
   // Menu Dropdown cho Avatar người dùng khi đã đăng nhập
   const userMenuItems = [
     { key: '1', label: 'Hồ sơ cá nhân', icon: <UserOutlined />, onClick: () => navigate('/profile') },
-    { key: '2', label: 'Vé của tôi', icon: <SafetyCertificateOutlined /> },
+    {
+      key: '2',
+      label: 'Vé của tôi',
+      icon: <SafetyCertificateOutlined />,
+      // Mục này trước không có onClick nên bấm không đi đâu cả — nối vào màn vé tháng.
+      onClick: () => navigate('/my-monthly-passes'),
+    },
     { type: 'divider' as const },
     { key: '3', label: 'Đăng xuất', icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
   ];
 
-  // Các mục điều hướng chính. Mục có `roles` chỉ hiện với vai trò tương ứng — ẩn đi
-  // thay vì để người dùng bấm vào rồi nhận trang 403.
-  const navItems = [
-    { to: '/', label: 'Trang chủ', roles: [] as string[] },
-    { to: '/route-lookup', label: 'Tra cứu tuyến', roles: [] as string[] },
-    { to: '/monthly-passes', label: 'Vé tháng', roles: [] as string[] },
-    { to: '/my-monthly-passes', label: 'Vé tháng của tôi', roles: [] as string[] },
-    { to: '/feedback-submit', label: 'Gửi phản ánh', roles: [] as string[] },
-    { to: '/my-feedback', label: 'Phản ánh của tôi', roles: [] as string[] },
-    { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
-    { to: '/stops', label: 'Trạm dừng', roles: ['Admin', 'Manager'] },
-    { to: '/buses', label: 'Đội xe', roles: ['Admin', 'Manager'] },
-    { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ['Admin', 'Manager'] },
-    { to: '/fares', label: 'Cấu hình giá vé', roles: ['Admin', 'Manager'] },
-    { to: '/trips-by-day', label: 'Chuyến theo ngày', roles: ['Admin', 'Manager'] },
-    { to: '/trip-schedule', label: 'Lịch trình', roles: ['Admin', 'Manager'] },
-    { to: '/trip-frequency', label: 'Tần suất chạy xe', roles: ['Admin', 'Manager'] },
-    { to: '/trip-assignment', label: 'Phân công điều xe', roles: ['Admin', 'Manager'] },
-    { to: '/admin-users', label: 'Người dùng', roles: ['Admin'] },
-    { to: '/audit-logs', label: 'Nhật ký', roles: ['Admin'] },
-    { to: '/admin-feedbacks', label: 'Xử lý phản ánh', roles: ['Admin', 'Manager'] },
-  ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
+  // Các mục điều hướng theo vai trò — cấu hình nhóm đặt ở components/ui/navItems.tsx.
+  const menuItems = buildNavItems(user?.role ?? null);
+  // Mục cần tô sáng theo URL hiện tại — vào thẳng đường dẫn vẫn sáng đúng mục.
+  const selectedNavKey = navKeyOf(pathname);
 
   return (
     <ConfigProvider theme={appTheme} locale={viVN}>
-      {!user ? (
-        // NẾU CHƯA ĐĂNG NHẬP: Hiển thị Màn hình Auth (Login / Register)
-        <AuthPage />
-      ) : (
-        // NẾU ĐÃ ĐĂNG NHẬP: Hiển thị khung chính + điều hướng các màn hình
-        <Layout style={{ minHeight: '100vh' }}>
-          <Header
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              // Đủ 16 mục điều hướng (Admin) nên thanh menu phải xuống dòng thay vì tràn
-              // ngang: bỏ chiều cao cứng 64px của AntD, cho phép cao theo nội dung.
-              flexWrap: 'wrap',
-              height: 'auto',
-              minHeight: 64,
-              lineHeight: 'normal',
-              gap: '12px',
-              background: '#ffffff',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              padding: '8px 24px',
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '28px' }}>🚌</span>
-              <span
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 'bold',
-                  background: 'linear-gradient(90deg, #4361ee, #f72585)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
-                Smart Bus Ticket
-              </span>
-            </div>
-
-            <nav style={{ flex: 1, display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === '/'}
-                  style={({ isActive }) => ({
-                    padding: '6px 12px',
-                    borderRadius: 8,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: isActive ? '#4361ee' : '#64748b',
-                    background: isActive ? '#eef1ff' : 'transparent',
-                    textDecoration: 'none',
-                    transition: 'all 0.2s',
-                  })}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-              <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Avatar style={{ backgroundColor: '#4361ee' }} icon={<UserOutlined />} />
-                <span style={{ fontWeight: 600 }}>
-                  {user.fullName || user.phoneNumber || 'Người dùng'}
-                </span>
-              </div>
-            </Dropdown>
-          </Header>
-
-          <Content style={{ padding: '24px', background: '#f8fafc' }}>
-            <div
+      {/* App của antd, dạng component={false} — không thêm thẻ nào vào DOM, chỉ dựng sẵn
+          context message/modal cho các màn chuyển dần sang App.useApp() ở đợt sau. */}
+      <AntApp component={false}>
+        {!user ? (
+          // NẾU CHƯA ĐĂNG NHẬP: Hiển thị Màn hình Auth (Login / Register)
+          <AuthPage />
+        ) : (
+          // NẾU ĐÃ ĐĂNG NHẬP: Hiển thị khung chính + điều hướng các màn hình
+          <Layout style={{ minHeight: '100vh' }}>
+            {/* Nền trắng, cao 64px, lề ngang lấy từ component token của Layout trong
+                components/ui/theme.ts. Menu ngang tự gom mục thừa vào nút "…" khi hẹp nên
+                không cần cho header xuống dòng như bản cũ. */}
+            <Header
               style={{
-                background: '#ffffff',
-                padding: '24px',
-                borderRadius: '16px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                position: 'sticky',
+                top: 0,
+                zIndex: 10,
               }}
             >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <span style={{ fontSize: 28 }}>🚌</span>
+                <span
+                  style={{
+                    fontSize: 20,
+                    fontWeight: 'bold',
+                    whiteSpace: 'nowrap',
+                    background: BRAND.gradient,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  Smart Bus Ticket
+                </span>
+              </div>
+
+              {/* minWidth: 0 là điều kiện để Menu ngang gom mục tràn vào nút "…" —
+                  thiếu nó là header lại xuống dòng như bản cũ. */}
+              <Menu
+                mode="horizontal"
+                selectedKeys={[selectedNavKey]}
+                items={menuItems}
+                onClick={({ key }) => navigate(key)}
+                style={{ flex: 1, minWidth: 0, borderBottom: 'none', background: 'transparent' }}
+              />
+
+              <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+                <div
+                  style={{
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Avatar style={{ backgroundColor: BRAND.primary }} icon={<UserOutlined />} />
+                  <span className="app-user-name" style={{ fontWeight: 600 }}>
+                    {user.fullName || user.phoneNumber || 'Người dùng'}
+                  </span>
+                </div>
+              </Dropdown>
+            </Header>
+
+            {/* Bỏ lớp thẻ trắng bọc ngoài — mỗi màn tự dựng PageCard của mình, hết cảnh
+                thẻ lồng trong thẻ. */}
+            <Content style={{ padding: 24, maxWidth: 1440, margin: '0 auto', width: '100%' }}>
               <Routes>
                 <Route path="/" element={<HomeContent />} />
                 {/* /profile là trang cá nhân — ai đã đăng nhập đều vào được, không cần
@@ -331,14 +336,14 @@ function App() {
                 />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
-            </div>
-          </Content>
+            </Content>
 
-          <Footer style={{ textAlign: 'center', color: '#94a3b8' }}>
-            Smart Bus Ticket System ©2026 Developed with React & Ant Design
-          </Footer>
-        </Layout>
-      )}
+            <Footer style={{ textAlign: 'center', color: SLATE[500] }}>
+              Smart Bus Ticket System ©2026 Developed with React & Ant Design
+            </Footer>
+          </Layout>
+        )}
+      </AntApp>
     </ConfigProvider>
   );
 }
