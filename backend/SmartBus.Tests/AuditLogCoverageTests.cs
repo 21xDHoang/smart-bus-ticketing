@@ -112,6 +112,11 @@ public class AuditLogCoverageTests
         ("PATCH",  "/api/admin/feedbacks/{id:guid}",             CachGhi.Middleware),
         ("POST",   "/api/admin/feedbacks/{id:guid}/replies",     CachGhi.Middleware),
 
+        // Gửi phản ánh — story 24, Trần Trung Hiếu. Middleware tự ghi (POST → Create); route không
+        // có tham số nào nên tên bảng suy từ đoạn tĩnh cuối là "Feedbacks", Target là id phản ánh
+        // mới đọc từ body trả về — cùng lối POST /api/monthly-passes.
+        ("POST",   "/api/feedbacks",                              CachGhi.Middleware),
+
         ("POST",   "/api/stops",                                 CachGhi.Middleware),
         ("PUT",    "/api/stops/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/stops/{id:guid}",                       CachGhi.Middleware),

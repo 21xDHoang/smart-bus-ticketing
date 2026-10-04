@@ -195,6 +195,16 @@ builder.Services.AddScoped<IFeedbackLookupService, FeedbackLookupService>();
 // KHÁC hẳn IFeedbackLookupService ở trên ([Authorize] trần cho hành khách).
 builder.Services.AddScoped<IFeedbackStatisticsService, FeedbackStatisticsService>();
 
+// Gửi phản ánh: POST /api/feedbacks (US 24). Task "API gửi phản ánh: chọn chuyến, loại phản ánh,
+// nội dung, đính kèm ảnh" (Sprint 2) — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua
+// trong PR.
+// Đặt ngay sau IFeedbackStatisticsService ở trên để bốn service của story 24 đứng liền một mạch:
+// quản lý xử lý (Hoàng) → phản ánh của tôi → thống kê → gửi phản ánh. Chỉ ghi vào bảng Feedbacks
+// (entity + cấu hình của Dăm, migration 20261003124532_Sprint2_Feedbacks_FeedbackReplies đã có).
+// Quyền: [Authorize] trần cho hành khách tự gửi — cùng lối IFeedbackLookupService, KHÁC hẳn hai
+// service nằm sau policy ManagerOrAbove.
+builder.Services.AddScoped<IFeedbackSubmissionService, FeedbackSubmissionService>();
+
 // Hạn mức gọi API (chống brute-force đăng ký) — Singleton vì bộ đếm phải dùng chung mọi request.
 // Task rate-limit của Hiếu (story 22); file này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
