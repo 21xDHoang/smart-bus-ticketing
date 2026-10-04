@@ -1,18 +1,20 @@
 import axiosClient from './axiosClient';
-import { fetchRoutes } from './routeApi';
 
 // -----------------------------------------------------------------------------
 // API vé tháng — nối với nhóm endpoint MonthlyPasses (story 16 "Đăng ký vé tháng").
 //
-// Backend CHƯA có endpoint vé tháng: migration MonthlyPasses/PassTypes và API đăng ký
-// là task của Vàng Thị Dăm + Trần Trung Hiếu (Sprint 5). Vì vậy file này dựng theo
-// đúng mẫu của routeLookupApi.ts — có nhánh dữ liệu giả để màn hình chạy được ngay,
-// và nhánh API thật đã viết sẵn để khi backend xong chỉ cần đổi cờ `USE_MOCK_DATA`.
+// Backend ĐÃ có (MonthlyPassRegistrationController / MonthlyPassLookupController):
+//   POST /monthly-passes     → đăng ký vé tháng mới → MonthlyPass (200)
+//   GET  /monthly-passes/me  → vé tháng đang hoạt động của chính người gọi (không dùng ở đây,
+//                              màn "Vé tháng của tôi" dùng myMonthlyPassApi.ts)
 //
-// Hợp đồng endpoint dự kiến (kebab-case, danh từ số nhiều — quy ước A của nhóm):
-//   GET  /pass-types        → PassType[]   (bảng tham chiếu loại vé, task của Dăm)
-//   POST /monthly-passes    → đăng ký vé tháng mới → MonthlyPass (201)
-//   GET  /monthly-passes/me → vé tháng đang hoạt động của hành khách
+// Nguồn tuyến cho ô chọn: cặp API CÔNG KHAI của story 1 — GET /stops/search (gợi ý trạm, xem
+// stopSearchApi.ts) rồi GET /routes/search (tuyến khớp cặp điểm đi/điểm đến). CỐ Ý không dùng
+// GET /routes: endpoint đó nằm sau policy ManagerOrAbove (màn quản lý tuyến, story 12), hành
+// khách gọi vào nhận 403 "Bạn không có quyền truy cập tính năng này." — đúng lỗi từng thấy ở
+// màn đăng ký vé tháng. /routes/search bắt buộc đủ điểm đi + điểm đến (mục "/routes/search"
+// của docs/api-contract.md), nên màn đăng ký chọn tuyến bằng cặp điểm đi/điểm đến — đúng luồng
+// hành khách mà hợp đồng đã vạch.
 //
 // Vé tháng (MonthlyPass) theo quy ước: là quyền đi lại trên MỘT tuyến trong khoảng
 // thời gian — có Code (mã QR unique) + RouteId + ValidFrom/ValidTo + Status. KHÔNG kèm
@@ -36,12 +38,24 @@ export interface PassType {
   price: number;
 }
 
-/** Một tuyến trong ô chọn — rút gọn từ Route của routeApi, chỉ đủ để hiển thị. */
+/** Một tuyến trong danh sách chọn — rút gọn từ kết quả GET /routes/search, chỉ đủ để hiển thị. */
 export interface MonthlyPassRoute {
   id: string;
   /** Mã tuyến, ví dụ "01", "B10". */
   code: string;
   name: string;
+  origin: string;
+  destination: string;
+}
+
+/**
+ * Một dòng của GET /routes/search — rút gọn còn các trường màn đăng ký dùng.
+ * Backend còn trả `distanceKm`, `stops`, `minPrice` (màn tra cứu dùng) — ở đây không cần.
+ */
+interface RouteSearchResult {
+  routeId: string;
+  routeCode: string;
+  routeName: string;
   origin: string;
   destination: string;
 }
@@ -81,14 +95,17 @@ export interface RegisterMonthlyPassPayload {
 }
 
 export interface MonthlyPassApi {
-  /** Danh sách tuyến đang khai thác cho ô chọn. */
-  listRoutes: () => Promise<MonthlyPassRoute[]>;
+  /** Tuyến đang khai thác khớp cặp điểm đi/điểm đến — nguồn công khai cho hành khách. */
+  searchRoutes: (origin: string, destination: string) => Promise<MonthlyPassRoute[]>;
   register: (payload: RegisterMonthlyPassPayload) => Promise<MonthlyPass>;
 }
 
 // ---------------------------------------------------------------------------
-// Bảng loại vé tháng — dữ liệu THAM CHIẾU. Backend chưa có bảng PassTypes nên tạm giữ
-// ở client làm hằng số; khi Dăm migrate xong, chuyển sang GET /pass-types.
+// Bảng loại vé tháng — dữ liệu THAM CHIẾU để vẽ ô chọn. Chưa có endpoint GET /pass-types
+// nên vẫn giữ ở client; backend tra mã trong bảng PassTypes và trả 404 nếu mã không khớp,
+// nên BỐN MÃ dưới đây phải tồn tại trong bảng PassTypes (mã là khoá nghiệp vụ, cùng lối
+// Routes.Code). Giá hiển thị ở đây chỉ là bản xem trước — giá THẬT do backend chụp từ
+// PassTypes lúc đăng ký; lệch nhau thì vé vẫn tạo theo giá backend.
 //
 // Giá gói tạm thời theo quy ước "mua càng dài càng rẻ" — tổng giá 3/6/12 tháng thấp hơn
 // tích luỹ 1 tháng nhân đúng số tháng. Số liệu chỉ để dựng giao diện, chưa phải giá thật.
@@ -111,14 +128,10 @@ export function findPassType(code: PassTypeCode | undefined): PassType | undefin
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì endpoint vé tháng chưa có
-// (xem ghi chú đầu file). Đổi thành `false` khi Hiếu xong API đăng ký vé tháng.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `false` — endpoint vé tháng đã có.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Trần `pageSize` của GET /routes là 100 — số tuyến tối đa lấy trong một lượt gọi. */
-const ROUTE_PAGE_SIZE = 100;
 
 /** Cộng `months` tháng vào một ngày, giữ nguyên giờ phút hiện tại. */
 function addMonths(date: Date, months: number): Date {
@@ -138,41 +151,28 @@ function generatePassCode(routeCode: string): string {
   return `MP-${routeCode}-${suffix}`;
 }
 
-/**
- * Lấy toàn bộ tuyến đang khai thác bằng cách lặp theo trang, giống routeLookupApi.
- * Không lọc phía server vì GET /routes chỉ nhận MỘT tham số `search` chung.
- */
-async function fetchActiveRoutes(): Promise<MonthlyPassRoute[]> {
-  const routes: MonthlyPassRoute[] = [];
-
-  for (let page = 1; ; page += 1) {
-    const { items, total } = await fetchRoutes({
-      page,
-      pageSize: ROUTE_PAGE_SIZE,
-      status: 'Active',
-    });
-
-    routes.push(
-      ...items.map(({ id, code, name, origin, destination }) => ({
-        id,
-        code,
-        name,
-        origin,
-        destination,
-      })),
-    );
-
-    // `items.length === 0` là chốt chặn để không lặp vô hạn nếu `total` sai.
-    if (routes.length >= total || items.length === 0) break;
-  }
-
-  return routes;
+/** Rút gọn kết quả /routes/search về đúng những gì danh sách chọn cần. */
+function toMonthlyPassRoute(result: RouteSearchResult): MonthlyPassRoute {
+  return {
+    id: result.routeId,
+    code: result.routeCode,
+    name: result.routeName,
+    origin: result.origin,
+    destination: result.destination,
+  };
 }
 
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
 const api: MonthlyPassApi = {
-  // GET /routes — chỉ lấy tuyến còn khai thác cho hành khách chọn.
-  listRoutes: async () => fetchActiveRoutes(),
+  // GET /routes/search — API công khai, chỉ trả tuyến Active có trạm đi đứng trước trạm đến.
+  searchRoutes: async (origin, destination) => {
+    const results = await axiosClient.get<RouteSearchResult[], RouteSearchResult[]>(
+      '/routes/search',
+      { params: { origin, destination } },
+    );
+
+    return results.map(toMonthlyPassRoute);
+  },
 
   // POST /monthly-passes — body { routeId, passTypeCode }. Backend tính giá + thời hạn.
   register: (payload) => axiosClient.post<MonthlyPass, MonthlyPass>('/monthly-passes', payload),
@@ -212,9 +212,23 @@ const MOCK_ROUTES: MonthlyPassRoute[] = [
 ];
 
 const mock: MonthlyPassApi = {
-  async listRoutes() {
+  async searchRoutes(origin, destination) {
     await delay(300);
-    return MOCK_ROUTES.map((route) => ({ ...route }));
+
+    // Bản giả khớp thô theo tên trong mã/tên/điểm đầu/điểm cuối của tuyến — đủ để dựng giao
+    // diện; bản thật khớp theo danh sách trạm của tuyến nên còn ra cả tuyến đi ngang qua trạm.
+    const needle = (text: string) => text.trim().toLowerCase();
+    const from = needle(origin);
+    const to = needle(destination);
+
+    return MOCK_ROUTES.filter((route) =>
+      [route.origin, route.destination, route.name].some((text) =>
+        text.toLowerCase().includes(from),
+      ) &&
+      [route.origin, route.destination, route.name].some((text) =>
+        text.toLowerCase().includes(to),
+      ),
+    ).map((route) => ({ ...route }));
   },
 
   async register({ routeId, passTypeCode }) {

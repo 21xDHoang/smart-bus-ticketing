@@ -1,69 +1,116 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  AutoComplete,
   Button,
   Card,
   Descriptions,
   Empty,
-  Form,
+  Radio,
   Select,
   Space,
   Typography,
   message,
 } from 'antd';
-import { CheckCircleFilled, IdcardOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { CheckCircleFilled, IdcardOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import monthlyPassApi, { PASS_TYPE_OPTIONS, findPassType } from '../api/monthlyPassApi';
 import type { MonthlyPass, MonthlyPassRoute, PassTypeCode } from '../api/monthlyPassApi';
+import stopSearchApi from '../api/stopSearchApi';
 import type { AppError } from '../api/axiosClient';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
 
 const { Title, Text } = Typography;
-
-/** Giá trị của form đăng ký — hai ô chọn tuyến và loại vé. */
-interface RegistrationFormValues {
-  routeId: string;
-  passTypeCode: PassTypeCode;
-}
 
 /** Định dạng tiền VND — ví dụ 200000 → "200.000 đ". */
 function formatVnd(price: number): string {
   return `${price.toLocaleString('vi-VN')} đ`;
 }
 
-// Màn hình đăng ký vé tháng (story 16): chọn tuyến → chọn loại vé → xem giá + thời hạn
-// → bấm "Đăng ký" để tạo vé tháng. Đây là màn hình cho HÀNH KHÁCH — không giới hạn vai
-// trò như các màn hình quản trị. Backend vé tháng chưa có nên đang chạy trên dữ liệu giả
-// (xem monthlyPassApi.ts); khi API xong chỉ cần đổi cờ USE_MOCK_DATA trong file đó.
+/** Gợi ý của một ô nhập điểm đi/điểm đến — giá trị phát ra là TÊN trạm. */
+interface StopOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * Gợi ý trạm cho một ô nhập: gọi GET /stops/search sau khi người dùng ngừng gõ 300ms.
+ *
+ * Chỉ là lớp cộng thêm — AutoComplete cho gõ tay giá trị bất kỳ, nên gợi ý hỏng (mất mạng,
+ * backend lỗi) thì ô nhập vẫn dùng được. Cùng lý do components/StopAutocomplete.tsx chọn
+ * AutoComplete thay vì Select.
+ */
+function useStopSuggestions(keyword: string): StopOption[] {
+  const [options, setOptions] = useState<StopOption[]>([]);
+
+  useEffect(() => {
+    const trimmed = keyword.trim();
+    if (trimmed.length === 0) {
+      // oxlint-disable-next-line react/set-state-in-effect
+      setOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      stopSearchApi
+        .search(trimmed)
+        .then((stops) => {
+          if (cancelled) return;
+          setOptions(
+            stops.map((stop) => ({
+              // /routes/search khớp theo TÊN trạm (không nhận id), nên giá trị phát ra là tên.
+              value: stop.name,
+              // Kèm địa chỉ để phân biệt hai trạm trùng tên — hợp đồng /stops/search ghi rõ.
+              label: `${stop.name} — ${stop.address}`,
+            })),
+          );
+        })
+        .catch(() => {
+          // Gợi ý hỏng không được chặn gõ tay — im lặng bỏ gợi ý, không báo lỗi.
+          if (!cancelled) setOptions([]);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [keyword]);
+
+  return options;
+}
+
+// Màn hình đăng ký vé tháng (story 16) — dành cho HÀNH KHÁCH.
+//
+// Luồng: nhập Điểm đi / Điểm đến (gợi ý trạm từ GET /stops/search — công khai) → bấm "Tìm
+// tuyến" gọi GET /routes/search (công khai, chỉ trả tuyến Active khớp cặp điểm) → chọn một
+// tuyến trong danh sách khớp → chọn loại vé → xem giá + thời hạn → Đăng ký.
+//
+// Vì sao không phải ô chọn "danh sách tuyến": GET /routes chỉ mở cho Admin/Manager (màn quản
+// lý tuyến, story 12) nên hành khách nhận 403 — đúng lỗi từng thấy ở màn này. /routes/search
+// là API công khai duy nhất trả về tuyến, nhưng bắt buộc đủ điểm đi + điểm đến (mục
+// "/routes/search" của docs/api-contract.md) — chọn cặp điểm chính là luồng tra cứu của hành
+// khách mà hợp đồng đã vạch (xem thêm đầu frontend/src/api/monthlyPassApi.ts).
 export default function MonthlyPassRegistrationPage() {
-  const [form] = Form.useForm<RegistrationFormValues>();
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
 
-  // Theo dõi hai ô chọn để vẽ lại ô "xem giá" ngay khi hành khách đổi lựa chọn.
-  const routeId = Form.useWatch('routeId', form);
-  const passTypeCode = Form.useWatch('passTypeCode', form);
+  // Tuyến khớp cặp điểm đi/điểm đến — rỗng cho tới lần "Tìm tuyến" đầu tiên.
+  const [foundRoutes, setFoundRoutes] = useState<MonthlyPassRoute[]>([]);
+  const [searching, setSearching] = useState(false);
+  // Đã bấm "Tìm tuyến" ít nhất một lần — phân biệt "chưa tìm" với "tìm mà không có kết quả".
+  const [hasSearched, setHasSearched] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
 
-  const [routes, setRoutes] = useState<MonthlyPassRoute[]>([]);
-  const [loadingRoutes, setLoadingRoutes] = useState(true);
-
+  const [passTypeCode, setPassTypeCode] = useState<PassTypeCode | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   // Vé tháng vừa đăng ký thành công — null khi chưa đăng ký hoặc đang đăng ký vé mới.
   const [registered, setRegistered] = useState<MonthlyPass | null>(null);
 
-  const loadRoutes = useCallback(async () => {
-    try {
-      setRoutes(await monthlyPassApi.listRoutes());
-    } catch (error) {
-      message.error((error as AppError).customMessage || 'Không tải được danh sách tuyến.');
-    } finally {
-      setLoadingRoutes(false);
-    }
-  }, []);
+  const originOptions = useStopSuggestions(origin);
+  const destinationOptions = useStopSuggestions(destination);
 
-  useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect
-    void loadRoutes();
-  }, [loadRoutes]);
-
-  const selectedRoute = routes.find((route) => route.id === routeId);
+  const selectedRoute = foundRoutes.find((route) => route.id === selectedRouteId);
   const selectedPassType = findPassType(passTypeCode);
 
   // Ngày hiệu lực dự kiến: bắt đầu hôm nay, kết thúc sau đúng `durationMonths` tháng.
@@ -75,12 +122,44 @@ export default function MonthlyPassRegistrationPage() {
           to: dayjs().startOf('day').add(selectedPassType.durationMonths, 'month'),
         };
 
-  const handleSubmit = async ({ routeId: selectedRouteId, passTypeCode: selectedType }: RegistrationFormValues) => {
+  const handleSearchRoutes = async () => {
+    const from = origin.trim();
+    const to = destination.trim();
+
+    if (from.length === 0 || to.length === 0) {
+      message.warning('Vui lòng nhập đủ điểm đi và điểm đến.');
+      return;
+    }
+
+    if (from.toLowerCase() === to.toLowerCase()) {
+      // Cùng lối chặn của backend (400 errors.destination) và form tra cứu phía client:
+      // hai đầu mút trùng nhau thì không có hành trình hợp lệ nào.
+      message.warning('Điểm đi và điểm đến không được trùng nhau.');
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const routes = await monthlyPassApi.searchRoutes(from, to);
+      setFoundRoutes(routes);
+      setSelectedRouteId(null);
+      setHasSearched(true);
+    } catch (error) {
+      message.error((error as AppError).customMessage || 'Không tìm được tuyến cho cặp điểm này.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Nút đã disabled khi thiếu lựa chọn; đây là chốt chặn thứ hai cho đường gọi bằng mã.
+    if (!selectedRoute || !selectedPassType) return;
+
     setSubmitting(true);
     try {
       const pass = await monthlyPassApi.register({
-        routeId: selectedRouteId,
-        passTypeCode: selectedType,
+        routeId: selectedRoute.id,
+        passTypeCode: selectedPassType.code,
       });
       setRegistered(pass);
       message.success('Đã đăng ký vé tháng thành công.');
@@ -91,13 +170,15 @@ export default function MonthlyPassRegistrationPage() {
     }
   };
 
-  // Đăng ký thêm một vé khác: xoá kết quả cũ và đưa form về trạng thái ban đầu.
+  // Đăng ký thêm một vé khác: xoá kết quả cũ và bỏ tuyến/loại vé đã chọn. GIỮ điểm đi/điểm đến
+  // và danh sách tuyến vừa tìm — khách thường đăng ký tiếp trên cùng cung đường.
   const handleRegisterAnother = () => {
     setRegistered(null);
-    form.resetFields();
+    setSelectedRouteId(null);
+    setPassTypeCode(undefined);
   };
 
-  const registeredRoute = routes.find((route) => route.id === registered?.routeId);
+  const registeredRoute = foundRoutes.find((route) => route.id === registered?.routeId);
   const registeredType = findPassType(registered?.passTypeCode);
 
   return (
@@ -107,7 +188,8 @@ export default function MonthlyPassRegistrationPage() {
           Đăng ký vé tháng
         </Title>
         <Text type="secondary">
-          Chọn tuyến và loại vé để xem giá, rồi đăng ký vé tháng tiết kiệm chi phí đi lại.
+          Chọn điểm đi và điểm đến để tìm tuyến, chọn loại vé để xem giá, rồi đăng ký vé tháng
+          tiết kiệm chi phí đi lại.
         </Text>
       </div>
 
@@ -115,44 +197,93 @@ export default function MonthlyPassRegistrationPage() {
         variant="borderless"
         style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
       >
-        <Form<RegistrationFormValues>
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-        >
-          <Space size="large" wrap align="start" style={{ display: 'flex', width: '100%' }}>
-            <Form.Item
-              name="routeId"
-              label="Tuyến xe"
-              style={{ flex: 1, minWidth: 260 }}
-              rules={[{ required: true, message: 'Vui lòng chọn tuyến xe.' }]}
-            >
-              <Select
-                placeholder="Chọn tuyến xe buýt"
-                loading={loadingRoutes}
-                showSearch
-                optionFilterProp="label"
-                options={routes.map((route) => ({
-                  value: route.id,
-                  label: `${route.code} — ${route.name}`,
-                }))}
-                suffixIcon={<EnvironmentOutlined />}
+        <Space direction="vertical" size={20} style={{ display: 'flex', width: '100%' }}>
+          {/* Ô nhập cặp điểm + nút tìm tuyến. */}
+          <Space size="large" wrap align="end" style={{ display: 'flex', width: '100%' }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                Điểm đi
+              </Text>
+              <AutoComplete
+                value={origin}
+                onChange={setOrigin}
+                options={originOptions}
+                placeholder="Ví dụ: Bến Thành"
+                allowClear
+                style={{ width: '100%' }}
               />
-            </Form.Item>
+            </div>
 
-            <Form.Item
-              name="passTypeCode"
-              label="Loại vé"
-              style={{ flex: 1, minWidth: 260 }}
-              rules={[{ required: true, message: 'Vui lòng chọn loại vé.' }]}
-            >
-              <Select
-                placeholder="Chọn loại vé tháng"
-                options={PASS_TYPE_OPTIONS}
-                suffixIcon={<IdcardOutlined />}
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                Điểm đến
+              </Text>
+              <AutoComplete
+                value={destination}
+                onChange={setDestination}
+                options={destinationOptions}
+                placeholder="Ví dụ: Chợ Lớn"
+                allowClear
+                style={{ width: '100%' }}
               />
-            </Form.Item>
+            </div>
+
+            <Button
+              type="primary"
+              icon={<SearchOutlined />}
+              loading={searching}
+              onClick={handleSearchRoutes}
+            >
+              Tìm tuyến
+            </Button>
           </Space>
+
+          {/* Danh sách tuyến khớp — chọn một tuyến để đăng ký. */}
+          {foundRoutes.length > 0 && (
+            <div>
+              <Text type="secondary">
+                Tìm thấy {foundRoutes.length} tuyến khớp — chọn một tuyến:
+              </Text>
+              <Radio.Group
+                value={selectedRouteId}
+                onChange={(event) => setSelectedRouteId(event.target.value as string)}
+                style={{ display: 'block', marginTop: 8 }}
+              >
+                <Space direction="vertical" size={8} style={{ display: 'flex' }}>
+                  {foundRoutes.map((route) => (
+                    <Radio key={route.id} value={route.id}>
+                      <Text strong>{route.code}</Text> — {route.name}{' '}
+                      <Text type="secondary">
+                        ({route.origin} → {route.destination})
+                      </Text>
+                    </Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
+            </div>
+          )}
+
+          {/* Tìm mà không có tuyến nào khớp — khác với "chưa tìm" ở trên. */}
+          {hasSearched && foundRoutes.length === 0 && (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Không có tuyến nào khớp cặp điểm này. Thử đổi chiều điểm đi/điểm đến hoặc chọn tên trạm khác."
+            />
+          )}
+
+          <div style={{ maxWidth: 320 }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+              Loại vé
+            </Text>
+            <Select
+              value={passTypeCode}
+              onChange={(value: PassTypeCode) => setPassTypeCode(value)}
+              placeholder="Chọn loại vé tháng"
+              options={PASS_TYPE_OPTIONS}
+              suffixIcon={<IdcardOutlined />}
+              style={{ width: '100%' }}
+            />
+          </div>
 
           {/* Ô "xem giá" — chỉ hiện khi đã chọn đủ cả tuyến lẫn loại vé. */}
           {selectedRoute && selectedPassType && validity && (
@@ -162,7 +293,6 @@ export default function MonthlyPassRegistrationPage() {
                 border: '1px solid #dbe1ff',
                 borderRadius: 12,
                 padding: '16px 20px',
-                marginBottom: 24,
               }}
             >
               <Space direction="vertical" size={6} style={{ width: '100%' }}>
@@ -186,23 +316,15 @@ export default function MonthlyPassRegistrationPage() {
 
           <Button
             type="primary"
-            htmlType="submit"
             size="large"
             loading={submitting}
             disabled={!selectedRoute || !selectedPassType}
+            onClick={handleSubmit}
           >
             Đăng ký vé tháng
           </Button>
-        </Form>
+        </Space>
       </Card>
-
-      {/* Trạng thái chưa có tuyến nào để chọn — khác với "chưa chọn" ở trên. */}
-      {!loadingRoutes && routes.length === 0 && (
-        <Empty
-          style={{ marginTop: 40 }}
-          description="Chưa có tuyến nào đang khai thác để đăng ký vé tháng."
-        />
-      )}
 
       {/* Kết quả đăng ký thành công. */}
       {registered && registeredRoute && registeredType && (
