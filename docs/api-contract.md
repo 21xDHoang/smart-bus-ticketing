@@ -1715,9 +1715,10 @@ múi giờ bị hiểu là giờ máy chủ — frontend luôn gửi kèm offset
 
 ## Vé tháng — `/monthly-passes`
 
-> 🚧 Bề mặt vé tháng mới có **hai phần**, đều của Phùng Duy Hoàng: gia hạn và tra cứu vé đang hoạt
-> động của tôi. Phần còn lại của story 16 **chưa làm**: đăng ký vé tháng `POST /monthly-passes`
-> (Trần Trung Hiếu). Hai bảng `MonthlyPasses`/`PassTypes` đã migrate xong (Vàng Thị Dăm).
+> ✅ Backend đã đủ cả ba phần của story 16: đăng ký vé tháng `POST /monthly-passes` (Trần Trung
+> Hiếu), gia hạn `POST /monthly-passes/{id}/renew` và tra cứu vé đang hoạt động của tôi
+> `GET /monthly-passes/me` (đều của Phùng Duy Hoàng). Hai bảng `MonthlyPasses`/`PassTypes` đã
+> migrate xong (Vàng Thị Dăm).
 
 Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đây:
 
@@ -1729,6 +1730,7 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
+| POST | `/monthly-passes` | Đăng ký vé tháng mới của chính người gọi: chọn tuyến + loại vé (thời hạn và giá theo loại) | `{ routeId, passTypeCode }` | `MonthlyPass` |
 | POST | `/monthly-passes/{id}/renew` | Gia hạn vé tháng của chính người gọi — ghi thêm một dòng mới, tính ngày hiệu lực kế tiếp | `{ passTypeCode? }` | `MonthlyPass` (dòng mới) |
 | GET | `/monthly-passes/me` | Vé tháng **đang hoạt động** của chính người gọi | — | `MonthlyPass[]` (mảng trần) |
 
@@ -1759,6 +1761,61 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 | `validFrom` / `validTo` | ISO 8601 UTC | Khoảng hiệu lực, **tính cả hai mốc**. Nguồn sự thật về hiệu lực của vé |
 | `status` | string | `Active` / `Expired` — trạng thái LƯU, có độ trễ (xem trên) |
 | `createdAt` | ISO 8601 UTC | |
+
+#### `POST /monthly-passes` — đăng ký vé tháng mới
+
+Đăng ký một vé tháng cho **chính người gọi**: chọn tuyến (`routeId`) và loại vé (`passTypeCode`) —
+thời hạn và giá gói do loại vé quyết định (bảng `PassTypes`), không phải tham số riêng: chọn loại
+vé chính là chọn thời hạn.
+
+```json
+// RegisterMonthlyPassRequest
+{ "routeId": "9d8c7b6a-0000-0000-0000-000000000000", "passTypeCode": "OneMonth" }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `routeId` | ✅ | GUID của tuyến muốn đăng ký. Không trỏ tới tuyến nào → **404** |
+| `passTypeCode` | ✅ | Mã loại vé trong `PassTypes`, tối đa 20 ký tự. Không khớp loại vé nào → **404** |
+
+**Cách tính khoảng hiệu lực** (phần "thời hạn" của task):
+
+1. `validFrom` = **thời điểm đăng ký** — vé có hiệu lực ngay khi mua, cùng lối gia hạn vé đã hết
+   hạn bắt đầu từ bây giờ.
+2. `validTo` = `validFrom + durationMonths` của loại vé, cộng theo **tháng lịch**:
+   `31/01 + 1 tháng = 28/02` (ngày cuối tháng tự kẹp — cùng lối .NET `AddMonths`).
+3. `price` = giá hiện hành của loại vé (**chụp lại** — cùng lý do cột `price` của gia hạn: đổi giá
+   gói sau này không làm vé đã bán nhảy theo), `status` = `Active`, `code` do server sinh theo
+   khuôn `MP-{mã tuyến}-{6 ký tự A–Z/0–9}` và kiểm duy nhất.
+
+Trả **200** kèm `MonthlyPass` của vé mới:
+
+> **Vì sao 200 mà không phải 201?** Chưa có `GET /monthly-passes/{id}` để trỏ `Location` — cùng
+> lý do `POST /monthly-passes/{id}/renew` trả 200. Đổi sang 201 khi có endpoint tra vé theo id.
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token / token hết hạn | 401 | |
+| `routeId` thiếu hoặc sai định dạng GUID; `passTypeCode` thiếu | 400 | `errors.routeId` / `errors.passTypeCode` |
+| Tuyến không tồn tại | 404 | `"Không tìm thấy tuyến đường"` — tham chiếu cứng, cùng câu trả lời của `GET /trips/search` |
+| `passTypeCode` không khớp loại vé nào | 404 | `"Không tìm thấy loại vé"` |
+| Khoảng hiệu lực mới **chồng lấn** với một vé tháng khác của cùng người trên **cùng tuyến** | 409 | So khoảng `[validFrom, validTo)` — cùng luật gia hạn; vé nối đuôi (mốc này `validTo` = mốc kia `validFrom`) **không** tính chồng |
+| `passTypeCode` dài quá 20 ký tự | 400 | `errors.passTypeCode` |
+
+Ghi chú:
+
+- **Yêu cầu đăng nhập, không yêu cầu vai trò cụ thể** — cùng lối gia hạn và `GET /monthly-passes/me`:
+  RBAC của dự án không có policy `Passenger`, quyền sở hữu nằm ngay trong luồng (vé luôn gắn
+  `userId` của người gọi). Admin/Manager gọi endpoint này cũng chỉ đăng ký cho chính mình.
+- **Việc chặn trùng vé tháng đang hoạt động trên cùng tuyến nằm ở đây** (task *"Validate trùng vé
+  tháng đang hoạt động trên cùng tuyến"*): so khoảng `[validFrom, validTo)` chồng lấn chứ không so
+  cột `status` — cột `status` có độ trễ (job quét của Kiên), so nó là so sai; và không thể khoá
+  bằng unique `(userId, routeId)` ở CSDL vì gia hạn cố ý ghi dòng mới nối đuôi kỳ cũ (xem
+  `Data/AppDbContext.MonthlyPass.cs`).
+- **Không chặn theo trạng thái tuyến** — cùng lý do gia hạn: đây là giao dịch mua bán, tuyến tạm
+  ngưng vẫn có thể mở lại.
+- **Nhật ký kiểm toán**: middleware tự ghi `Create`, `Target` = `MonthlyPasses:{id vé mới}` — id
+  đọc từ body trả về, cùng lối gia hạn.
 
 #### `POST /monthly-passes/{id}/renew` — gia hạn vé tháng
 
