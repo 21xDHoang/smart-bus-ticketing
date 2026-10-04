@@ -16,6 +16,7 @@ import TripFrequencyPage from './pages/TripFrequencyPage';
 import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
+import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import FareConfigPage from './pages/FareConfigPage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
@@ -70,6 +71,7 @@ function App() {
     { to: '/', label: 'Trang chủ', roles: [] as string[] },
     { to: '/route-lookup', label: 'Tra cứu tuyến', roles: [] as string[] },
     { to: '/monthly-passes', label: 'Vé tháng', roles: [] as string[] },
+    { to: '/my-monthly-passes', label: 'Vé tháng của tôi', roles: [] as string[] },
     { to: '/feedback-submit', label: 'Gửi phản ánh', roles: [] as string[] },
     { to: '/my-feedback', label: 'Phản ánh của tôi', roles: [] as string[] },
     { to: '/routes', label: 'Tuyến đường', roles: ['Admin', 'Manager'] },
@@ -277,6 +279,12 @@ function App() {
                     nhập đều dùng được. Backend đăng ký vé tháng chưa có nên màn hình đang
                     chạy dữ liệu giả (xem monthlyPassApi.ts). */}
                 <Route path="/monthly-passes" element={<MonthlyPassRegistrationPage />} />
+                {/* /my-monthly-passes là màn hình quản lý vé tháng của tôi + nút gia hạn
+                    (US 16, task Sprint 2 dòng 45 của Hoàng Văn Thịnh) — mọi người đã đăng nhập
+                    đều dùng được, mỗi người chỉ thấy vé của chính mình (backend lọc theo token).
+                    Dòng route này do Hoàng Văn Thịnh thêm hộ: màn hình cần đường vào, mà App.tsx
+                    là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route path="/my-monthly-passes" element={<MyMonthlyPassPage />} />
                 {/* /feedback-submit là màn hình gửi phản ánh (US 24, task của Dương Thị Hạnh) —
                     mọi người đã đăng nhập đều dùng được. Backend gửi phản ánh chưa có nên màn
                     hình đang chạy dữ liệu giả (xem feedbackSubmitApi.ts). */}
