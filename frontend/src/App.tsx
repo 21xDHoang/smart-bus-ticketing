@@ -20,6 +20,7 @@ import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import FareConfigPage from './pages/FareConfigPage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
+import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import RouteGuard from './components/RouteGuard';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
@@ -85,6 +86,7 @@ function App() {
     { to: '/trip-assignment', label: 'Phân công điều xe', roles: ['Admin', 'Manager'] },
     { to: '/admin-users', label: 'Người dùng', roles: ['Admin'] },
     { to: '/audit-logs', label: 'Nhật ký', roles: ['Admin'] },
+    { to: '/admin-feedbacks', label: 'Xử lý phản ánh', roles: ['Admin', 'Manager'] },
   ].filter((item) => item.roles.length === 0 || item.roles.includes(user?.role ?? ''));
 
   return (
@@ -316,6 +318,19 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin']}>
                       <AuditLogPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /admin-feedbacks là màn hình xử lý phản ánh (US 24, task Sprint 2 dòng 58
+                    của Hoàng Văn Thịnh) — nhóm endpoint /admin/feedbacks yêu cầu vai trò Manager
+                    hoặc Admin (docs/api-contract.md). Vai trò khác nhận trang 403.
+                    Dòng route này do Hoàng Văn Thịnh thêm hộ: màn hình cần đường vào, mà App.tsx
+                    là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route
+                  path="/admin-feedbacks"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <AdminFeedbackPage />
                     </RouteGuard>
                   }
                 />
