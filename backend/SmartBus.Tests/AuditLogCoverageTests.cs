@@ -100,6 +100,11 @@ public class AuditLogCoverageTests
         ("PUT",    "/api/drivers/{id:guid}",                     CachGhi.Middleware),
         ("DELETE", "/api/drivers/{id:guid}",                     CachGhi.Middleware),
 
+        // Đăng ký vé tháng — story 16, Trần Trung Hiếu. Middleware tự ghi (POST → Create);
+        // route không có tham số nào nên tên bảng suy từ đoạn tĩnh cuối là "MonthlyPasses",
+        // Target là id vé mới đọc từ body trả về.
+        ("POST",   "/api/monthly-passes",                         CachGhi.Middleware),
+
         // Gia hạn vé tháng — story 16, Phùng Duy Hoàng. Middleware tự ghi (POST → Create, tên
         // bảng suy từ đoạn trước {id} là "MonthlyPasses"). Target là id vé MỚI đọc từ body trả
         // về, không phải vé cũ trên đường dẫn — ca này cố ý để lộ điều đó ra test Phần 2.
