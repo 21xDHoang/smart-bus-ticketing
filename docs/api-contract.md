@@ -2036,10 +2036,10 @@ cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc 
 ## Phản ánh — `/feedbacks`
 
 > 🚧 Story 24 đã có **phần quản lý xử lý** (Phùng Duy Hoàng), **danh sách phản ánh của hành khách**
-> và **thống kê theo loại/tuyến** (Nguyễn Duy Kiên). Hai bảng `Feedbacks`/`FeedbackReplies` **đã có
+> và **thống kê theo loại/tuyến** (Nguyễn Duy Kiên), **gửi phản ánh** (Trần Trung Hiếu — mục
+> "Gửi phản ánh" ở cuối phần này). Hai bảng `Feedbacks`/`FeedbackReplies` **đã có
 > migration** (Vàng Thị Dăm — `20261003124532_Sprint2_Feedbacks_FeedbackReplies`); còn thiếu bước
-> chạy `dotnet ef database update` lên CSDL. Phần còn lại của story **chưa làm**: gửi phản ánh
-> (Trần Trung Hiếu). Ai làm phần nào thì bổ sung mục cho phần đó vào đây.
+> chạy `dotnet ef database update` lên CSDL.
 >
 > **Toàn bộ endpoint `/admin/feedbacks` ở mục "Endpoints" dưới đây yêu cầu vai trò `Manager` hoặc
 > `Admin`** — xử lý phản ánh là nghiệp vụ vận hành của nhà xe. Người đã đăng nhập nhưng không đủ
@@ -2366,3 +2366,65 @@ phân biệt chúng là xác nhận với người đang dò rằng id đó có 
 |---|---|---|
 | Không có token | 401 | |
 | `{id}` không tồn tại, hoặc thuộc hành khách khác | 404 | `{ "message": "Không tìm thấy phản ánh" }` |
+
+### Gửi phản ánh — `POST /feedbacks` (hành khách)
+
+Hành khách đã đăng nhập gửi một phản ánh mới về một chuyến đi — hoặc phản ánh chung không gắn
+chuyến nào. Yêu cầu **đăng nhập** (`[Authorize]` trần, cùng lối `/feedbacks/me`): `userId` đọc từ
+JWT, **không có trong body** — không ai gửi phản ánh hộ người khác được.
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| POST | `/feedbacks` | Gửi một phản ánh mới của chính người gọi | `CreateFeedbackRequest` | `FeedbackSubmission` — **201** |
+
+```json
+// CreateFeedbackRequest — ví dụ body gửi lên
+{
+  "tripId": "b7c1d2e3-0000-0000-0000-000000000000",
+  "type": "Complaint",
+  "content": "Xe chạy trễ 30 phút so với giờ trên vé, tài xế không thông báo gì.",
+  "rating": 2,
+  "attachmentUrl": "https://img.example.com/xe-tre.jpg"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `tripId` | GUID \| null | Chuyến bị phản ánh. **`null` là hợp lệ** (A9 #20) — phản ánh về tuyến/dịch vụ/ứng dụng. Có giá trị mà chuyến không tồn tại → **404** |
+| `type` | string | Bắt buộc — `Complaint` / `Compliment` / `Suggestion`. Mã lạ → **400** `errors.type`, thông báo liệt kê đủ ba mã chấp nhận |
+| `content` | string | Bắt buộc, 1–2000 ký tự — cùng giới hạn nội dung phản hồi của quản lý |
+| `rating` | number \| null | 1–5 sao mức độ hài lòng. `null` khi không chấm sao |
+| `attachmentUrl` | string \| null | Ảnh đính kèm do hành khách gửi, tối đa 2000 ký tự. `null` khi không đính kèm; chuỗi trắng/rỗng lưu thành `null`. Hiện chưa có endpoint upload ảnh riêng — client tự chuẩn bị đường dẫn |
+
+```json
+// FeedbackSubmission — response 201
+{
+  "id": "3f2a1b0c-0000-0000-0000-000000000000",
+  "tripId": "b7c1d2e3-0000-0000-0000-000000000000",
+  "type": "Complaint",
+  "content": "Xe chạy trễ 30 phút so với giờ trên vé, tài xế không thông báo gì.",
+  "attachmentUrl": "https://img.example.com/xe-tre.jpg",
+  "rating": 2,
+  "status": "New",
+  "createdAt": "2026-10-04T02:11:00Z"
+}
+```
+
+Khác `Feedback` của nhóm admin và `MyFeedback` của "phản ánh của tôi" đúng ba chỗ, cả ba đều vì
+phản ánh **vừa được tạo ra**: không `userId`/`userFullName` (tác giả là chính người gọi), không
+`replyCount`/`replies` (chưa có phản hồi nào), không `updatedAt` (chưa ai đổi trạng thái).
+
+`status` luôn là `New` — giá trị khởi tạo của entity. Trạng thái chỉ đổi khi quản lý xử lý ở
+`PATCH /admin/feedbacks/{id}`.
+
+Nhật ký (US 23): middleware ghi `Create` với `Target` = `Feedbacks:{id phản ánh}` — id đọc từ body
+trả về.
+
+| Ca lỗi | Mã | Ghi chú |
+|---|---|---|
+| Không có token | 401 | |
+| `tripId` trỏ chuyến không tồn tại | 404 | `{ "message": "Không tìm thấy chuyến đã chọn." }` |
+| `type` thiếu, quá 20 ký tự, hoặc không phải ba mã trên | 400 | `errors.type` |
+| `content` trống hoặc quá 2000 ký tự | 400 | `errors.content` |
+| `rating` ngoài khoảng 1..5 | 400 | `errors.rating` |
+| `attachmentUrl` quá 2000 ký tự | 400 | `errors.attachmentUrl` |
