@@ -80,6 +80,15 @@ builder.Services.AddHostedService<TripGenerationBackgroundService>();
 // danh) nên đứng riêng — cùng khuôn cặp IStopService / IRouteStopService.
 builder.Services.AddScoped<ITripLookupService, TripLookupService>();
 
+// Gợi ý trạm dừng cho hành khách: GET /api/stops/search (US 1.0 "Tra cứu tuyến" — ô chọn trạm).
+// Task "API gợi ý trạm dừng theo từ khoá (autocomplete)" (Sprint 2 dòng 29) — Hoàng Văn Thịnh.
+// File này của Hoàng (Phùng Duy Hoàng) nên nhờ Hoàng xem qua trong PR.
+// Công khai có chủ đích, cùng nhóm với hai endpoint story 1 ngay dưới — đặt TRƯỚC
+// IRouteSearchService vì đây là bước đứng trước trong luồng: chọn trạm (endpoint này) → tìm tuyến
+// → tìm chuyến. Khác IStopService ở trên (CRUD trạm của quản lý, sau policy Admin/Manager):
+// service này trả một lát cắt gợi ý và không biết ai đang gọi.
+builder.Services.AddScoped<IStopSearchService, StopSearchService>();
+
 // Tìm tuyến cho hành khách theo điểm đi/điểm đến: GET /api/routes/search (US 1 "Tra cứu tuyến").
 // Task story 1 — Trần Trung Hiếu (file này của Hoàng nên nhờ Hoàng xem qua trong PR).
 // Công khai có chủ đích — đặt ngay trước ITripSearchService bên dưới vì hai endpoint công khai

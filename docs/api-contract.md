@@ -108,11 +108,15 @@ nên không thể xoá mềm như `Routes` — quy ước A4 chỉ cho dùng c�
 
 ## Tra cứu trạm dừng — `/stops/search`
 
-> 📌 **Hợp đồng chốt ở đây, backend CHƯA có.** Mục này do Hoàng Văn Thịnh bổ sung cho task
-> *"Component autocomplete chọn trạm dừng"* (Sprint 2 dòng 33, US 1.0) — người viết backend là
-> **Nguyễn Duy Kiên**, người đang giữ task *"API gợi ý trạm dừng theo từ khoá (autocomplete)"*
-> (Sprint 2 dòng 29). Backlog đánh dấu task đó **"Đã xong"**, nhưng trong `main` chưa có endpoint
-> nào như vậy — `StopsController` chỉ có 5 route CRUD ở mục trên. Cần Kiên xác nhận.
+> 📌 **Hợp đồng chốt ở đây.** Backend: `StopsSearchController` + `StopSearchService` trong
+> `backend/SmartBus.Api/`. Mục này do Hoàng Văn Thịnh bổ sung cho task *"Component autocomplete
+> chọn trạm dừng"* (Sprint 2 dòng 33, US 1.0).
+>
+> Lịch sử chỗ này: task *"API gợi ý trạm dừng theo từ khoá (autocomplete)"* (Sprint 2 dòng 29)
+> trong backlog ghi **Nguyễn Duy Kiên** và đánh dấu **"Đã xong"**, nhưng trong `main` không có
+> endpoint nào như vậy — `StopsController` chỉ có 5 route CRUD ở mục trên, `RouteSearchService` chỉ
+> giải từ khoá ra trạm ở nội bộ. Backend được Hoàng Văn Thịnh viết bù ngày 2026-10-04;
+> **backlog cần sửa lại người thực hiện ở dòng 29.**
 >
 > **Endpoint CÔNG KHAI** — hành khách gõ từ khoá **trước khi đăng nhập**, cùng nhóm với
 > `GET /routes/search` và `GET /trips/search`. Đây là mảnh còn thiếu của luồng tra cứu: hành khách
@@ -120,12 +124,13 @@ nên không thể xoá mềm như `Routes` — quy ước A4 chỉ cho dùng c�
 > nó thì màn "Tra cứu tuyến" buộc phải dùng `GET /stops` của quản lý (Admin/Manager), và hành
 > khách chưa đăng nhập không có gợi ý nào.
 >
-> **Phía frontend:** ô gợi ý đã viết xong ở `frontend/src/components/StopAutocomplete.tsx` (nhánh
-> `feature/1-component-autocomplete-chon-tram-dung`, chưa vào `main`). Bản hiện tại lấy **trọn**
-> `GET /stops` một lượt rồi tự lọc trong bộ nhớ, nên khi endpoint này có thật thì component phải
-> đổi **cách lấy dữ liệu**, không phải chỉ đổi địa chỉ gọi: chuyển sang gọi theo từng từ khoá (có
-> chờ gõ xong — debounce) và bỏ lớp lọc phía client. Làm trong cùng nhánh đó, **sau** khi endpoint
-> chạy được — chưa làm ở đây vì gọi một endpoint chưa có thì chỉ nhận 404.
+> **Phía frontend:** ô gợi ý đã viết xong ở `frontend/src/components/StopAutocomplete.tsx`
+> (đã vào `main` qua PR #101). Bản hiện tại lấy **trọn**
+> `GET /stops` một lượt rồi tự lọc trong bộ nhớ. Khi chuyển sang endpoint này, component phải đổi
+> **cách lấy dữ liệu** chứ không phải chỉ đổi địa chỉ gọi: gọi theo từng từ khoá (có chờ gõ xong —
+> debounce) và bỏ lớp lọc phía client. **Chưa làm ở đây**: ô nhập nằm trong
+> `frontend/src/pages/RouteLookupPage.tsx`, không phải file của người viết mục này, nên phải do chủ
+> file đổi.
 
 ### Endpoint
 
