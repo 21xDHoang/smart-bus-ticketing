@@ -44,8 +44,8 @@ const CONTENT_MAX_LENGTH = 2000;
 // Màn hình "Gửi phản ánh / đánh giá chuyến đi" (story 24, task của Dương Thị Hạnh): hành
 // khách chọn loại phản ánh, có thể gắn với một chuyến đã đi, chấm sao mức độ hài lòng, viết
 // nội dung và đính kèm ảnh rồi gửi. Đây là màn hình cho HÀNH KHÁCH — không giới hạn vai trò
-// như các màn hình quản trị. Backend gửi phản ánh chưa có nên đang chạy trên dữ liệu giả
-// (xem feedbackSubmitApi.ts); khi API xong chỉ cần đổi cờ USE_MOCK_DATA trong file đó.
+// như các màn hình quản trị. Gửi phản ánh gọi POST /feedbacks thật; ô "chuyến xe" còn trống
+// vì chưa có API liệt kê chuyến đã đi của hành khách (xem feedbackSubmitApi.ts).
 export default function FeedbackSubmitPage() {
   const [form] = Form.useForm<FeedbackFormValues>();
 

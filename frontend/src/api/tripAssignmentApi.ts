@@ -5,18 +5,18 @@ import type { Trip } from './tripApi';
 // API phân công tài xế — phần frontend của task 120 "Component lọc chuyến chưa phân
 // công + phân công hàng loạt" (story 14, Dương Thị Hạnh).
 //
-// ⚠️ Backend gán tài xế (task 113 của Kiên) CHƯA có: TripResponse chưa trả driverId và
-// chưa có endpoint gán tài xế vào chuyến. Vì vậy file này giữ nhánh dữ liệu giả
-// (USE_MOCK) để dựng giao diện trước — đúng tiền lệ stopApi.ts / adminUserApi.ts /
-// fareApi.ts: đổi cờ thành false là quay lại API thật khi backend xong.
+// Backend ĐÃ có (task 113 của Kiên): TripResponse mang sẵn driverId/driverName, và
+// PATCH /routes/{routeId}/trips/driver-assignment gán một tài xế cho nhiều chuyến cùng lúc.
+// File này gọi thẳng API thật — nhánh dữ liệu giả ở dưới giữ lại theo tiền lệ stopApi.ts /
+// adminUserApi.ts / fareApi.ts, chỉ để dựng giao diện khi cần mà không có backend.
 //
-// Khi Kiên xong task 113, hợp đồng dự kiến (cần chốt lại với Kiên trước khi bật):
-//   GET /drivers?isActive=true   → danh sách tài xế đang hoạt động (ĐÃ có thật)
-//   ... triển khai gán tài xế 1 chuyến + hàng loạt theo đúng contract Kiên đưa ra.
+// Endpoint dùng ở đây:
+//   GET   /drivers?isActive=true                          → danh sách tài xế đang hoạt động
+//   PATCH /routes/{routeId}/trips/driver-assignment       → gán 1 tài xế cho nhiều chuyến
 // -----------------------------------------------------------------------------
 
-/** Bật nhánh dữ liệu giả khi backend gán tài xế chưa có — đổi false khi nối API thật. */
-const USE_MOCK = true;
+/** Bật nhánh dữ liệu giả để dựng giao diện khi không có backend — đang nối API thật. */
+const USE_MOCK = false;
 
 /** Tài xế cho ô chọn — rút gọn từ GET /drivers, chỉ đủ để hiển thị. */
 export interface DriverOption {
@@ -26,8 +26,9 @@ export interface DriverOption {
 }
 
 /**
- * Chuyến kèm thông tin phân công tài xế. Khi Kiên xong task 113, TripResponse sẽ mang
- * sẵn 2 trường này và file này bỏ lớp làm giàu ở dưới.
+ * Chuyến kèm thông tin phân công tài xế — `TripResponse` đã trả sẵn 2 trường này, ở đây
+ * khai báo lại thành BẮT BUỘC (đã chuẩn hoá về null) để bảng/lọc không phải bận tâm
+ * chuyện undefined.
  */
 export interface AssignableTrip extends Trip {
   /** null = chưa phân công tài xế. */
@@ -72,10 +73,10 @@ interface DriverListResult {
 }
 
 /**
- * Gán một tài xế cho NHIỀU chuyến cùng lúc. Trả về số chuyến đã gán.
+ * Gán một tài xế cho NHIỀU chuyến cùng lúc. Trả về số chuyến THỰC SỰ được đổi tài xế.
  */
 export async function bulkAssignDriver(
-  _routeId: string,
+  routeId: string,
   tripIds: string[],
   driverId: string,
 ): Promise<number> {
@@ -87,19 +88,46 @@ export async function bulkAssignDriver(
     return tripIds.length;
   }
 
-  // TODO(task 113 - Kiên): chưa có endpoint gán tài xế hàng loạt. Khi có thì gọi endpoint
-  // thật ở đây (thay `_routeId` bằng tham số dùng trong URL) rồi trả số chuyến đã gán.
-  throw new Error('Chưa có endpoint gán tài xế — chờ backend task 113 của Kiên.');
+  // PATCH /routes/{routeId}/trips/driver-assignment — tối đa 200 chuyến một lô, và trùng
+  // lịch chỉ là CẢNH BÁO trong response (vẫn 200) chứ không chặn: luồng điều hành được phép
+  // cố ý chấp nhận trùng. `assignedCount` là số chuyến thực đổi — gọi lại y hệt lần hai trả 0
+  // vì chuyến đã đúng tài xế đó từ trước, nên thông báo "đã phân công cho N chuyến" luôn đúng.
+  const result = await axiosClient.patch<DriverAssignmentResponse, DriverAssignmentResponse>(
+    `/routes/${routeId}/trips/driver-assignment`,
+    { tripIds, driverId },
+  );
+
+  return result.assignedCount;
 }
 
 /**
- * Gắn thông tin tài xế vào danh sách chuyến. Ở nhánh giả: chuyến chưa từng được phân
- * công trong phiên thì so le chẵn/lẻ theo vị trí để có cả hai trạng thái mà demo bộ lọc.
- * Khi backend thật trả sẵn driverId/driverName thì đây chỉ là phép chuyển kiểu.
+ * Kết quả PATCH /routes/{routeId}/trips/driver-assignment — khớp `DriverAssignmentResponse`
+ * của backend. Ở đây chỉ dùng `assignedCount`; `items` (chi tiết từng chuyến kèm cảnh báo
+ * trùng lịch) để dành cho màn hình nào cần hiện chi tiết.
+ */
+interface DriverAssignmentResponse {
+  driverId: string;
+  driverName: string;
+  /** Số chuyến THỰC SỰ được đổi tài xế — chuyến đã đúng tài xế đó từ trước không tính. */
+  assignedCount: number;
+  items: unknown[];
+}
+
+/**
+ * Chuẩn hoá danh sách chuyến thành `AssignableTrip`. API thật luôn kèm `driverId`/`driverName`
+ * (null khi chưa phân công), ở đây chỉ quy `undefined` về `null` để bộ lọc "chỉ chưa phân
+ * công" và cột "Tài xế" đọc đúng.
+ *
+ * Ở nhánh giả: chuyến chưa từng được phân công trong phiên thì so le chẵn/lẻ theo vị trí để
+ * có cả hai trạng thái mà demo bộ lọc.
  */
 export function enrichTripsWithDriver(trips: Trip[]): AssignableTrip[] {
   if (!USE_MOCK) {
-    return trips as AssignableTrip[];
+    return trips.map((trip) => ({
+      ...trip,
+      driverId: trip.driverId ?? null,
+      driverName: trip.driverName ?? null,
+    }));
   }
 
   return trips.map((trip, index) => {

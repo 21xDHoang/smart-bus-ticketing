@@ -32,14 +32,15 @@ interface TripAssignmentModalProps {
  * Modal "Phân công điều xe" cho một chuyến — story 14, task của Nguyễn Đình Băng.
  *
  * Chỉ có một trường lưu được NGAY: "Xe chạy chuyến" (gọi PUT /trips để đổi xe). Ô "Tài xế"
- * được vẽ sẵn nhưng tạm khoá vì endpoint gán tài xế (task của Kiên) và hồ sơ tài xế
- * (task của Hiếu) chưa có — xem docs/api-contract.md. Khi có API thì mở lại ô này và nối
- * `driverId` vào payload PUT. Ô "Phụ xe" không có: quy ước A8.4 chốt chỉ 4 vai trò, không
- * có Phụ xe (bảng Trips cũng không có cột phụ xe).
+ * được vẽ sẵn nhưng vẫn khoá: PUT /routes/{routeId}/trips/{id} không nhận `driverId`, gán tài
+ * xế đi qua thanh "phân công hàng loạt" ở trang cha (PATCH .../trips/driver-assignment). Ô
+ * "Phụ xe" không có: quy ước A8.4 chốt chỉ 4 vai trò, không có Phụ xe (bảng Trips cũng không
+ * có cột phụ xe).
  *
  * Kèm "cảnh báo trực quan khi trùng lịch xe": lúc chọn xe, nếu xe đó còn chuyến khác trùng
- * khung giờ thì hiện Alert cảnh báo (không chặn lưu). Cảnh báo trùng TÀI XẾ sẽ dùng cùng hàm
- * `findConflictingTrips` với `t => t.driverId` khi backend trả `driverId` trên TripResponse.
+ * khung giờ thì hiện Alert cảnh báo (không chặn lưu). Cảnh báo trùng TÀI XẾ dùng cùng hàm
+ * `findConflictingTrips` với `t => t.driverId` — `TripResponse` đã trả `driverId`, việc nối
+ * vào UI chờ màn hình nào cần cảnh báo trùng tài xế.
  */
 export default function TripAssignmentModal({
   open,
@@ -155,10 +156,9 @@ export default function TripAssignmentModal({
         </Form.Item>
 
         <Form.Item label="Tài xế">
-          <Select disabled placeholder="Chờ API gán tài xế" />
+          <Select disabled placeholder="Phân công ở thanh phía trên" />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Chưa thể phân công tài xế — endpoint gán tài xế (Kiên) và hồ sơ tài xế (Hiếu) chưa có.
-            Sẽ nối sau.
+            Gán tài xế theo lô bằng thanh "phân công hàng loạt" ở đầu trang — ô ở đây chỉ đổi xe.
           </Text>
         </Form.Item>
       </Form>
