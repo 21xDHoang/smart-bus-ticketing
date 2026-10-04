@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Input, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import { PlusOutlined } from '@ant-design/icons';
 import { fetchBuses, BUS_STATUS_META } from '../api/busApi';
 import type { Bus, BusStatus } from '../api/busApi';
@@ -9,6 +8,9 @@ import busCrudApi, { BUS_STATUS_OPTIONS } from '../api/busCrudApi';
 import type { BusPayload, UpdateBusPayload } from '../api/busCrudApi';
 import type { AppError } from '../api/axiosClient';
 import BusFormModal from '../components/BusFormModal';
+import { FilterBar, PageCard, PageHeader } from '../components/ui';
+import { formatDate } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
 // Màn hình quản lý đội xe (story 14): bảng + tìm kiếm + lọc trạng thái + phân trang.
 // Phần Thêm/Sửa xe + xác nhận ngừng khai thác (nút, modal, popconfirm) là task "Màn hình
@@ -51,7 +53,7 @@ const BASE_COLUMNS: TableProps<Bus>['columns'] = [
     dataIndex: 'createdAt',
     key: 'createdAt',
     width: 130,
-    render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY'),
+    render: (createdAt: string) => formatDate(createdAt),
   },
 ];
 
@@ -178,52 +180,50 @@ const BusManagePage = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Quản lý đội xe
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          Tra cứu xe theo biển số, loại xe và trạng thái khai thác — bảo dưỡng.
-        </Typography.Text>
-      </div>
+      <PageHeader
+        title="Quản lý đội xe"
+        subtitle="Tra cứu xe theo biển số, loại xe và trạng thái khai thác — bảo dưỡng."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Input.Search
-            allowClear
-            placeholder="Tìm theo biển số hoặc loại xe"
-            style={{ width: 280 }}
-            onSearch={(value) => {
-              setSearch(value.trim());
-              setPage(1);
-            }}
-            onChange={(e) => {
-              // Bấm nút X (allowClear) thì cập nhật ngay, không cần chờ Enter.
-              if (!e.target.value) {
-                setSearch('');
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                Thêm xe
+              </Button>
+            }
+          >
+            <Input.Search
+              allowClear
+              placeholder="Tìm theo biển số hoặc loại xe"
+              style={{ width: 280 }}
+              onSearch={(value) => {
+                setSearch(value.trim());
                 setPage(1);
-              }
-            }}
-          />
+              }}
+              onChange={(e) => {
+                // Bấm nút X (allowClear) thì cập nhật ngay, không cần chờ Enter.
+                if (!e.target.value) {
+                  setSearch('');
+                  setPage(1);
+                }
+              }}
+            />
 
-          <Select<BusStatus>
-            allowClear
-            placeholder="Trạng thái"
-            style={{ width: 200 }}
-            options={BUS_STATUS_OPTIONS}
-            onChange={(value) => {
-              setStatus(value ?? undefined);
-              setPage(1);
-            }}
-          />
-
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            Thêm xe
-          </Button>
-        </Space>
+            <Select<BusStatus>
+              allowClear
+              placeholder="Trạng thái"
+              style={{ width: 200 }}
+              options={BUS_STATUS_OPTIONS}
+              onChange={(value) => {
+                setStatus(value ?? undefined);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
+      >
 
         <Table<Bus>
           rowKey="id"
@@ -232,22 +232,19 @@ const BusManagePage = () => {
           loading={loading}
           scroll={{ x: 720 }}
           locale={{ emptyText: 'Không tìm thấy xe buýt nào' }}
-          pagination={{
-            current: page,
+          pagination={tablePagination({
+            page,
             pageSize,
             total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: [10, 20, 50],
-            showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} xe`,
+            unitLabel: 'xe',
             onChange: (nextPage, nextPageSize) => {
               // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
               setPage(nextPageSize !== pageSize ? 1 : nextPage);
               setPageSize(nextPageSize);
             },
-          }}
+          })}
         />
-      </Card>
+      </PageCard>
 
       <BusFormModal
         open={modalOpen}

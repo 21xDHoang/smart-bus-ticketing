@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   DatePicker,
-  Empty,
   Form,
   Input,
   List,
@@ -12,25 +11,23 @@ import {
   Tag,
   Typography,
   message,
+  theme,
 } from 'antd';
 import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import routeLookupApi from '../api/routeLookupApi';
 import type { RouteLookupResult } from '../api/routeLookupApi';
 import type { AppError } from '../api/axiosClient';
+import { EmptyState, PageCard, PageHeader } from '../components/ui';
+import { formatVnd } from '../components/ui/format';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /** Giá trị của form tìm tuyến — `date` là Dayjs để DatePicker xử lý trực tiếp. */
 interface SearchFormValues {
   origin: string;
   destination: string;
   date: Dayjs;
-}
-
-/** Định dạng tiền VND — ví dụ 8000 → "8.000 đ". */
-function formatVnd(price: number): string {
-  return `${price.toLocaleString('vi-VN')} đ`;
 }
 
 // Màn hình tra cứu tuyến (User Story 1): form "điểm đi - điểm đến - ngày" + kết quả tuyến.
@@ -42,6 +39,8 @@ function formatVnd(price: number): string {
 export default function RouteLookupPage() {
   const [form] = Form.useForm<SearchFormValues>();
   const navigate = useNavigate();
+  // Màu lấy từ token của theme chung — không viết hex tay trong màn hình.
+  const { token } = theme.useToken();
 
   const [results, setResults] = useState<RouteLookupResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,16 +93,12 @@ export default function RouteLookupPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Tra cứu tuyến
-        </Title>
-        <Text type="secondary">
-          Nhập điểm đi, điểm đến và ngày đi để tìm tuyến xe buýt phù hợp.
-        </Text>
-      </div>
+      <PageHeader
+        title="Tra cứu tuyến"
+        subtitle="Nhập điểm đi, điểm đến và ngày đi để tìm tuyến xe buýt phù hợp."
+      />
 
-      <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+      <PageCard>
         <Form<SearchFormValues>
           form={form}
           layout="vertical"
@@ -140,7 +135,7 @@ export default function RouteLookupPage() {
             </Form.Item>
           </Space>
         </Form>
-      </Card>
+      </PageCard>
 
       {hasSearched && !loading && results.length > 0 && (
         <div style={{ marginTop: 20 }}>
@@ -172,7 +167,7 @@ export default function RouteLookupPage() {
                       <Text style={{ fontSize: 13 }}>{route.stops.length} trạm</Text>
                     </Space>
                     {route.minPrice !== null && (
-                      <Text style={{ color: '#4361ee', fontWeight: 600, fontSize: 15 }}>
+                      <Text style={{ color: token.colorPrimary, fontWeight: 600, fontSize: 15 }}>
                         Giá từ {formatVnd(route.minPrice)}
                       </Text>
                     )}
@@ -188,17 +183,15 @@ export default function RouteLookupPage() {
       )}
 
       {hasSearched && !loading && results.length === 0 && (
-        <Empty
-          style={{ marginTop: 40 }}
-          description="Không tìm thấy tuyến phù hợp. Vui lòng thử điểm đi/điểm đến khác."
-        />
+        <div style={{ marginTop: 40 }}>
+          <EmptyState description="Không tìm thấy tuyến phù hợp. Vui lòng thử điểm đi/điểm đến khác." />
+        </div>
       )}
 
       {!hasSearched && (
-        <Empty
-          style={{ marginTop: 40 }}
-          description="Nhập điểm đi, điểm đến và ngày đi rồi bấm “Tìm tuyến”."
-        />
+        <div style={{ marginTop: 40 }}>
+          <EmptyState description="Nhập điểm đi, điểm đến và ngày đi rồi bấm “Tìm tuyến”." />
+        </div>
       )}
     </div>
   );
