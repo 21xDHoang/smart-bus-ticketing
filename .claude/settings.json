@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push origin main)",
+      "Bash(git push origin main:*)",
+      "Bash(git push -u origin main:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet ef migrations remove:*)",
+      "Bash(dotnet ef database drop:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./backend/SmartBus.Api/appsettings.Development.json)",
+      "Read(./backend/SmartBus.Api/appsettings.Local.json)",
+      "Read(./frontend/.env)",
+      "Read(./frontend/.env.local)"
+    ]
+  }
+}
