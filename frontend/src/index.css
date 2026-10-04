@@ -18,4 +18,7 @@ body {
   font-family: 'Plus Jakarta Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Nền xám nhạt của cả app — cùng màu colorBgLayout trong components/ui/theme.ts.
+     Đặt ở đây để lúc trang vừa tải chưa kịp có theme vẫn không nháy nền trắng. */
+  background: #f8fafc;
 }
