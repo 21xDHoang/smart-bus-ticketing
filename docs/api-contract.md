@@ -11,8 +11,9 @@
   trả file `.xlsx` nhị phân — xem mục "Nhật ký kiểm toán". Riêng đường **lỗi** của endpoint
   đó vẫn theo đúng định dạng JSON bên dưới.
 - Xác thực: gửi header `Authorization: Bearer <accessToken>` cho mọi endpoint, trừ
-  `/auth/login`, `/auth/register` và hai endpoint tra cứu công khai của story 1:
-  `GET /routes/search` (tìm tuyến) và `GET /trips/search` (tìm chuyến).
+  `/auth/login`, `/auth/register` và ba endpoint tra cứu công khai của story 1:
+  `GET /routes/search` (tìm tuyến), `GET /stops/search` (gợi ý trạm) và `GET /trips/search`
+  (tìm chuyến).
 - Lỗi trả về thống nhất:
 
   ```json
@@ -48,6 +49,9 @@
 >
 > **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
 > nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+>
+> Ô gợi ý trạm cho hành khách là endpoint **công khai**, đứng ở mục riêng
+> "Tra cứu trạm dừng — `/stops/search`" bên dưới.
 
 ### Entity `Stop`
 
@@ -101,6 +105,102 @@ Trạm đang nằm trên ít nhất một tuyến (`RouteStops` tham chiếu t�
 
 Trạm không nằm trên tuyến nào → xoá hẳn khỏi CSDL, trả 204. `Stop` không có cột trạng thái
 nên không thể xoá mềm như `Routes` — quy ước A4 chỉ cho dùng cột trạng thái sẵn có.
+
+## Tra cứu trạm dừng — `/stops/search`
+
+> 📌 **Hợp đồng chốt ở đây, backend CHƯA có.** Mục này do Hoàng Văn Thịnh bổ sung cho task
+> *"Component autocomplete chọn trạm dừng"* (Sprint 2 dòng 33, US 1.0) — người viết backend là
+> **Nguyễn Duy Kiên**, người đang giữ task *"API gợi ý trạm dừng theo từ khoá (autocomplete)"*
+> (Sprint 2 dòng 29). Backlog đánh dấu task đó **"Đã xong"**, nhưng trong `main` chưa có endpoint
+> nào như vậy — `StopsController` chỉ có 5 route CRUD ở mục trên. Cần Kiên xác nhận.
+>
+> **Endpoint CÔNG KHAI** — hành khách gõ từ khoá **trước khi đăng nhập**, cùng nhóm với
+> `GET /routes/search` và `GET /trips/search`. Đây là mảnh còn thiếu của luồng tra cứu: hành khách
+> cần được **gợi ý trạm** để chọn, rồi mới gọi `GET /routes/search` bằng tên trạm vừa chọn. Thiếu
+> nó thì màn "Tra cứu tuyến" buộc phải dùng `GET /stops` của quản lý (Admin/Manager), và hành
+> khách chưa đăng nhập không có gợi ý nào.
+>
+> **Phía frontend:** ô gợi ý đã viết xong ở `frontend/src/components/StopAutocomplete.tsx` (nhánh
+> `feature/1-component-autocomplete-chon-tram-dung`, chưa vào `main`). Bản hiện tại lấy **trọn**
+> `GET /stops` một lượt rồi tự lọc trong bộ nhớ, nên khi endpoint này có thật thì component phải
+> đổi **cách lấy dữ liệu**, không phải chỉ đổi địa chỉ gọi: chuyển sang gọi theo từng từ khoá (có
+> chờ gõ xong — debounce) và bỏ lớp lọc phía client. Làm trong cùng nhánh đó, **sau** khi endpoint
+> chạy được — chưa làm ở đây vì gọi một endpoint chưa có thì chỉ nhận 404.
+
+### Endpoint
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/stops/search` | Gợi ý trạm theo từ khoá cho hành khách (**công khai**) | — | `Stop[]` |
+
+Tham số query:
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `keyword` | `string` | — | Từ khoá — khớp **tên trạm hoặc địa chỉ**, **không phân biệt hoa thường và không phân biệt dấu**. Bỏ trống hoặc toàn khoảng trắng = lấy đầu danh sách |
+| `limit` | `number` | 10 | Số gợi ý tối đa, **1..50** |
+
+```json
+// Stop[] — ví dụ GET /stops/search?keyword=cau+giay
+[
+  {
+    "id": "3f2a1b0c-0000-0000-0000-000000000000",
+    "name": "Trạm Cầu Giấy",
+    "address": "Số 1 Cầu Giấy, Hà Nội",
+    "latitude": 21.0307,
+    "longitude": 105.8034
+  }
+]
+```
+
+Trả về đúng entity `Stop` của mục "Trạm dừng" — **không thêm trường nào**. Màn hình cần `name` để
+hiển thị và để gửi thẳng vào `GET /routes/search`; `address` để phân biệt hai trạm trùng tên nằm ở
+hai đường khác nhau.
+
+- **Xếp hạng:** tên trạm **bắt đầu bằng** từ khoá trước, rồi tên **chứa** từ khoá, cuối cùng là
+  trạm chỉ khớp **địa chỉ**; trong cùng một hạng xếp theo tên tăng dần (chuẩn `vi`). Hai lần gọi
+  cùng tham số cho ra cùng một kết quả.
+- Không trạm nào khớp → `[]`, **không** phải 404 — bộ lọc mềm, cùng lối `GET /routes/search`.
+- `limit` ngoài khoảng 1..50 → **400** `errors.limit`.
+- `limit` mặc định **10**: dropdown gợi ý chỉ đọc được chừng đó dòng, lấy thêm không mang lại
+  thông tin gì mà buộc hành khách phải cuộn.
+
+> **Vì sao `keyword` KHÔNG bắt buộc (khác `GET /routes/search`)?** Hai câu hỏi khác nhau.
+> `/routes/search` là ô **tìm**, thiếu từ khoá là **400**. Đây là ô **chọn** trạm: hành khách vừa
+> bấm vào ô phải thấy ngay vài trạm để chọn, chứ không phải nghĩ ra từ khoá trước mới thấy gì.
+> Bỏ trống trả đầu danh sách theo tên — biến ô nhập thành danh sách rút gọn thay vì ô trống rỗng.
+
+> **Vì sao khớp cả ĐỊA CHỈ?** Mục đích là giúp hành khách **chọn đúng trạm**, không phải lọc tuyến.
+> Người chỉ nhớ tên đường ("Hai Bà Trưng") vẫn tìm ra được trạm mình cần. Giá trị gửi tiếp cho
+> `GET /routes/search` vẫn là **tên trạm**, mà endpoint kia khớp theo tên trạm — nên vòng khớp này
+> không đổi luật của nó.
+
+> ⚠️ **Vì sao BẮT BUỘC bỏ dấu, không chỉ bỏ hoa thường?** Trạm lưu tên CÓ dấu ("Trạm Cầu Giấy"),
+> còn hành khách gõ trên điện thoại gần như luôn **không gõ dấu** — "cau giay". Chỉ `ToLower()`
+> như `RouteSearchService` đang làm thì "cau giay" không khớp gì và ô gợi ý trả về rỗng đúng lúc
+> hành khách cần nhất. Ô gợi ý đã viết ở frontend hiện **đã bỏ dấu phía client**
+> (`normalizeForSearch` trong `frontend/src/components/stopSuggest.ts`), nên nếu endpoint này chỉ
+> bỏ hoa thường thì lúc chuyển sang nó, tính năng **thoái hoá** chứ không phải nâng cấp.
+>
+> Gợi ý hiện thực: PostgreSQL có extension `unaccent` (nhớ kiểm thử riêng chữ **`đ`**), hoặc một
+> cột chuẩn hoá sẵn — **cột thêm vào bảng là việc của Vàng Thị Dăm** (quy ước A7), nên nếu đi
+> đường cột thì phải phối hợp trước.
+>
+> Ghi nhận kèm: `GET /routes/search` **cũng đang** chỉ bỏ hoa thường (`ToLower().Contains(...)`),
+> nên hành khách gõ "ben thanh" ở ô điểm đi cũng không ra tuyến. Đó là lỗ hổng có sẵn của endpoint
+> Hiếu, **không sửa trong mục này** — nhưng nếu ô gợi ý chọn sẵn tên trạm có dấu thì đường tra cứu
+> tuyến cũng được lợi theo.
+
+> **Vì sao đứng ở controller riêng (`StopsSearchController`)?** Cùng lối `RouteSearchController` và
+> `TripSearchController`: mỗi bề mặt một controller, hai task hai người. `GET /stops` là CRUD của
+> quản lý (Admin/Manager) trả **toàn bộ** trạm; đường này **công khai** và trả **một lát cắt**. Route
+> template đầy đủ khác nhau (`api/stops/search` so với `api/stops` và `api/stops/{id:guid}`) nên
+> không tranh chấp — đoạn literal `search` không thể khớp `{id:guid}`.
+
+> **Vì sao KHÔNG mở công khai luôn `GET /stops`?** Sửa quyền của một đường đã có là đổi hình dạng
+> API (⛔5), và phải gỡ `[Authorize]` ở mức lớp của `StopsController` rồi gắn lại cho **từng** hành
+> động ghi — đụng vào controller của người khác nhiều hơn hẳn việc thêm một endpoint chỉ-đọc. Ngoài
+> ra `GET /stops` trả **hết** trạm kèm toạ độ trong một lượt, còn ô gợi ý chỉ cần một lát cắt.
 
 ## Tuyến đường — `/routes`
 
