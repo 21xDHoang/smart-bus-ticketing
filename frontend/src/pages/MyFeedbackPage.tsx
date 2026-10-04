@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Rate, Segmented, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import { Card, Segmented, Space, Spin, Table, Tag, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -8,6 +8,7 @@ import type { FeedbackStatus, MyFeedback, MyFeedbackDetail } from '../api/feedba
 import { FEEDBACK_STATUS_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackApi';
 import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
+import SatisfactionRating from '../components/SatisfactionRating';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -178,8 +179,7 @@ export default function MyFeedbackPage() {
       dataIndex: 'rating',
       key: 'rating',
       width: 170,
-      render: (rating: number | null) =>
-        rating === null ? <Text type="secondary">—</Text> : <Rate disabled value={rating} />,
+      render: (rating: number | null) => <SatisfactionRating readOnly value={rating} />,
     },
     {
       title: 'Phản hồi',

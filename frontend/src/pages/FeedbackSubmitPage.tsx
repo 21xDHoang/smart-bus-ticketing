@@ -5,7 +5,6 @@ import {
   Descriptions,
   Form,
   Input,
-  Rate,
   Segmented,
   Select,
   Space,
@@ -26,6 +25,7 @@ import type {
 } from '../api/feedbackSubmitApi';
 import { FEEDBACK_STATUS_META, FEEDBACK_TYPE_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackSubmitApi';
 import type { AppError } from '../api/axiosClient';
+import SatisfactionRating from '../components/SatisfactionRating';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -33,7 +33,8 @@ const { Title, Text, Paragraph } = Typography;
 interface FeedbackFormValues {
   type: FeedbackType;
   tripId?: string;
-  rating?: number;
+  /** `null` khi hành khách đã chấm rồi lại xoá — SatisfactionRating trả thẳng `null`. */
+  rating?: number | null;
   content: string;
 }
 
@@ -81,9 +82,9 @@ export default function FeedbackSubmitPage() {
         tripId: tripId ?? null,
         type,
         content,
-        // Rate khi xoá chấm trả về 0, chưa chạm vào thì undefined — cả hai đều coi là
-        // không chấm sao (contract chỉ nhận 1..5 hoặc null).
-        rating: rating ? rating : null,
+        // `rating` là null khi hành khách xoá chấm hoặc chưa chạm vào ô chấm sao. Việc đổi số
+        // 0 của antd Rate thành null nay nằm trong SatisfactionRating, không lặp lại ở đây.
+        rating: rating ?? null,
         attachmentUrl: fileList[0]?.name ?? null,
       };
       setSubmitted(await feedbackSubmitApi.submit(payload));
@@ -150,7 +151,7 @@ export default function FeedbackSubmitPage() {
           </Form.Item>
 
           <Form.Item name="rating" label="Mức độ hài lòng">
-            <Rate allowClear />
+            <SatisfactionRating />
           </Form.Item>
 
           <Form.Item
@@ -225,7 +226,7 @@ export default function FeedbackSubmitPage() {
               {
                 key: 'rating',
                 label: 'Mức độ hài lòng',
-                children: submitted.rating === null ? '—' : <Rate disabled value={submitted.rating} />,
+                children: <SatisfactionRating readOnly value={submitted.rating} />,
               },
               {
                 key: 'status',
