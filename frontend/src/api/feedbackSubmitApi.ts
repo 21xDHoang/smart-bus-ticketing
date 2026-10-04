@@ -5,17 +5,16 @@ import axiosClient from './axiosClient';
 // API gửi phản ánh — nối với story 24 "Gửi phản ánh" (Sprint 2), màn hình
 // "Gửi phản ánh / đánh giá chuyến đi" (task của Dương Thị Hạnh).
 //
-// Backend CHƯA có endpoint gửi phản ánh: "API gửi phản ánh: chọn chuyến, loại phản ánh,
-// nội dung, đính kèm ảnh" là task của Trần Trung Hiếu, vẫn ghi "Chưa làm" ở sheet Sprint 2.
-// Vì vậy file này dựng theo đúng mẫu của monthlyPassApi.ts: khai báo kiểu + bảng nhãn/màu
-// loại phản ánh, có nhánh dữ liệu giả để màn hình chạy được ngay, và nhánh API thật viết
-// sẵn để khi backend xong chỉ cần đổi cờ `USE_MOCK_DATA`.
+// Backend ĐÃ có (FeedbackSubmissionController — Trần Trung Hiếu):
+//   POST /feedbacks → gửi một phản ánh mới → FeedbackSubmission (201, status khởi tạo `New`)
 //
-// Hợp đồng endpoint DỰ KIẾN (kebab-case, danh từ số nhiều — quy ước D của nhóm):
-//   POST /feedbacks → gửi một phản ánh mới → Feedback (201, status khởi tạo là `New`)
+// Ô "chọn chuyến" vẫn chưa có nguồn dữ liệu thật: không endpoint nào cho hành khách liệt kê
+// chuyến đã đi (GET /trips nằm sau policy ManagerOrAbove), nên listMyRecentTrips trả mảng rỗng
+// — form vẫn gửi được phản ánh KHÔNG kèm chuyến (`tripId: null` là hợp lệ). Khi backend bổ
+// sung API chuyến của hành khách thì nối vào đó.
 //
-// Hình dạng entity khớp mục "Phản ánh — /feedbacks" trong docs/api-contract.md — nguồn
-// chân lý duy nhất (feedbackApi.ts của màn "Phản ánh của tôi" cũng đã bám cùng contract:
+// Hình dạng entity khớp mục "Gửi phản ánh — POST /feedbacks" trong docs/api-contract.md —
+// nguồn chân lý duy nhất (feedbackApi.ts của màn "Phản ánh của tôi" cũng đã bám cùng contract:
 // loại `Complaint` / `Compliment` / `Suggestion`, trạng thái `New` / `InProgress` / `Resolved`).
 // -----------------------------------------------------------------------------
 
@@ -113,24 +112,22 @@ export interface FeedbackSubmitApi {
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì endpoint gửi phản ánh chưa có
-// (xem ghi chú đầu file). Đổi thành `false` khi Hiếu xong API gửi phản ánh.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `false` — endpoint gửi phản ánh đã có.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
 const api: FeedbackSubmitApi = {
   // Chưa có endpoint công khai để hành khách liệt kê chuyến đã đi (GET /trips nằm sau
-  // policy ManagerOrAbove — xem docs/api-contract.md). Khi backend bổ sung nguồn chuyến
-  // cho màn hình này thì gọi ở đây. Chưa có contract nên không dựng lời gọi để tránh đặt
-  // tên endpoint bịa (quy ước D: danh từ số nhiều, kebab-case).
+  // policy ManagerOrAbove — xem docs/api-contract.md). Trả mảng rỗng thay vì lỗi để ô
+  // "chọn chuyến" trống mà form vẫn dùng được — `tripId: null` là hợp lệ (A9 #20).
   async listMyRecentTrips() {
-    throw new Error('Chưa có API danh sách chuyến của hành khách. Xem docs/api-contract.md.');
+    return [];
   },
 
   // POST /feedbacks — body { tripId, type, content, rating, attachmentUrl }. Backend đọc
-  // userId từ JWT và khởi tạo status = New. Endpoint là DỰ KIẾN, chờ Hiếu chốt trong contract.
+  // userId từ JWT, khởi tạo status = New, trả 201 kèm FeedbackSubmission.
   submit: (payload) => axiosClient.post<SubmittedFeedback, SubmittedFeedback>('/feedbacks', payload),
 };
 

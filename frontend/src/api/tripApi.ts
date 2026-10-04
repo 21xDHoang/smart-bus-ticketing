@@ -37,6 +37,14 @@ export interface Trip {
   currentLat: number | null;
   currentLng: number | null;
   positionUpdatedAt: string | null;
+  /**
+   * Tài xế được phân công — null khi chưa phân công. Backend kèm sẵn để hiển thị mà không
+   * phải gọi thêm API, cùng lối `busLicensePlate`. Khai báo optional để màn hình nào chưa
+   * cần vẫn dùng được `Trip` mà không phải bịa giá trị khi dựng đối tượng.
+   */
+  driverId?: string | null;
+  /** Tên tài xế kèm sẵn; null khi chưa phân công. */
+  driverName?: string | null;
   createdAt: string;
   updatedAt: string | null;
 }

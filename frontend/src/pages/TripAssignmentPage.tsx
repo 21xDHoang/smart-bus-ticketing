@@ -61,8 +61,9 @@ function dayBounds(day: Dayjs): { from: string; to: string } {
  * Màn hình phân công điều xe theo chuyến (story 14, task của Nguyễn Đình Băng).
  *
  * Chọn tuyến + ngày + trạng thái rồi gán/đổi XE cho từng chuyến qua PUT /routes/{routeId}/trips/{id}.
- * Phần "chọn tài xế" đã vẽ trong modal nhưng tạm khoá — endpoint gán tài xế (Kiên) và hồ sơ
- * tài xế (Hiếu) chưa có, sẽ nối sau. Phần "phụ xe" bỏ theo quy ước A8.4 (không có vai trò phụ xe).
+ * Tài xế gán theo lô bằng thanh "phân công hàng loạt" (PATCH .../trips/driver-assignment); ô chọn
+ * tài xế trong modal đổi xe vẫn khoá vì PUT /trips không nhận driverId. Phần "phụ xe" bỏ theo
+ * quy ước A8.4 (không có vai trò phụ xe).
  *
  * Kèm "cảnh báo trực quan khi trùng lịch xe": cột "Cảnh báo" đánh dấu chuyến đang trùng xe,
  * và modal cảnh báo khi chọn xe trùng giờ với chuyến khác.
@@ -140,7 +141,7 @@ export default function TripAssignmentPage() {
   }, [loadBusOptions]);
 
   // Tải danh sách tài xế đang hoạt động cho ô chọn "phân công hàng loạt" — chỉ tải một lần
-  // khi mở trang. Hiện lấy từ nhánh dữ liệu giả (chờ backend task 113 của Kiên).
+  // khi mở trang, từ GET /drivers?isActive=true.
   const loadDriverOptions = useCallback(async () => {
     try {
       setDriverOptions(await fetchDriverOptions());
@@ -198,9 +199,8 @@ export default function TripAssignmentPage() {
     fetchTrips(selectedRouteId, { from, to, status, page, pageSize })
       .then((result) => {
         if (cancelled) return;
-        // Gắn thêm thông tin tài xế (driverId/driverName) vào từng chuyến — nhánh giả hiện
-        // so le có/không để demo bộ lọc "chỉ chưa phân công"; khi Kiên xong task 113 thì
-        // TripResponse tự mang sẵn và hàm này chỉ là chuyển kiểu.
+        // Chuẩn hoá driverId/driverName (TripResponse đã trả sẵn) để bộ lọc "chỉ chưa phân
+        // công" và cột "Tài xế" đọc đúng — xem enrichTripsWithDriver.
         setData(enrichTripsWithDriver(result.items));
         setTotal(result.total);
       })
@@ -250,9 +250,8 @@ export default function TripAssignmentPage() {
     }
   };
 
-  // Phân công tài xế HÀNG LOẠT cho các chuyến đang chọn — task 120. Hiện gọi nhánh giả
-  // (bulkAssignDriver ghi vào bản đồ phiên) nên kết quả "dính" sau khi reload; khi Kiên
-  // xong task 113 thì hàm gọi endpoint thật và hành vi giữ nguyên.
+  // Phân công tài xế HÀNG LOẠT cho các chuyến đang chọn — task 120. Gọi PATCH
+  // .../trips/driver-assignment rồi tải lại danh sách để bảng hiện đúng tài xế vừa gán.
   const handleBulkAssign = async (driverId: string) => {
     if (!selectedRouteId || selectedTripIds.length === 0) return;
     setBulkSubmitting(true);
@@ -343,8 +342,7 @@ export default function TripAssignmentPage() {
       title: 'Tài xế',
       key: 'driver',
       width: 150,
-      // driverName/driverId do enrichTripsWithDriver gắn (nhánh giả). Khi Kiên xong task 113,
-      // TripResponse tự mang sẵn và cột này đọc trực tiếp mà không cần lớp làm giàu.
+      // driverId/driverName do TripResponse trả sẵn, enrichTripsWithDriver chỉ chuẩn hoá.
       render: (_, trip) =>
         trip.driverName ? (
           <Tag color="geekblue">{trip.driverName}</Tag>
@@ -393,7 +391,7 @@ export default function TripAssignmentPage() {
   ];
 
   // Chỉ hiện chuyến chưa phân công khi bật bộ lọc — lọc phía client trên trang hiện tại
-  // (chờ backend thêm tham số `unassigned` ở task 113, khi đó chuyển sang lọc server-side).
+  // (GET /routes/{routeId}/trips chưa có tham số lọc theo tài xế để chuyển sang server-side).
   const visibleData = onlyUnassigned ? data.filter((trip) => trip.driverId === null) : data;
 
   return (
@@ -403,8 +401,7 @@ export default function TripAssignmentPage() {
           Phân công điều xe theo chuyến
         </Title>
         <Text type="secondary">
-          Gán xe cho từng chuyến + phân công tài xế hàng loạt (phần tài xế đang dùng dữ liệu
-          giả, chờ API gán tài xế của Kiên).
+          Gán xe cho từng chuyến + phân công tài xế hàng loạt cho các chuyến đã chọn.
         </Text>
       </div>
 
