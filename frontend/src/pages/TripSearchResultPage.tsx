@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, Empty, List, Segmented, Space, Tag, Typography, message } from 'antd';
-import { ArrowLeftOutlined, CarOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { Button, Card, Empty, List, Result, Segmented, Space, Spin, Tag, Typography } from 'antd';
+import {
+  ArrowLeftOutlined,
+  CarOutlined,
+  EnvironmentOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import tripSearchApi from '../api/tripSearchApi';
 import type { TripSearchResult } from '../api/tripSearchApi';
@@ -57,6 +62,41 @@ function sortResults(results: TripSearchResult[], sortKey: SortKey): TripSearchR
   return copy;
 }
 
+/**
+ * Kết quả của MỘT lượt gọi API, gắn kèm bộ tiêu chí đã hỏi (`key`). Nhờ cặp khoá–giá trị này
+ * mà đổi tiêu chí là kết quả cũ tự hết giá trị: không cần xoá state, cũng không có đường nào
+ * để danh sách của lượt trước hiện dưới spinner của lượt sau.
+ */
+type SearchOutcome =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'done'; results: TripSearchResult[] };
+
+/** Bốn trạng thái hiển thị của màn kết quả — đúng bốn nhánh, không nhánh nào kiêm nhánh nào. */
+type ResultView =
+  | { kind: 'loading' }
+  | { kind: 'error'; message: string }
+  | { kind: 'no-match' }
+  | { kind: 'results'; trips: TripSearchResult[] };
+
+/** Mảng rỗng dùng chung — giữ nguyên tham chiếu để `useMemo` bên dưới không chạy lại vô ích. */
+const NO_TRIPS: TripSearchResult[] = [];
+
+/**
+ * Luật chuyển trạng thái, tách khỏi JSX để bốn nhánh không lồng vào nhau.
+ *
+ * `done` mà không có chuyến nào là "không tìm thấy" — im lặng, không phải lỗi. Còn gọi API
+ * hỏng là trạng thái RIÊNG: trước đây lượt gọi hỏng cũng đổ về `[]` nên người dùng đọc được
+ * câu "Không tìm thấy chuyến phù hợp", tức là màn hình nói sai sự thật.
+ */
+function viewOf(outcome: SearchOutcome | null): ResultView {
+  if (outcome === null || outcome.status === 'loading') return { kind: 'loading' };
+  if (outcome.status === 'error') return { kind: 'error', message: outcome.message };
+  return outcome.results.length === 0
+    ? { kind: 'no-match' }
+    : { kind: 'results', trips: outcome.results };
+}
+
 // Màn hình kết quả tìm kiếm chuyến (User Story 1, Sprint 2 — task của Nguyễn Đình Băng):
 // danh sách chuyến cho một cặp điểm đi/điểm đến + ngày, kèm bộ sắp xếp theo giờ/giá.
 //
@@ -64,6 +104,11 @@ function sortResults(results: TripSearchResult[], sortKey: SortKey): TripSearchR
 // "phần kết quả", còn form nhập điểm đi/điểm đến/ngày là task riêng của màn hình "Tra cứu
 // tuyến" (RouteLookupPage, Dương Thị Hạnh). Không có tiêu chí thì mời quay lại đó, không
 // dựng form thứ hai để tránh đè lên task của Hạnh.
+//
+// Bốn trạng thái rỗng / đang tải / không tìm thấy / lỗi là task Sprint 2 dòng 35 — Hoàng Văn
+// Thịnh (một dòng backlog riêng, tách khỏi dòng 34 dựng màn hình của Băng). Phần dưới đây là
+// chỗ duy nhất trong repo mà Hoàng Văn Thịnh sửa vào file của người khác; đã báo Băng xem
+// trong PR.
 export default function TripSearchResultPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -73,44 +118,55 @@ export default function TripSearchResultPage() {
   const date = searchParams.get('date')?.trim() ?? '';
   const routeId = searchParams.get('routeId')?.trim() || undefined;
 
-  const [results, setResults] = useState<TripSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [outcome, setOutcome] = useState<{ key: string; value: SearchOutcome } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('time');
+  const [reloadToken, setReloadToken] = useState(0);
 
   const hasCriteria = origin !== '' && destination !== '';
+
+  // Bộ tiêu chí hiện tại, làm khoá cho kết quả. JSON.stringify để hai bộ khác nhau không thể
+  // ghép ra cùng một chuỗi (dấu "|" hay "," đều có thể nằm trong tên điểm đi/điểm đến).
+  const requestKey = JSON.stringify([origin, destination, date, routeId ?? '']);
+
+  // Kết quả chỉ được coi là của lượt hỏi hiện tại khi khoá trùng; lệch khoá = chưa có gì.
+  const currentOutcome = outcome?.key === requestKey ? outcome.value : null;
+  const view = viewOf(currentOutcome);
+  const trips = view.kind === 'results' ? view.trips : NO_TRIPS;
 
   useEffect(() => {
     if (!hasCriteria) return;
 
     let cancelled = false;
 
-    // Bật spinner khi bắt đầu tải. Đây là lần tải thực sự từ API (không phải "đồng bộ
-    // state dẫn xuất") nên tắt cảnh báo react/set-state-in-effect cho đúng ngữ cảnh.
+    // Bật trạng thái đang tải khi bắt đầu gọi API. Đây là lần tải thực sự (không phải "đồng
+    // bộ state dẫn xuất") nên tắt cảnh báo react/set-state-in-effect cho đúng ngữ cảnh.
     // oxlint-disable-next-line react/set-state-in-effect
-    setLoading(true);
+    setOutcome({ key: requestKey, value: { status: 'loading' } });
 
     tripSearchApi
       .search({ origin, destination, date, routeId })
       .then((found) => {
         if (cancelled) return;
-        setResults(found);
+        setOutcome({ key: requestKey, value: { status: 'done', results: found } });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         const appError = err as AppError;
-        message.error(appError.customMessage || 'Không thể tải kết quả tìm kiếm chuyến.');
-        setResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        setOutcome({
+          key: requestKey,
+          value: {
+            status: 'error',
+            message: appError.customMessage || 'Không thể tải kết quả tìm kiếm chuyến.',
+          },
+        });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [origin, destination, date, routeId, hasCriteria]);
+  }, [origin, destination, date, routeId, hasCriteria, requestKey, reloadToken]);
 
-  const sorted = useMemo(() => sortResults(results, sortKey), [results, sortKey]);
+  const sorted = useMemo(() => sortResults(trips, sortKey), [trips, sortKey]);
 
   // Chưa có tiêu chí tìm kiếm → mời quay lại màn hình tra cứu tuyến, không hiển thị kết quả.
   if (!hasCriteria) {
@@ -155,78 +211,110 @@ export default function TripSearchResultPage() {
           wrap
         >
           <Text type="secondary">
-            Tìm thấy <Text strong>{results.length}</Text> chuyến
+            {view.kind === 'results' && (
+              <>
+                Tìm thấy <Text strong>{view.trips.length}</Text> chuyến
+              </>
+            )}
           </Text>
           <Segmented
             value={sortKey}
             onChange={(value) => setSortKey(value as SortKey)}
             options={SORT_OPTIONS}
+            disabled={view.kind !== 'results'}
           />
         </Space>
 
-        <List<TripSearchResult>
-          dataSource={sorted}
-          loading={loading}
-          locale={{
-            emptyText: 'Không tìm thấy chuyến phù hợp. Vui lòng thử điểm đi/điểm đến hoặc ngày khác.',
-          }}
-          renderItem={(trip) => {
-            const seats = seatsMeta(trip.seatsRemaining);
+        {/* Đang tải — spinner riêng, không mượn danh sách của lượt trước và không hiện số đếm. */}
+        {view.kind === 'loading' && (
+          <div style={{ padding: '56px 0', textAlign: 'center' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 12 }}>
+              <Text type="secondary">Đang tải danh sách chuyến…</Text>
+            </div>
+          </div>
+        )}
 
-            return (
-              <List.Item style={{ padding: '14px 0', borderBlockEnd: '1px solid #f1f5f9' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 16,
-                    width: '100%',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  {/* Giờ khởi hành → giờ đến */}
-                  <div style={{ minWidth: 96 }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
-                      {dayjs(trip.departureTime).format('HH:mm')}
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 13 }}>
-                      {trip.arrivalTime ? dayjs(trip.arrivalTime).format('HH:mm') : '—'}
-                    </Text>
-                  </div>
+        {/* Gọi API hỏng — trạng thái riêng, có lối thoát, KHÔNG mạo nhận là "không có chuyến". */}
+        {view.kind === 'error' && (
+          <Result
+            status="warning"
+            title="Không tải được kết quả tìm kiếm"
+            subTitle={view.message}
+            extra={
+              <Button icon={<ReloadOutlined />} onClick={() => setReloadToken((n) => n + 1)}>
+                Thử lại
+              </Button>
+            }
+          />
+        )}
 
-                  {/* Tuyến + loại xe */}
-                  <div style={{ flex: 1, minWidth: 220 }}>
-                    <Space size={8} wrap>
-                      <Tag color="blue">{trip.routeCode}</Tag>
-                      <Text strong>{trip.routeName}</Text>
-                    </Space>
-                    <div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        <CarOutlined /> {trip.busType}
-                      </Text>
-                    </div>
-                  </div>
+        {/* Đã tìm xong nhưng không có chuyến nào khớp. */}
+        {view.kind === 'no-match' && (
+          <Empty description="Không tìm thấy chuyến phù hợp. Vui lòng thử điểm đi/điểm đến hoặc ngày khác." />
+        )}
 
-                  {/* Giá + số ghế còn trống — tuyến chưa cấu hình giá thì ghi rõ thay vì hiện 0 đ */}
-                  <div style={{ textAlign: 'right', minWidth: 128 }}>
-                    {trip.price === null ? (
-                      <Text type="secondary" style={{ fontWeight: 600 }}>
-                        Chưa có giá
-                      </Text>
-                    ) : (
-                      <div style={{ fontSize: 16, fontWeight: 700, color: '#4361ee' }}>
-                        {formatVnd(trip.price)}
+        {view.kind === 'results' && (
+          <List<TripSearchResult>
+            dataSource={sorted}
+            renderItem={(trip) => {
+              const seats = seatsMeta(trip.seatsRemaining);
+
+              return (
+                <List.Item style={{ padding: '14px 0', borderBlockEnd: '1px solid #f1f5f9' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 16,
+                      width: '100%',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    {/* Giờ khởi hành → giờ đến */}
+                    <div style={{ minWidth: 96 }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
+                        {dayjs(trip.departureTime).format('HH:mm')}
                       </div>
-                    )}
-                    <Tag color={seats.color} style={{ marginTop: 4, marginInlineEnd: 0 }}>
-                      {seats.label}
-                    </Tag>
+                      <Text type="secondary" style={{ fontSize: 13 }}>
+                        {trip.arrivalTime ? dayjs(trip.arrivalTime).format('HH:mm') : '—'}
+                      </Text>
+                    </div>
+
+                    {/* Tuyến + loại xe */}
+                    <div style={{ flex: 1, minWidth: 220 }}>
+                      <Space size={8} wrap>
+                        <Tag color="blue">{trip.routeCode}</Tag>
+                        <Text strong>{trip.routeName}</Text>
+                      </Space>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          <CarOutlined /> {trip.busType}
+                        </Text>
+                      </div>
+                    </div>
+
+                    {/* Giá + số ghế còn trống — tuyến chưa cấu hình giá thì ghi rõ thay vì hiện 0 đ */}
+                    <div style={{ textAlign: 'right', minWidth: 128 }}>
+                      {trip.price === null ? (
+                        <Text type="secondary" style={{ fontWeight: 600 }}>
+                          Chưa có giá
+                        </Text>
+                      ) : (
+                        <div style={{ fontSize: 16, fontWeight: 700, color: '#4361ee' }}>
+                          {formatVnd(trip.price)}
+                        </div>
+                      )}
+                      <Tag color={seats.color} style={{ marginTop: 4, marginInlineEnd: 0 }}>
+                        {seats.label}
+                      </Tag>
+                    </div>
                   </div>
-                </div>
-              </List.Item>
-            );
-          }}
-        />
+                </List.Item>
+              );
+            }}
+          />
+        )}
       </Card>
     </div>
   );
