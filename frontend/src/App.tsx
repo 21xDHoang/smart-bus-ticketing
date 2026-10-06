@@ -21,6 +21,7 @@ import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
 import TripSearchResultPage from './pages/TripSearchResultPage';
+import SeatMapPage from './pages/SeatMapPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
@@ -192,6 +193,11 @@ function App() {
                     sách chuyến + sắp xếp theo giờ/giá. Cũng dành cho mọi người đã đăng nhập,
                     không giới hạn vai trò như các màn hình quản trị. */}
                 <Route path="/trip-results" element={<TripSearchResultPage />} />
+                {/* /seat-map là màn hình sơ đồ ghế (US 2, Sprint 3 — task của Nguyễn Đình Băng):
+                    vẽ dàn ghế trực quan và cho chọn nhiều ghế trống. Là bước tiếp của luồng tra
+                    cứu tuyến → kết quả tìm kiếm chuyến, mọi người đã đăng nhập đều dùng được.
+                    Endpoint sơ đồ ghế chưa có nên màn hình đang chạy dữ liệu giả (seatMapApi.ts). */}
+                <Route path="/seat-map" element={<SeatMapPage />} />
                 {/* /my-feedback là màn hình danh sách phản ánh của tôi (US 24, Sprint 2) —
                     mọi người đã đăng nhập đều dùng được, không giới hạn vai trò như các màn
                     hình quản trị. */}
