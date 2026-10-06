@@ -30,6 +30,7 @@ import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
+import MyTicketsPage from './pages/MyTicketsPage';
 import FareConfigPage from './pages/FareConfigPage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
@@ -287,6 +288,13 @@ function App() {
                     Dòng route này do Hoàng Văn Thịnh thêm hộ: màn hình cần đường vào, mà App.tsx
                     là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
                 <Route path="/my-monthly-passes" element={<MyMonthlyPassPage />} />
+                {/* /my-tickets là màn hình "Vé của tôi" — vé điện tử (US 4, Sprint 3, task của
+                    Dương Thị Hạnh), mọi người đã đăng nhập đều dùng được, mỗi người chỉ thấy vé
+                    của chính mình. Backend Tickets chưa có nên màn hình đang chạy dữ liệu giả
+                    (xem ticketApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần
+                    đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi
+                    rõ trong PR để Băng xem. */}
+                <Route path="/my-tickets" element={<MyTicketsPage />} />
                 {/* /feedback-submit là màn hình gửi phản ánh (US 24, task của Dương Thị Hạnh) —
                     mọi người đã đăng nhập đều dùng được. Backend gửi phản ánh chưa có nên màn
                     hình đang chạy dữ liệu giả (xem feedbackSubmitApi.ts). */}

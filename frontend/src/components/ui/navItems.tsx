@@ -4,6 +4,7 @@ import {
   DatabaseOutlined,
   HomeOutlined,
   MessageOutlined,
+  QrcodeOutlined,
   ScheduleOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -43,6 +44,7 @@ type NavEntry = (NavLeaf & { icon: ReactNode }) | NavGroup;
 const NAV: NavEntry[] = [
   { to: '/', label: 'Trang chủ', roles: ALL, icon: <HomeOutlined /> },
   { to: '/route-lookup', label: 'Tra cứu tuyến', roles: ALL, icon: <SearchOutlined /> },
+  { to: '/my-tickets', label: 'Vé của tôi', roles: ALL, icon: <QrcodeOutlined /> },
   {
     key: 'group-passes',
     label: 'Vé tháng',
