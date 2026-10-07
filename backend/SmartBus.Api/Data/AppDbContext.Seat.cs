@@ -11,6 +11,10 @@ namespace SmartBus.Api.Data;
 /// nghiệp vụ riêng (sơ đồ, vị trí, giữ chỗ) chứ không còn là phần phụ của chuyến xe. Việc chuyển
 /// này KHÔNG đổi mô hình EF — file partial nào cấu hình cũng như nhau, nên migration Sprint 3 chỉ
 /// chứa thay đổi thật (2 bảng mới + 4 cột mới trên Seats).
+///
+/// Migration thứ hai của Sprint 3 — <c>Sprint3_SeatLayouts_CauHinhSoDoGhe</c> — thêm 3 cột cấu hình
+/// lưới ghế cho <c>SeatLayouts</c> (số hàng/tầng, số cột/hàng, danh sách vị trí ghế VIP), tức dòng 9
+/// của bảng phân công: "Cấu hình sơ đồ ghế theo loại xe (số tầng, số ghế, ghế VIP)".
 /// </summary>
 public partial class AppDbContext
 {
@@ -23,6 +27,16 @@ public partial class AppDbContext
         modelBuilder.Entity<SeatLayout>(e =>
         {
             e.Property(l => l.BusType).HasMaxLength(50).IsRequired();
+
+            // Vị trí ghế VIP là chuỗi ngắn có giới hạn (A3): mỗi vị trí "tầng-hàng-cột" ngăn bằng ';'.
+            // 2000 ký tự là mức chừa rộng rãi cho trần của màn cấu hình (2 tầng × 13 hàng × 6 cột =
+            // 156 ghế, ~1.100 ký tự nếu VIP hết) — đủ để không bao giờ chạm trần và Postgres cắt cụt
+            // âm thầm. Rỗng là giá trị hợp lệ (sơ đồ không có ghế VIP), nên default là chuỗi rỗng chứ
+            // không phải NULL: cột NOT NULL thì tầng service không phải phân biệt hai nghĩa "không có".
+            e.Property(l => l.VipSeatPositions)
+             .HasMaxLength(2000)
+             .IsRequired()
+             .HasDefaultValue(string.Empty);
 
             // Mỗi loại xe đúng MỘT sơ đồ — khoá nghiệp vụ, cùng lối Buses.LicensePlate và
             // Routes.Code đã đặt unique ở các file cấu hình khác.

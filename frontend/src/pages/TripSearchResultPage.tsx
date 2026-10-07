@@ -168,6 +168,17 @@ export default function TripSearchResultPage() {
 
   const sorted = useMemo(() => sortResults(trips, sortKey), [trips, sortKey]);
 
+  // Sang màn hình sơ đồ ghế (US 2, Sprint 3) cho một chuyến — truyền kèm ngữ cảnh để đầu
+  // trang hiển thị tuyến/giờ/loại xe mà không phải gọi thêm endpoint chi tiết chuyến.
+  const openSeatMap = (trip: TripSearchResult) => {
+    const params = new URLSearchParams({ tripId: trip.id });
+    params.set('routeName', trip.routeName);
+    params.set('departureTime', trip.departureTime);
+    params.set('busType', trip.busType);
+
+    navigate(`/seat-map?${params.toString()}`);
+  };
+
   // Chưa có tiêu chí tìm kiếm → mời quay lại màn hình tra cứu tuyến, không hiển thị kết quả.
   if (!hasCriteria) {
     return (
@@ -309,6 +320,15 @@ export default function TripSearchResultPage() {
                         {seats.label}
                       </Tag>
                     </div>
+
+                    {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. */}
+                    <Button
+                      type="primary"
+                      disabled={trip.seatsRemaining === 0}
+                      onClick={() => openSeatMap(trip)}
+                    >
+                      Chọn ghế
+                    </Button>
                   </div>
                 </List.Item>
               );

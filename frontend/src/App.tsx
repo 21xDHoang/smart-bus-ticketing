@@ -21,6 +21,7 @@ import RouteListPage from './pages/RouteListPage';
 import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
 import TripSearchResultPage from './pages/TripSearchResultPage';
+import SeatMapPage from './pages/SeatMapPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
@@ -30,7 +31,9 @@ import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
+import MyTicketsPage from './pages/MyTicketsPage';
 import FareConfigPage from './pages/FareConfigPage';
+import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
@@ -192,6 +195,11 @@ function App() {
                     sách chuyến + sắp xếp theo giờ/giá. Cũng dành cho mọi người đã đăng nhập,
                     không giới hạn vai trò như các màn hình quản trị. */}
                 <Route path="/trip-results" element={<TripSearchResultPage />} />
+                {/* /seat-map là màn hình sơ đồ ghế (US 2, Sprint 3 — task của Nguyễn Đình Băng):
+                    vẽ dàn ghế trực quan và cho chọn nhiều ghế trống. Là bước tiếp của luồng tra
+                    cứu tuyến → kết quả tìm kiếm chuyến, mọi người đã đăng nhập đều dùng được.
+                    Endpoint sơ đồ ghế chưa có nên màn hình đang chạy dữ liệu giả (seatMapApi.ts). */}
+                <Route path="/seat-map" element={<SeatMapPage />} />
                 {/* /my-feedback là màn hình danh sách phản ánh của tôi (US 24, Sprint 2) —
                     mọi người đã đăng nhập đều dùng được, không giới hạn vai trò như các màn
                     hình quản trị. */}
@@ -287,6 +295,13 @@ function App() {
                     Dòng route này do Hoàng Văn Thịnh thêm hộ: màn hình cần đường vào, mà App.tsx
                     là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
                 <Route path="/my-monthly-passes" element={<MyMonthlyPassPage />} />
+                {/* /my-tickets là màn hình "Vé của tôi" — vé điện tử (US 4, Sprint 3, task của
+                    Dương Thị Hạnh), mọi người đã đăng nhập đều dùng được, mỗi người chỉ thấy vé
+                    của chính mình. Backend Tickets chưa có nên màn hình đang chạy dữ liệu giả
+                    (xem ticketApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần
+                    đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi
+                    rõ trong PR để Băng xem. */}
+                <Route path="/my-tickets" element={<MyTicketsPage />} />
                 {/* /feedback-submit là màn hình gửi phản ánh (US 24, task của Dương Thị Hạnh) —
                     mọi người đã đăng nhập đều dùng được. Backend gửi phản ánh chưa có nên màn
                     hình đang chạy dữ liệu giả (xem feedbackSubmitApi.ts). */}
@@ -298,6 +313,20 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <FareConfigPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /seat-layouts là màn hình Admin cấu hình sơ đồ ghế theo loại xe (US 2,
+                    Sprint 3, task của Dương Thị Hạnh) — chỉ Admin và Manager vào được (cùng
+                    nhóm các màn cấu hình dữ liệu). Backend SeatLayouts chưa có nên màn hình
+                    đang chạy dữ liệu giả (xem seatLayoutApi.ts). Dòng route này do Dương Thị
+                    Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung §E1
+                    (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route
+                  path="/seat-layouts"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <SeatLayoutConfigPage />
                     </RouteGuard>
                   }
                 />
