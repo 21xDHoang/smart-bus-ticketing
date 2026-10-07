@@ -124,11 +124,11 @@ export function buildNavItems(role: string | null): MenuProps['items'] {
 
 /**
  * Key cần tô sáng trên menu theo đường dẫn hiện tại. Thường là chính đường dẫn — antd tự
- * tô cả nhóm cha khi mục con của nó được chọn. Riêng /trip-results là bước tiếp của luồng
- * "Tra cứu tuyến" (đi từ màn đó sang) nên sáng theo mục đó thay vì không sáng gì.
+ * tô cả nhóm cha khi mục con của nó được chọn. Riêng /trip-results và /seat-map là bước tiếp
+ * của luồng "Tra cứu tuyến" (đi từ màn đó sang) nên sáng theo mục đó thay vì không sáng gì.
  */
 export function navKeyOf(pathname: string): string {
-  return pathname === '/trip-results' ? '/route-lookup' : pathname;
+  return pathname === '/trip-results' || pathname === '/seat-map' ? '/route-lookup' : pathname;
 }
 
 /** Danh sách điểm đến (mọi mục lá) theo vai trò — dùng cho lối vào nhanh ở màn Trang chủ. */
