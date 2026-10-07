@@ -5,7 +5,8 @@ namespace SmartBus.Api.Data;
 
 /// <summary>
 /// Phần DbContext của nhóm nghiệp vụ Sơ đồ ghế &amp; Giữ chỗ (US 2 + US 3 — Sprint 3):
-/// <c>SeatLayouts</c>, <c>Seats</c>, <c>SeatHolds</c>. Vàng Thị Dăm sửa file này — chủ CSDL của nhóm.
+/// <c>SeatLayouts</c>, <c>Seats</c>, <c>SeatHolds</c>, <c>SeatHoldLogs</c>.
+/// Vàng Thị Dăm sửa file này — chủ CSDL của nhóm.
 ///
 /// Cấu hình <c>Seat</c> được CHUYỂN từ AppDbContext.Trip.cs về đây: từ Sprint 3, "ghế" là một
 /// nghiệp vụ riêng (sơ đồ, vị trí, giữ chỗ) chứ không còn là phần phụ của chuyến xe. Việc chuyển
@@ -15,12 +16,17 @@ namespace SmartBus.Api.Data;
 /// Migration thứ hai của Sprint 3 — <c>Sprint3_SeatLayouts_CauHinhSoDoGhe</c> — thêm 3 cột cấu hình
 /// lưới ghế cho <c>SeatLayouts</c> (số hàng/tầng, số cột/hàng, danh sách vị trí ghế VIP), tức dòng 9
 /// của bảng phân công: "Cấu hình sơ đồ ghế theo loại xe (số tầng, số ghế, ghế VIP)".
+///
+/// Migration thứ ba — <c>Sprint3_SeatHoldLogs</c> — dựng bảng nhật ký <c>SeatHoldLogs</c> cho task
+/// "Migrate bảng SeatHoldLogs + job quét hold hết hạn" (dòng 14), đi kèm job nền
+/// <c>SeatHoldExpiryBackgroundService</c>.
 /// </summary>
 public partial class AppDbContext
 {
     public DbSet<SeatLayout> SeatLayouts => Set<SeatLayout>();
     public DbSet<Seat> Seats => Set<Seat>();
     public DbSet<SeatHold> SeatHolds => Set<SeatHold>();
+    public DbSet<SeatHoldLog> SeatHoldLogs => Set<SeatHoldLog>();
 
     partial void ConfigureSeat(ModelBuilder modelBuilder)
     {
@@ -117,6 +123,42 @@ public partial class AppDbContext
             e.HasOne(h => h.User)
              .WithMany()
              .HasForeignKey(h => h.UserId)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SeatHoldLog>(e =>
+        {
+            e.Property(l => l.SessionCode).HasMaxLength(64).IsRequired();
+            e.Property(l => l.Action).HasConversion<string>().HasMaxLength(20).IsRequired();
+
+            // 🔴 Mỗi hành động của một lượt giữ xảy ra ĐÚNG MỘT LẦN, nên (SeatHoldId, Action) là
+            // unique. Ràng buộc này không phải để cho đẹp: nó là thứ giữ cho nhật ký không đếm hai
+            // lần khi CÓ HAI bản app cùng chạy job quét — cả hai cùng đọc một lượt giữ quá hạn rồi
+            // cùng ghi log. Bên SeatHolds chuyện đó vô hại (hai bản ghi cùng một giá trị Status),
+            // nhưng ở bảng chỉ-ghi-thêm thì nó thành hai dòng cho một sự kiện, và câu hỏi "tài khoản
+            // này để hết hạn bao nhiêu lần" trả lời sai gấp đôi. Bản app thứ hai đâm vào unique là
+            // SaveChanges ném DbUpdateException, cả lượt quét của nó rollback — lượt sau không còn
+            // gì để làm vì bản thứ nhất đã lật xong.
+            //
+            // Nó cũng chính là chốt CSDL cho luật "gia hạn tối đa 1 lần" của US 3 (API gia hạn là
+            // task của Trần Trung Hiếu): Extended thứ hai không lọt được xuống bảng.
+            e.HasIndex(l => new { l.SeatHoldId, l.Action }).IsUnique();
+
+            // Đếm số lượt giữ của một tài khoản trong một khoảng thời gian — task "Ghi log và cảnh
+            // báo khi một tài khoản giữ chỗ quá nhiều lần". Cùng lối chỉ mục (UserId, CreatedAt)
+            // của AuditLogs.
+            e.HasIndex(l => new { l.UserId, l.CreatedAt });
+
+            // FK nghiệp vụ → Restrict tường minh (A5): nhật ký phải giữ được dấu vết, xoá một lượt
+            // giữ hay một tài khoản còn nhật ký là bị chặn chứ không được âm thầm xoá log.
+            e.HasOne(l => l.SeatHold)
+             .WithMany()
+             .HasForeignKey(l => l.SeatHoldId)
+             .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(l => l.User)
+             .WithMany()
+             .HasForeignKey(l => l.UserId)
              .OnDelete(DeleteBehavior.Restrict);
         });
     }
