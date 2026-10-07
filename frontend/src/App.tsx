@@ -92,16 +92,25 @@ function App() {
     message.info('Đã đăng xuất tài khoản.');
   };
 
+  // Mục "Vé của tôi" chỉ có nghĩa với hành khách — tài khoản nhân viên không giữ vé tháng.
+  // Phải ẩn cùng lúc với các mục "của tôi" ở menu chính (components/ui/navItems.tsx): để lại
+  // thì đây thành đường vào thứ hai cho đúng những màn đó, ẩn menu chính cũng bằng không.
+  const laHanhKhach = user?.role === 'Passenger';
+
   // Menu Dropdown cho Avatar người dùng khi đã đăng nhập
   const userMenuItems = [
     { key: '1', label: 'Hồ sơ cá nhân', icon: <UserOutlined />, onClick: () => navigate('/profile') },
-    {
-      key: '2',
-      label: 'Vé của tôi',
-      icon: <SafetyCertificateOutlined />,
-      // Mục này trước không có onClick nên bấm không đi đâu cả — nối vào màn vé tháng.
-      onClick: () => navigate('/my-monthly-passes'),
-    },
+    ...(laHanhKhach
+      ? [
+          {
+            key: '2',
+            label: 'Vé của tôi',
+            icon: <SafetyCertificateOutlined />,
+            // Mục này trước không có onClick nên bấm không đi đâu cả — nối vào màn vé tháng.
+            onClick: () => navigate('/my-monthly-passes'),
+          },
+        ]
+      : []),
     { type: 'divider' as const },
     { key: '3', label: 'Đăng xuất', icon: <LogoutOutlined />, danger: true, onClick: handleLogout },
   ];

@@ -8,18 +8,18 @@ import routeLookupApi from './routeLookupApi';
 // chạy, số ghế còn trống" (Phùng Duy Hoàng), CÔNG KHAI không cần đăng nhập; hợp đồng ở mục
 // "GET /trips/search" của docs/api-contract.md.
 //
-// Việc tìm RA TUYẾN từ điểm đi/điểm đến vẫn chưa có endpoint công khai (task của Trần Trung
-// Hiếu), nên khi thiếu `routeId` module nhờ routeLookupApi ghép tạm từ GET /routes — đường
-// đó cần vai trò Manager/Admin. Có `routeId` (đi từ màn hình tra cứu tuyến) thì gọi thẳng
-// endpoint công khai, không cần quyền gì.
+// Việc tìm RA TUYẾN từ điểm đi/điểm đến nay đã có endpoint công khai: GET /routes/search
+// (Trần Trung Hiếu) — routeLookupApi gọi thẳng endpoint đó, không đòi quyền gì. Nên cả hai
+// nhánh dưới đây đều công khai: có `routeId` (đi từ màn hình tra cứu tuyến) thì gọi thẳng
+// GET /trips/search của tuyến đó; thiếu `routeId` thì nhờ routeLookupApi tìm các tuyến khớp.
 // -----------------------------------------------------------------------------
 
 /** Tham số tìm chuyến — được truyền từ màn hình "Tra cứu tuyến" (form của Dương Thị Hạnh). */
 export interface TripSearchParams {
-  /** Điểm đi — khớp `Route.origin`. */
+  /** Điểm đi — khớp TÊN TRẠM trên tuyến (`GET /routes/search`), không phải điểm đầu của tuyến. */
   origin: string;
 
-  /** Điểm đến — khớp `Route.destination`. */
+  /** Điểm đến — cùng lối khớp trên; trạm đến phải đứng sau trạm đi theo thứ tự chạy. */
   destination: string;
 
   /** Ngày đi (yyyy-MM-dd). Ghép thành `from`/`to` của TRỌN ngày đó (giờ Việt Nam) khi gọi API. */
@@ -85,8 +85,8 @@ function searchRange(date: string | undefined): Record<string, string> {
 const api: TripSearchApi = {
   async search({ origin, destination, date, routeId }) {
     // Có routeId (đi từ màn hình tra cứu tuyến) → gọi thẳng endpoint công khai.
-    // Thiếu routeId → nhờ màn tra cứu tuyến tìm các tuyến khớp điểm đi/điểm đến trước;
-    // đó là đường Manager/Admin vì GET /routes còn sau policy (xem ghi chú đầu file).
+    // Thiếu routeId (F5 trên màn kết quả, hoặc mở link trần) → nhờ routeLookupApi tìm các
+    // tuyến khớp điểm đi/điểm đến trước; đường đó nay cũng công khai (GET /routes/search).
     const routeIds = routeId
       ? [routeId]
       : (await routeLookupApi.search({ origin, destination })).map((route) => route.routeId);

@@ -23,6 +23,8 @@ const ADMIN_MANAGER = ['Admin', 'Manager'];
 const ADMIN = ['Admin'];
 /** Mọi vai trò đã đăng nhập. */
 const ALL: string[] = [];
+/** Chỉ hành khách — dành cho các màn ngôi thứ nhất ("… của tôi"). */
+const PASSENGER = ['Passenger'];
 
 /** Một mục lá — bấm là đi thẳng tới `to`. */
 interface NavLeaf {
@@ -44,14 +46,21 @@ type NavEntry = (NavLeaf & { icon: ReactNode }) | NavGroup;
 const NAV: NavEntry[] = [
   { to: '/', label: 'Trang chủ', roles: ALL, icon: <HomeOutlined /> },
   { to: '/route-lookup', label: 'Tra cứu tuyến', roles: ALL, icon: <SearchOutlined /> },
-  { to: '/my-tickets', label: 'Vé của tôi', roles: ALL, icon: <QrcodeOutlined /> },
+  // "Vé của tôi" và hai nhóm dưới đây là màn NGÔI THỨ NHẤT ("vé CỦA TÔI", "vé tháng CỦA TÔI",
+  // "phản ánh CỦA TÔI") nên chỉ hành khách thấy. Với tài khoản nhân viên chúng không có nghĩa
+  // gì — admin không giữ vé tháng — và phía nhân viên đã có màn riêng cho cùng miền nghiệp vụ:
+  // "Sơ đồ ghế" / "Cấu hình giá vé" (Quản lý dữ liệu) và "Xử lý phản ánh" (Hệ thống). Trước đây
+  // các mục này để roles rỗng (mọi vai trò) vì API không gắn policy — nhưng menu không phải chỗ
+  // phản ánh quyền của API, và màn "của tôi" nằm trong menu quản trị chỉ gây rối. Quyền gọi API
+  // vẫn giữ nguyên, không đụng tới.
+  { to: '/my-tickets', label: 'Vé của tôi', roles: PASSENGER, icon: <QrcodeOutlined /> },
   {
     key: 'group-passes',
     label: 'Vé tháng',
     icon: <CreditCardOutlined />,
     children: [
-      { to: '/monthly-passes', label: 'Đăng ký vé tháng', roles: ALL },
-      { to: '/my-monthly-passes', label: 'Vé tháng của tôi', roles: ALL },
+      { to: '/monthly-passes', label: 'Đăng ký vé tháng', roles: PASSENGER },
+      { to: '/my-monthly-passes', label: 'Vé tháng của tôi', roles: PASSENGER },
     ],
   },
   {
@@ -59,8 +68,8 @@ const NAV: NavEntry[] = [
     label: 'Phản ánh',
     icon: <MessageOutlined />,
     children: [
-      { to: '/feedback-submit', label: 'Gửi phản ánh', roles: ALL },
-      { to: '/my-feedback', label: 'Phản ánh của tôi', roles: ALL },
+      { to: '/feedback-submit', label: 'Gửi phản ánh', roles: PASSENGER },
+      { to: '/my-feedback', label: 'Phản ánh của tôi', roles: PASSENGER },
     ],
   },
   {
