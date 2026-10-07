@@ -1,36 +1,29 @@
-import { fetchRoutes } from './routeApi';
-import type { Route } from './routeApi';
-import { fetchRouteStops } from './routeStopApi';
-import fareApi from './fareApi';
-import type { Fare } from './fareApi';
+import axiosClient from './axiosClient';
 
 // -----------------------------------------------------------------------------
 // API tra cứu tuyến — màn hình "Tra cứu tuyến" (User Story 1).
 //
-// Endpoint "tìm tuyến theo điểm đi - điểm đến" vẫn CHƯA có (task của Trần Trung Hiếu,
-// Sprint 2), nên nhánh API THẬT bên dưới ghép từ 3 endpoint đã có sẵn ở Sprint 1:
-//   GET /routes                → lọc tuyến theo điểm đi/điểm đến (Route.origin/destination)
-//   GET /routes/{id}/stops     → danh sách trạm của tuyến
-//   GET /routes/{id}/fares     → giá vé thấp nhất
+// Dùng endpoint CÔNG KHAI GET /routes/search (RouteSearchController — Trần Trung Hiếu,
+// story 1): điểm đi/điểm đến khớp theo TÊN TRẠM trên tuyến, kèm danh sách trạm và giá thấp
+// nhất. Không gắn [Authorize] nên ai cũng gọi được, kể cả khách chưa đăng nhập — hợp đồng ở
+// mục "Tra cứu tuyến — /routes/search" của docs/api-contract.md.
 //
-// ⚠️ Giới hạn hiện tại: 3 endpoint trên đều đòi vai trò Admin/Manager (docs/api-contract.md),
-// nên màn "Tra cứu tuyến" phải đăng nhập bằng tài khoản Manager/Admin mới xem được kết quả.
-// Phần TÌM CHUYẾN của hành khách thì đã có đường công khai: từ kết quả tra cứu bấm "Xem
-// chuyến" → màn "Kết quả tìm kiếm" gọi GET /trips/search (công khai, không cần đăng nhập).
-// Khi Hiếu có API tìm tuyến công khai thì thay ruột hàm `search` dưới đây là xong.
+// Trước đây màn này ghép tạm từ GET /routes + GET /routes/{id}/stops + GET /routes/{id}/fares,
+// ba endpoint đều sau policy ManagerOrAbove nên hành khách bị 403. Đổi sang /routes/search thì
+// màn "Tra cứu tuyến" thành công khai hoàn toàn (xem api-contract.md mục 747).
 // -----------------------------------------------------------------------------
 
 /** Tham số tìm tuyến từ form "điểm đi - điểm đến - ngày". */
 export interface RouteLookupParams {
-  /** Điểm đi — tên địa danh, khớp `Route.origin`. */
+  /** Điểm đi — tên trạm, khớp `Stop.name` trên tuyến. */
   origin: string;
 
-  /** Điểm đến — khớp `Route.destination`. */
+  /** Điểm đến — khớp `Stop.name` trên tuyến. */
   destination: string;
 
   /**
-   * Ngày đi (yyyy-MM-dd). Backend chưa có bảng Trips nên tạm thời chưa dùng để lọc —
-   * giữ trường này sẵn để khi API tìm chuyến xong chỉ cần truyền thẳng vào.
+   * Ngày đi (yyyy-MM-dd). Có ngày thì endpoint chỉ trả tuyến có ít nhất một chuyến Scheduled
+   * khởi hành trong trọn ngày đó (giờ Việt Nam) — truyền thẳng vào query `date`.
    */
   date?: string;
 }
@@ -62,89 +55,61 @@ export interface RouteLookupApi {
   search: (params: RouteLookupParams) => Promise<RouteLookupResult[]>;
 }
 
+// Hình dạng thật của GET /routes/search (docs/api-contract.md mục 747) — camelCase như backend
+// trả về. Chỉ khai báo phần màn hình cần; không khai báo thừa để ai đọc cũng thấy đúng phần
+// được dùng.
+interface RouteSearchStop {
+  stopId: string;
+  stopName: string;
+  stopOrder: number;
+}
+
+interface RouteSearchResult {
+  routeId: string;
+  routeCode: string;
+  routeName: string;
+  origin: string;
+  destination: string;
+  distanceKm: number;
+  stops: RouteSearchStop[];
+  minPrice: number | null;
+}
+
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đã bật API thật — màn "Tra cứu tuyến" cần đăng
-// nhập bằng tài khoản Manager/Admin (xem ghi chú đầu file). Nhánh giả giữ làm đường lùi:
-// đổi cờ này thành `true` là quay lại được, không phải chạm phần nào khác.
+// Cờ chuyển giữa dữ liệu giả và API thật. Đã bật API thật — GET /routes/search có trên main
+// (xem ghi chú đầu file). Nhánh giả giữ làm đường lùi: đổi cờ này thành `true` là quay lại
+// được, không phải chạm phần nào khác.
 const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Trần `pageSize` của GET /routes là 100 — số tuyến tối đa lấy trong một lượt gọi. */
-const ROUTE_PAGE_SIZE = 100;
-
-/** So khớp chuỗi không phân biệt hoa thường, đã bỏ khoảng trắng thừa hai đầu. */
-function matches(value: string, keyword: string): boolean {
-  return value.toLowerCase().includes(keyword.toLowerCase());
-}
-
-/** Giá vé thấp nhất trong bảng giá — màn hình hiển thị là "giá từ …". */
-function minPriceOf(fares: Fare[]): number | null {
-  if (fares.length === 0) return null;
-  return Math.min(...fares.map((fare) => fare.price));
-}
-
-/**
- * Lấy toàn bộ tuyến đang khai thác bằng cách lặp theo trang, giống `fareApi.listRoutes`.
- * Không thể lọc origin/destination ngay tại GET /routes vì endpoint chỉ nhận MỘT tham số
- * `search` chung, không tách riêng hai chiều — phải lấy về rồi lọc phía client.
- */
-async function fetchActiveRoutes(): Promise<Route[]> {
-  const routes: Route[] = [];
-
-  for (let page = 1; ; page += 1) {
-    const { items, total } = await fetchRoutes({
-      page,
-      pageSize: ROUTE_PAGE_SIZE,
-      status: 'Active',
-    });
-
-    routes.push(...items);
-
-    // `items.length === 0` là chốt chặn để không lặp vô hạn nếu `total` sai.
-    if (routes.length >= total || items.length === 0) break;
-  }
-
-  return routes;
-}
-
-/** Sắp xếp kết quả theo mã tuyến — "01" đứng trước "B10" nhờ cờ numeric của localeCompare. */
-function sortByCode(results: RouteLookupResult[]): RouteLookupResult[] {
-  return [...results].sort((a, b) => a.routeCode.localeCompare(b.routeCode, 'vi', { numeric: true }));
-}
-
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
 const api: RouteLookupApi = {
-  async search({ origin, destination }) {
-    const keywordOrigin = origin.trim();
-    const keywordDestination = destination.trim();
+  async search({ origin, destination, date }) {
+    // Trim trước khi gửi: backend tự bỏ khoảng trắng thừa, nhưng trùng nhau sau khi trim bị 400
+    // — gửi sạch ngay từ đây để lỗi (nếu có) hiện sớm và rõ ràng hơn.
+    const params: Record<string, string> = {
+      origin: origin.trim(),
+      destination: destination.trim(),
+    };
+    if (date) params.date = date;
 
-    const routes = await fetchActiveRoutes();
-    const matched = routes.filter(
-      (route) => matches(route.origin, keywordOrigin) && matches(route.destination, keywordDestination),
+    const results = await axiosClient.get<RouteSearchResult[], RouteSearchResult[]>(
+      '/routes/search',
+      { params },
     );
 
-    const results = await Promise.all(
-      matched.map(async (route): Promise<RouteLookupResult> => {
-        const [stops, fares] = await Promise.all([
-          fetchRouteStops(route.id),
-          fareApi.list(route.id),
-        ]);
-
-        return {
-          routeId: route.id,
-          routeCode: route.code,
-          routeName: route.name,
-          origin: route.origin,
-          destination: route.destination,
-          distanceKm: route.distanceKm,
-          stops: stops.map((stop) => ({ name: stop.stopName, order: stop.stopOrder })),
-          minPrice: minPriceOf(fares),
-        };
-      }),
-    );
-
-    return sortByCode(results);
+    // Ánh xạ stops: endpoint trả { stopId, stopName, stopOrder }, màn hình dùng { name, order }.
+    return results.map((route) => ({
+      routeId: route.routeId,
+      routeCode: route.routeCode,
+      routeName: route.routeName,
+      origin: route.origin,
+      destination: route.destination,
+      distanceKm: route.distanceKm,
+      stops: route.stops.map((stop) => ({ name: stop.stopName, order: stop.stopOrder })),
+      minPrice: route.minPrice,
+    }));
   },
 };
 
