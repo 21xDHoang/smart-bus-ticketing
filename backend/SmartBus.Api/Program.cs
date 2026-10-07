@@ -240,6 +240,17 @@ builder.Services.AddSingleton<IRateLimitService, RateLimitService>();
 // hai nhánh cùng sửa file này, đặt xa nhau thì merge không phải gỡ tay.
 builder.Services.AddScoped<ITripDriverAssignmentService, TripDriverAssignmentService>();
 
+// Giữ chỗ tạm thời (US 3): job quét các lượt giữ đã quá hạn để nhả ghế và ghi nhật ký SeatHoldLogs.
+// Task "Migrate bảng SeatHoldLogs + job quét hold hết hạn" — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// ISeatHoldExpiryService đăng ký ngay trên — hosted service là singleton còn AppDbContext là scoped
+// nên nó mở scope riêng cho mỗi lượt quét; giải thích đầy đủ ở đầu SeatHoldExpiryBackgroundService.
+// Đặt ở CUỐI danh sách đăng ký, cạnh ITripDriverAssignmentService ở trên, để không chèn vào đúng
+// khe mà các nhánh Sprint 3 khác đang thêm dòng — cùng lý do dòng ITripDriverAssignmentService.
+builder.Services.AddScoped<ISeatHoldExpiryService, SeatHoldExpiryService>();
+builder.Services.AddHostedService<SeatHoldExpiryBackgroundService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 

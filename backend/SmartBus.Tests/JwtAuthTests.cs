@@ -347,8 +347,9 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Đổi hai job nền của app sang bản chạy RỖNG trong host test
-    /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>).
+    /// Đổi ba job nền của app sang bản chạy RỖNG trong host test
+    /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>,
+    /// <see cref="NoopSeatHoldExpiryJob"/>).
     ///
     /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
     /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
@@ -370,8 +371,8 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     {
         var jobThat = services
             .Where(d => d.ServiceType == typeof(IHostedService)
-                && (d.ImplementationType == typeof(TripGenerationBackgroundService)
-                    || d.ImplementationType == typeof(MonthlyPassExpiryBackgroundService)))
+                && d.ImplementationType is not null
+                && BanNoopCuaJob.ContainsKey(d.ImplementationType))
             .ToList();
 
         foreach (var descriptor in jobThat)
@@ -380,11 +381,21 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
 
             services.Add(ServiceDescriptor.Singleton(
                 typeof(IHostedService),
-                descriptor.ImplementationType == typeof(TripGenerationBackgroundService)
-                    ? typeof(NoopTripGenerationJob)
-                    : typeof(NoopMonthlyPassExpiryJob)));
+                BanNoopCuaJob[descriptor.ImplementationType!]));
         }
     }
+
+    /// <summary>
+    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền thứ tư
+    /// thì thêm đúng một dòng ở đây, không phải sửa một biểu thức điều kiện đã dài ra theo mỗi job —
+    /// và quên job mới sẽ lộ ra ngay ở <see cref="TestHostKhongChayJobNenTests"/>.
+    /// </summary>
+    private static readonly Dictionary<Type, Type> BanNoopCuaJob = new()
+    {
+        [typeof(TripGenerationBackgroundService)] = typeof(NoopTripGenerationJob),
+        [typeof(MonthlyPassExpiryBackgroundService)] = typeof(NoopMonthlyPassExpiryJob),
+        [typeof(SeatHoldExpiryBackgroundService)] = typeof(NoopSeatHoldExpiryJob),
+    };
 
     /// <summary>
     /// Bản "chạy rỗng" của <see cref="TripGenerationBackgroundService"/> cho host test — lý do đầy
@@ -414,6 +425,24 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopMonthlyPassExpiryJob(
             IServiceScopeFactory scopeFactory,
             ILogger<MonthlyPassExpiryBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="SeatHoldExpiryBackgroundService"/> cho host test — cùng lý do
+    /// với <see cref="NoopTripGenerationJob"/>. Job này quét mỗi PHÚT (nhanh nhất trong ba job), nên
+    /// nếu để bản thật chạy trong host test thì nó không chỉ đua một lần lúc khởi động như hai job
+    /// kia mà còn quét lại giữa lúc test đang chạy.
+    /// </summary>
+    private sealed class NoopSeatHoldExpiryJob : SeatHoldExpiryBackgroundService
+    {
+        public NoopSeatHoldExpiryJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<SeatHoldExpiryBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }
