@@ -33,6 +33,7 @@ import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import MyTicketsPage from './pages/MyTicketsPage';
 import FareConfigPage from './pages/FareConfigPage';
+import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
@@ -312,6 +313,20 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <FareConfigPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /seat-layouts là màn hình Admin cấu hình sơ đồ ghế theo loại xe (US 2,
+                    Sprint 3, task của Dương Thị Hạnh) — chỉ Admin và Manager vào được (cùng
+                    nhóm các màn cấu hình dữ liệu). Backend SeatLayouts chưa có nên màn hình
+                    đang chạy dữ liệu giả (xem seatLayoutApi.ts). Dòng route này do Dương Thị
+                    Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung §E1
+                    (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route
+                  path="/seat-layouts"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <SeatLayoutConfigPage />
                     </RouteGuard>
                   }
                 />

@@ -73,6 +73,7 @@ const NAV: NavEntry[] = [
       { to: '/buses', label: 'Đội xe', roles: ADMIN_MANAGER },
       { to: '/route-stops', label: 'Gán trạm vào tuyến', roles: ADMIN_MANAGER },
       { to: '/fares', label: 'Cấu hình giá vé', roles: ADMIN_MANAGER },
+      { to: '/seat-layouts', label: 'Sơ đồ ghế', roles: ADMIN_MANAGER },
     ],
   },
   {
