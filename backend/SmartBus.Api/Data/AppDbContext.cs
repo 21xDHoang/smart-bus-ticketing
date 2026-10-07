@@ -23,6 +23,7 @@ public partial class AppDbContext : DbContext
         ConfigureDiscountRequest(modelBuilder);
         ConfigureMonthlyPass(modelBuilder);
         ConfigureFeedback(modelBuilder);
+        ConfigureSeat(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -42,4 +43,8 @@ public partial class AppDbContext : DbContext
     // US 24 (Feedbacks + FeedbackReplies): entity + cấu hình đã có, migration còn thiếu —
     // việc của Vàng Thị Dăm, xem docs/24-huong-dan-migrate-feedbacks.md.
     partial void ConfigureFeedback(ModelBuilder modelBuilder);
+
+    // US 2 + US 3 (SeatLayouts + Seats + SeatHolds): nhóm nghiệp vụ sơ đồ ghế & giữ chỗ — Sprint 3.
+    // Cấu hình Seat chuyển từ AppDbContext.Trip.cs về AppDbContext.Seat.cs, mô hình EF không đổi.
+    partial void ConfigureSeat(ModelBuilder modelBuilder);
 }

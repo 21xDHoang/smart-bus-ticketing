@@ -8,8 +8,8 @@ namespace SmartBus.Api.Seed;
 
 /// <summary>
 /// Bộ dữ liệu nền cho CSDL dùng chung của nhóm (chốt 01/10/2026, mục 3): 4 tài khoản — mỗi vai
-/// trò một cái — cộng bộ trạm/tuyến/giá vé/xe/chuyến và vài phản ánh mẫu của hành khách, để mở
-/// app lên là có việc để làm.
+/// trò một cái — cộng bộ trạm/tuyến/giá vé/xe/sơ đồ ghế/ghế/chuyến và vài phản ánh mẫu của hành
+/// khách, để mở app lên là có việc để làm.
 ///
 /// Logic nằm trong project API (chứ không nằm trong project console) để bộ test chạm tới được:
 /// <c>backend/SmartBus.Seed</c> chỉ là vỏ mỏng đọc chuỗi kết nối rồi gọi vào đây. Nhờ vậy mọi
@@ -18,7 +18,8 @@ namespace SmartBus.Api.Seed;
 ///
 /// Ba tính chất cố ý, đừng phá khi sửa:
 ///   - <b>Idempotent</b>: chạy lại không nhân bản dữ liệu. Tài khoản khớp theo số điện thoại,
-///     trạm theo tên, tuyến theo mã, xe theo biển số, chuyến theo "tuyến đã có chuyến nào chưa".
+///     trạm theo tên, tuyến theo mã, xe theo biển số, sơ đồ ghế theo loại xe, chuyến theo "tuyến đã
+///     có chuyến nào chưa", ghế theo "xe đã có ghế nào chưa".
 ///   - <b>Mật khẩu không nằm trong repo</b> — repo public, nên mật khẩu seed truyền vào lúc chạy
 ///     và lấy từ chat nhóm. Băm bằng đúng <see cref="PasswordService"/> của API để tài khoản seed
 ///     đăng nhập được y hệt tài khoản đăng ký qua API.
@@ -128,14 +129,45 @@ public static class SampleDataSeeder
     /// Ba xe mẫu: hai xe đang khai thác (đủ để xoay vòng gán chuyến) và một xe bảo dưỡng — có sẵn
     /// một trạng thái khác Active để màn hình đội xe và bộ lọc có dữ liệu mà kiểm tra bằng mắt.
     ///
-    /// Cố ý KHÔNG sinh ghế (Seats): chưa có luồng nào sinh ghế trong API (Sprint 3 mới có chọn ghế),
-    /// và bịa trước một quy cách mã ghế ở đây sẽ chọi với quy cách thật của Sprint 3.
+    /// Loại xe ở đây phải có sơ đồ trong <see cref="SoDoGheMau"/> và <c>Capacity</c> phải bằng đúng
+    /// tổng số ghế của sơ đồ đó — xe 45 chỗ dùng sơ đồ 1 tầng 9×5, xe hai tầng 60 chỗ dùng sơ đồ
+    /// 2 tầng 6×5. Lệch nhau thì <see cref="SeedSeatsAsync"/> sinh ra dàn ghế không khớp sức chứa,
+    /// và bộ test ghim đúng ràng buộc này.
+    ///
+    /// Vì sao xe thứ ba là "Xe buýt 2 tầng 60 chỗ" chứ không phải "Xe buýt 29 chỗ" như trước: sơ đồ
+    /// ghế là LƯỚI hàng × cột nên số ghế phải phân tích được thành tích (45 = 9×5, 60 = 2×6×5);
+    /// 29 là số nguyên tố, không có lưới chữ nhật nào ra 29 ghế. Đổi xe bảo dưỡng sang loại hai tầng
+    /// vừa seed được, vừa có sẵn ca "số tầng = 2" cho màn cấu hình sơ đồ ghế (US 2).
     /// </summary>
     private static readonly (string LicensePlate, string BusType, int Capacity, BusStatus Status)[] XeMau =
     [
         ("51B-123.45", "Xe buýt 45 chỗ", 45, BusStatus.Active),
         ("51B-234.56", "Xe buýt 45 chỗ", 45, BusStatus.Active),
-        ("51B-345.67", "Xe buýt 29 chỗ", 29, BusStatus.Maintenance),
+        ("51B-345.67", "Xe buýt 2 tầng 60 chỗ", 60, BusStatus.Maintenance),
+    ];
+
+    /// <summary>
+    /// Sơ đồ ghế của từng loại xe có trong <see cref="XeMau"/> — dòng 9 của bảng phân công Sprint 3:
+    /// "Cấu hình sơ đồ ghế theo loại xe (số tầng, số ghế, ghế VIP)". Đây là chỗ CHỐT quy cách sơ đồ
+    /// cho cả nhóm, nên đọc kỹ ba quy ước dưới đây trước khi sửa số:
+    ///
+    /// <list type="number">
+    /// <item>Số ghế của một loại xe = <c>NumberOfFloors × RowsPerFloor × ColumnsPerRow</c> — lưới
+    /// không khuyết ô, nên <c>Capacity</c> của xe phải phân tích được thành tích.</item>
+    /// <item>Vị trí một ghế viết <c>"tầng-hàng-cột"</c>, hàng và cột đếm từ 1 (1 là hàng đầu, cột
+    /// trái cùng) — đúng toạ độ lưu ở <see cref="Seat"/>, đúng khoá ô của màn chọn ghế.</item>
+    /// <item>Ghế VIP ở hàng đầu — chỗ khách trả thêm để ngồi, đúng lối xe khách Việt Nam. Danh sách
+    /// rỗng là hợp lệ: sơ đồ không có ghế VIP.</item>
+    /// </list>
+    /// </summary>
+    private static readonly (string BusType, int NumberOfFloors, int RowsPerFloor, int ColumnsPerRow, string[] VipSeatPositions)[] SoDoGheMau =
+    [
+        // Xe 45 chỗ một tầng: 9 hàng × 5 cột. VIP là hai hàng đầu, hai cột trái (4 ghế).
+        ("Xe buýt 45 chỗ", 1, 9, 5, ["1-1-1", "1-1-2", "1-2-1", "1-2-2"]),
+
+        // Xe hai tầng 60 chỗ: mỗi tầng 6 hàng × 5 cột. VIP là trọn hàng đầu của tầng 1 (5 ghế) —
+        // tầng trên không có VIP, đúng ca "ghế VIP chỉ nằm ở một tầng".
+        ("Xe buýt 2 tầng 60 chỗ", 2, 6, 5, ["1-1-1", "1-1-2", "1-1-3", "1-1-4", "1-1-5"]),
     ];
 
     /// <summary>
@@ -163,18 +195,22 @@ public static class SampleDataSeeder
 
         // Thứ tự có nghĩa: vai trò trước tài khoản, trạm trước tuyến (gán trạm tra theo tên),
         // xe trước chuyến (chuyến cần xe đang khai thác), chuyến trước phản ánh (phản ánh mẫu
-        // trỏ vào chuyến mẫu).
+        // trỏ vào chuyến mẫu). Sơ đồ ghế trước ghế (ghế trỏ vào sơ đồ của loại xe), và cả hai
+        // sau xe (ghế thuộc về xe).
         await EnsureRolesAsync(db, cancellationToken);
 
         var (taiKhoanTao, taiKhoanDaCo) = await SeedAccountsAsync(db, password, cancellationToken);
         var tramTao = await SeedStopsAsync(db, cancellationToken);
         var tuyenTao = await SeedRoutesAsync(db, cancellationToken);
         var xeTao = await SeedBusesAsync(db, cancellationToken);
+        var soDoGheTao = await SeedSeatLayoutsAsync(db, cancellationToken);
+        var gheTao = await SeedSeatsAsync(db, cancellationToken);
         var chuyenTao = await SeedTripsAsync(db, cancellationToken);
         var phanAnhTao = await SeedFeedbacksAsync(db, cancellationToken);
 
         return new SeedResult(
-            reset, taiKhoanTao, taiKhoanDaCo, tramTao, tuyenTao, xeTao, chuyenTao, phanAnhTao);
+            reset, taiKhoanTao, taiKhoanDaCo, tramTao, tuyenTao, xeTao,
+            soDoGheTao, gheTao, chuyenTao, phanAnhTao);
     }
 
     /// <summary>
@@ -381,6 +417,125 @@ public static class SampleDataSeeder
         db.Buses.AddRange(moi);
         await db.SaveChangesAsync(cancellationToken);
         return moi.Count;
+    }
+
+    /// <summary>
+    /// Tạo các sơ đồ ghế còn thiếu, khớp theo loại xe. <c>TotalSeats</c> tính từ chính lưới
+    /// (số tầng × số hàng × số cột) chứ không chép tay — hai nguồn số liệu là hai nguồn sẽ lệch nhau.
+    /// </summary>
+    private static async Task<int> SeedSeatLayoutsAsync(AppDbContext db, CancellationToken cancellationToken)
+    {
+        var loaiDaCo = await db.SeatLayouts.Select(l => l.BusType).ToListAsync(cancellationToken);
+
+        var moi = SoDoGheMau
+            .Where(x => !loaiDaCo.Contains(x.BusType))
+            .Select(x => new SeatLayout
+            {
+                BusType = x.BusType,
+                NumberOfFloors = x.NumberOfFloors,
+                RowsPerFloor = x.RowsPerFloor,
+                ColumnsPerRow = x.ColumnsPerRow,
+                VipSeatPositions = string.Join(';', x.VipSeatPositions),
+                TotalSeats = x.NumberOfFloors * x.RowsPerFloor * x.ColumnsPerRow,
+            })
+            .ToList();
+
+        db.SeatLayouts.AddRange(moi);
+        await db.SaveChangesAsync(cancellationToken);
+        return moi.Count;
+    }
+
+    /// <summary>
+    /// Sinh dàn ghế thật cho từng xe CHƯA có ghế nào, theo sơ đồ của loại xe đó.
+    ///
+    /// Vì sao theo từng xe chứ không theo từng loại: hai xe cùng loại có hai dàn ghế riêng — ghế là
+    /// tài sản của một chiếc xe cụ thể, và chuyến của xe nào thì bán ghế của xe đó (US 2/US 3).
+    ///
+    /// Vì sao chỉ sinh khi xe CHƯA có ghế nào: cùng luật với <see cref="SeedTripsAsync"/> — chạy lại
+    /// seeder không được chép thêm đè lên dàn ghế mà quản lý đã sửa qua màn cấu hình. Xe có loại
+    /// chưa có sơ đồ thì bỏ qua, KHÔNG phải lỗi: đó là trạng thái dữ liệu hợp lệ (ghế bắt buộc thuộc
+    /// một sơ đồ — <see cref="Seat.SeatLayoutId"/> NOT NULL).
+    /// </summary>
+    private static async Task<int> SeedSeatsAsync(AppDbContext db, CancellationToken cancellationToken)
+    {
+        // Sơ đồ đã được SeedSeatLayoutsAsync bảo đảm tồn tại trước khi hàm này chạy.
+        var soDoTheoLoai = await db.SeatLayouts.ToDictionaryAsync(l => l.BusType, cancellationToken);
+
+        var xeDaCoGhe = await db.Seats.Select(s => s.BusId).Distinct().ToListAsync(cancellationToken);
+        var gheMoi = new List<Seat>();
+
+        foreach (var bus in await db.Buses.ToListAsync(cancellationToken))
+        {
+            if (xeDaCoGhe.Contains(bus.Id) || !soDoTheoLoai.TryGetValue(bus.BusType, out var soDo))
+            {
+                continue;
+            }
+
+            gheMoi.AddRange(SinhGhe(bus, soDo));
+        }
+
+        db.Seats.AddRange(gheMoi);
+        await db.SaveChangesAsync(cancellationToken);
+        return gheMoi.Count;
+    }
+
+    /// <summary>
+    /// Sinh trọn lưới ghế của một xe: mỗi tầng một lưới <see cref="SeatLayout.RowsPerFloor"/> hàng ×
+    /// <see cref="SeatLayout.ColumnsPerRow"/> cột, ghế nào có vị trí nằm trong danh sách VIP của sơ đồ
+    /// thì mang <see cref="SeatType.Vip"/>.
+    /// </summary>
+    private static IEnumerable<Seat> SinhGhe(Bus bus, SeatLayout soDo)
+    {
+        var viTriVip = ViTriVipCua(soDo);
+
+        for (var tang = 1; tang <= soDo.NumberOfFloors; tang++)
+        {
+            for (var hang = 1; hang <= soDo.RowsPerFloor; hang++)
+            {
+                for (var cot = 1; cot <= soDo.ColumnsPerRow; cot++)
+                {
+                    yield return new Seat
+                    {
+                        BusId = bus.Id,
+                        SeatLayoutId = soDo.Id,
+                        Floor = tang,
+                        RowIndex = hang,
+                        ColumnIndex = cot,
+                        SeatNumber = MaGhe(soDo.NumberOfFloors, tang, hang, cot),
+                        SeatType = viTriVip.Contains(ViTri(tang, hang, cot))
+                            ? SeatType.Vip
+                            : SeatType.Standard,
+                    };
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tách <see cref="SeatLayout.VipSeatPositions"/> thành tập hợp để tra cứu. Chuỗi rỗng (sơ đồ
+    /// không có ghế VIP) cho ra tập rỗng — không phải trường hợp đặc biệt nào.
+    /// </summary>
+    private static HashSet<string> ViTriVipCua(SeatLayout soDo) =>
+        soDo.VipSeatPositions
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>Khoá vị trí một ô ghế trong sơ đồ: <c>"tầng-hàng-cột"</c>, đếm từ 1.</summary>
+    private static string ViTri(int floor, int row, int column) => $"{floor}-{row}-{column}";
+
+    /// <summary>
+    /// Mã ghế hiển thị trên vé: hàng đánh chữ A, B, C… cột đánh số 1, 2, 3… — "A1", "I5".
+    ///
+    /// Xe hai tầng thêm tiền tố tầng ("T1-A1", "T2-A1"): không thì ghế tầng 1 và tầng 2 trùng mã,
+    /// mà <c>(BusId, SeatNumber)</c> là unique (A6). Xe một tầng giữ mã trần cho gọn — đúng mã màn
+    /// chọn ghế đang dựng.
+    ///
+    /// Quy cách này chỉ đủ tới 26 hàng (hết bảng chữ cái) — trần của màn cấu hình là 13 hàng/tầng.
+    /// </summary>
+    private static string MaGhe(int numberOfFloors, int floor, int row, int column)
+    {
+        var ma = $"{(char)('A' + row - 1)}{column}";
+        return numberOfFloors > 1 ? $"T{floor}-{ma}" : ma;
     }
 
     /// <summary>
@@ -607,5 +762,7 @@ public sealed record SeedResult(
     int StopsCreated,
     int RoutesCreated,
     int BusesCreated,
+    int SeatLayoutsCreated,
+    int SeatsCreated,
     int TripsCreated,
     int FeedbacksCreated);

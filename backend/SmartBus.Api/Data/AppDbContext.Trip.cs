@@ -4,19 +4,21 @@ using SmartBus.Api.Entities;
 namespace SmartBus.Api.Data;
 
 /// <summary>
-/// Phần DbContext của nhóm nghiệp vụ Vận hành chuyến xe (Buses, Seats, Trips).
+/// Phần DbContext của nhóm nghiệp vụ Vận hành chuyến xe (Buses, Trips).
 /// Vàng Thị Dăm sửa file này — chủ CSDL của nhóm.
 ///
 /// Story 13 "Lập lịch trình" phân rã task migrate là "Schedules, Trips, TripStops", nhưng
 /// quy ước A8.3 chốt KHÔNG tách bảng Schedule (chỉ dùng Trips + API sinh chuyến hàng loạt)
 /// và A9 không có bảng TripStops (thứ tự trạm lấy từ RouteStops). Vì vậy ở đây chỉ có Trips.
-/// Buses + Seats được gộp vào cùng migration để Trips.BusId có khoá ngoại thật — A9 cũng xếp
-/// Buses (10) và Seats (11) trước Trips (12).
+/// Buses được gộp vào cùng migration để Trips.BusId có khoá ngoại thật — A9 cũng xếp Buses (10)
+/// trước Trips (12).
+///
+/// <c>Seats</c> từng nằm ở đây (Sprint 2) nhưng đã CHUYỂN sang AppDbContext.Seat.cs ở Sprint 3,
+/// khi ghế có sơ đồ riêng và lượt giữ chỗ — xem file đó.
 /// </summary>
 public partial class AppDbContext
 {
     public DbSet<Bus> Buses => Set<Bus>();
-    public DbSet<Seat> Seats => Set<Seat>();
     public DbSet<Trip> Trips => Set<Trip>();
 
     partial void ConfigureTrip(ModelBuilder modelBuilder)
@@ -35,19 +37,7 @@ public partial class AppDbContext
             e.HasIndex(b => b.LicensePlate).IsUnique();
         });
 
-        modelBuilder.Entity<Seat>(e =>
-        {
-            e.Property(s => s.SeatNumber).HasMaxLength(10).IsRequired();
-
-            // Một xe không có hai ghế cùng số (A6).
-            e.HasIndex(s => new { s.BusId, s.SeatNumber }).IsUnique();
-
-            // Ghế thuộc về xe — xoá xe thì dàn ghế đi theo (A5).
-            e.HasOne(s => s.Bus)
-             .WithMany(b => b.Seats)
-             .HasForeignKey(s => s.BusId)
-             .OnDelete(DeleteBehavior.Cascade);
-        });
+        // Cấu hình Seat nằm ở AppDbContext.Seat.cs (Sprint 3).
 
         modelBuilder.Entity<Trip>(e =>
         {
