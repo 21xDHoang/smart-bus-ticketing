@@ -251,6 +251,19 @@ builder.Services.AddScoped<ITripDriverAssignmentService, TripDriverAssignmentSer
 builder.Services.AddScoped<ISeatHoldExpiryService, SeatHoldExpiryService>();
 builder.Services.AddHostedService<SeatHoldExpiryBackgroundService>();
 
+// Cảnh báo tài khoản giữ chỗ quá nhiều lần (US 3): job canh tần suất giữ chỗ theo tài khoản, ghi
+// AuditLogs (Action = Warning) + log ứng dụng khi vượt ngưỡng.
+// Task "Ghi log và cảnh báo khi một tài khoản giữ chỗ quá nhiều lần" — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Đặt ngay sau khối SeatHold ở trên vì cùng story 3 và cùng bảng SeatHolds: job kia NHẢ ghế hết hạn,
+// job này ĐẾM số lần giữ chỗ của một tài khoản — hai việc khác nhau trên cùng một bảng, đừng gộp.
+// Cùng lối AddScoped (ruột) + AddHostedService (vòng lặp): hosted service là singleton còn
+// AppDbContext là scoped nên nó mở scope riêng cho mỗi lượt quét; giải thích đầy đủ ở đầu
+// SeatHoldAbuseBackgroundService. Đăng ký ở CUỐI danh sách, cạnh hai dòng SeatHold kia, để không
+// chèn vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<ISeatHoldAbuseService, SeatHoldAbuseService>();
+builder.Services.AddHostedService<SeatHoldAbuseBackgroundService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
