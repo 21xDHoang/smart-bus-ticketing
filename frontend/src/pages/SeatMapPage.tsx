@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
+import { Button, Col, Row, Space, Tag, Typography, theme } from 'antd';
 import seatMapApi from '../api/seatMapApi';
 import type { SeatMapSeat, TripSeatMap } from '../api/seatMapApi';
 import type { AppError } from '../api/axiosClient';
@@ -105,9 +105,18 @@ export default function SeatMapPage() {
 
   const handleContinue = () => {
     const labels = selectedSeats.map((seat) => seat.seatNumber).join(', ');
-    message.info(
-      `Đã chọn ${selectedSeats.length} ghế: ${labels}. Luồng giữ chỗ và thanh toán sẽ được nối ở các task tiếp theo của Sprint 3.`,
-    );
+
+    // Sang màn hình chờ kết quả thanh toán (US 6, Sprint 3 — task của Nguyễn Đình Băng).
+    // Đây là lối tắt DEMO để chạm được màn hình chờ ngay khi các bước trung gian (giữ chỗ của
+    // Kiên/Thịnh/Hạnh, chọn phương thức thanh toán của Hạnh) chưa nối xong. Khi các bước đó có,
+    // thay `paymentCode` giả bằng mã thanh toán thật do backend tạo giao dịch trả về.
+    const params = new URLSearchParams({
+      paymentCode: `demo-${tripId}`,
+      amount: String(totalPrice),
+      seats: labels,
+    });
+
+    navigate(`/payment-waiting?${params.toString()}`);
   };
 
   // Chưa có tripId → không có chuyến nào để vẽ sơ đồ. Mời quay lại luồng tra cứu.
