@@ -22,6 +22,7 @@ import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
 import TripSearchResultPage from './pages/TripSearchResultPage';
 import SeatMapPage from './pages/SeatMapPage';
+import PaymentMethodPage from './pages/PaymentMethodPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
@@ -200,6 +201,13 @@ function App() {
                     cứu tuyến → kết quả tìm kiếm chuyến, mọi người đã đăng nhập đều dùng được.
                     Endpoint sơ đồ ghế chưa có nên màn hình đang chạy dữ liệu giả (seatMapApi.ts). */}
                 <Route path="/seat-map" element={<SeatMapPage />} />
+                {/* /payment là màn hình chọn phương thức thanh toán (US 6, Sprint 4, task của
+                    Dương Thị Hạnh) — bước tiếp theo của luồng tra cứu tuyến → kết quả tìm kiếm
+                    chuyến → sơ đồ ghế, mọi người đã đăng nhập đều dùng được. Backend thanh toán
+                    chưa có nên màn hình đang chạy dữ liệu giả (paymentApi.ts). Dòng route này do
+                    Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung
+                    §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route path="/payment" element={<PaymentMethodPage />} />
                 {/* /my-feedback là màn hình danh sách phản ánh của tôi (US 24, Sprint 2) —
                     mọi người đã đăng nhập đều dùng được, không giới hạn vai trò như các màn
                     hình quản trị. */}
