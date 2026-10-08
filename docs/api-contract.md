@@ -2126,12 +2126,12 @@ có endpoint nào sửa hay xoá bản ghi — sửa được nhật ký thì nh
 |---|---|---|
 | `id` | `string` (GUID) | Khoá chính |
 | `userId` | `string \| null` | Người thao tác. `null` khi không xác định được — đăng nhập thất bại với SĐT không tồn tại, hoặc hành động do hệ thống tự làm |
-| `action` | `string` | Một trong 6 mã bên dưới |
+| `action` | `string` | Một trong 7 mã bên dưới |
 | `target` | `string \| null` | Đối tượng bị tác động, dạng `<Tên bảng>:<Id>` — ví dụ `"Routes:3f2a1b0c-…"`. `null` với đăng nhập / đăng xuất |
 | `ipAddress` | `string \| null` | Địa chỉ IP của người gọi. `null` khi không lấy được |
 | `createdAt` | `string` (ISO 8601, UTC) | Thời điểm hành động xảy ra |
 
-Mã `action` hợp lệ — đúng **6** giá trị, khớp enum `AuditAction` của backend:
+Mã `action` hợp lệ — đúng **7** giá trị, khớp enum `AuditAction` của backend:
 
 | Mã | Nghĩa |
 |---|---|
@@ -2141,9 +2141,17 @@ Mã `action` hợp lệ — đúng **6** giá trị, khớp enum `AuditAction` c
 | `Create` | Tạo bản ghi mới |
 | `Update` | Sửa bản ghi đã có |
 | `Delete` | Xoá bản ghi |
+| `Warning` | Cảnh báo do **hệ thống tự phát hiện**, không gắn HTTP verb nào |
 
 Middleware suy `Create` / `Update` / `Delete` từ HTTP verb, nên màn hình mới không cần thêm mã —
 chi tiết nằm ở `target`.
+
+`Warning` là mã duy nhất **không** do một request nào sinh ra: job nền ghi nó khi phát hiện bất
+thường. Hiện có đúng một nguồn — `SeatHoldAbuseBackgroundService` ghi một dòng `Warning` với
+`userId` là tài khoản bị gắn cờ và `target = "Users:<id>"` khi tài khoản đó giữ chỗ quá nhiều lần
+(ngưỡng và cửa sổ: `docs/26-csdl-so-do-ghe.md` §8). `ipAddress` luôn `null` ở nhóm này vì job nền
+không có request. Vì vậy màn hình nhật ký lọc `action=Warning` là ra thẳng danh sách tài khoản
+đáng xem.
 
 ### Endpoints
 

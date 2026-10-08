@@ -236,3 +236,60 @@ hạn"*, còn dòng 16 giao Kiên *"BackgroundService tự động giải phóng
 nói về cùng một job. Bản đã làm ở §4 là bản của dòng 14 (Dăm). Nếu nhóm muốn job nằm ở phần của Kiên
 thì chuyển nguyên cặp `SeatHoldExpiryBackgroundService` + `SeatHoldExpiryService`, đừng viết thêm một
 job thứ hai quét cùng bảng.
+
+**Mã `action` thứ 7 trong nhật ký kiểm toán:** §8 thêm giá trị `Warning` vào `AuditAction`. Đây là
+thay đổi **thêm**, không đổi endpoint nào (`GET /api/audit-logs` giữ nguyên hình dạng, bộ lọc
+`action` so theo `Enum.GetNames` nên tự nhận giá trị mới), và không cần migration vì enum lưu dạng
+chuỗi (A3). `docs/api-contract.md` đã được cập nhật: mục "Nhật ký kiểm toán" từ **6** thành **7**
+giá trị. ⛔ luật 5 nói đổi hình dạng API phải báo nhóm trước — ở đây *không* đổi hình dạng, nhưng
+danh sách giá trị hợp lệ là thứ Hiếu/Băng đọc để viết bộ lọc, nên vẫn báo để không ai bất ngờ khi
+thấy một mã mình chưa từng nghe tới. Ai viết test khẳng định "đúng 6 mã" thì cập nhật lại.
+
+## 8. Cảnh báo tài khoản giữ chỗ quá nhiều lần
+
+`SeatHoldAbuseBackgroundService` (hosted service) + `SeatHoldAbuseService` (phần ruột, scoped) —
+task *"Ghi log và cảnh báo khi một tài khoản giữ chỗ quá nhiều lần"* (dòng 19 Sprint 3, Vàng Thị Dăm).
+
+**Vấn đề:** US 3 cho khách giữ ghế 10 phút miễn phí, không ràng buộc gì. Một tài khoản cứ giữ ghế
+rồi để hết hạn sẽ khoá ghế của người khác mà không mua vé. Màn chọn ghế không phân biệt được hành
+vi đó với một khách đang cân nhắc — cái phân biệt được là **tần suất**, và tần suất chỉ nhìn thấy
+khi đếm qua thời gian.
+
+**Việc job làm mỗi lượt:** đếm số **phiên** giữ chỗ khác nhau của từng tài khoản trong cửa sổ
+`[now − 1 giờ, now]`; tài khoản đạt ngưỡng thì ghi **một dòng `AuditLogs`**
+(`Action = 'Warning'`, `UserId` = tài khoản bị gắn cờ, `Target = "Users:<id>"`, `IpAddress = null`)
+và một dòng `ILogger.LogWarning` mang đủ số liệu, rồi trả về số tài khoản vừa bị cảnh báo. **Không
+chặn gì cả** — đúng tinh thần "cảnh báo, không chặn" của dự án (cùng lối `TripConflictService`).
+
+| Chốt | Giá trị | Vì sao |
+|---|---|---|
+| Cửa sổ | **1 giờ trượt** | Đếm luỹ kế thì mọi khách trung thành đều bị gắn cờ. Cần bắt là giữ nhiều lần trong thời gian NGẮN. |
+| Ngưỡng | **5 phiên** (`>= 5`) | Khách thật hiếm khi tạo quá 2–3 phiên/giờ (chọn ghế, đổi ý, chọn lại). Mốc 5 đủ rộng để không bắt nhầm, vẫn bắt được tài khoản giữ ghế hàng loạt. |
+| Đếm theo | **`SessionCode` khác nhau** | Một khách đặt vé cho cả gia đình chọn 4 ghế trong MỘT phiên là một lần giữ chỗ. Đếm theo dòng `SeatHolds` thì chính khách mua nhiều vé nhất lại dễ bị gắn cờ nhất — bắt nhầm đúng nhóm khách tốt. |
+| Nhịp quét | **5 phút** | Khác 1 phút của job hết hạn (§4): ở đó nhịp CHÍNH LÀ độ trễ nhả ghế; ở đây chỉ là độ trễ *phát hiện*, trên một hành vi đo bằng giờ — 8% cửa sổ, không ai nhận ra, mà rẻ hơn 5 lần. |
+| Chống ghi trùng | Đã có `Warning` trong cùng cửa sổ → bỏ qua | Nhịp 5 phút × cửa sổ 1 giờ: không chặn thì một hành vi sinh **12 dòng giống hệt nhau** trên màn hình của Admin. |
+
+**Vì sao "cảnh báo" nằm ở `AuditLogs`:** bảng `Notifications` + SignalR (A9 #15) **chưa tồn tại** —
+nó thuộc Sprint 5. `AuditLogs` thì đã có sẵn cả bảng lẫn màn hình (`GET /api/audit-logs`, chỉ
+`Admin`), nên cảnh báo tới được đúng người cần thấy **mà không phải thêm endpoint, không phải sửa
+hình dạng API nào**. Chi tiết số liệu (bao nhiêu phiên) nằm ở log ứng dụng có cấu trúc: bảng nhật
+ký chỉ có `UserId`/`Action`/`Target`, không có chỗ cho con số đó.
+
+**Vì sao đếm bằng cách nạp rồi tính trong bộ nhớ:** `GroupBy` + `Distinct().Count()` dịch xuống CSDL
+được, nhưng provider InMemory của bộ test thì không — nhánh quan trọng nhất sẽ thành nhánh không có
+test nào phủ. Cùng lập luận đã ghi ở §4 cho `SeatHoldExpiryService`.
+
+⚠️ **Chỉ mục nào dùng cho việc gì:** phép đếm lọc `SeatHolds` theo `CreatedAt` trong cửa sổ, còn
+phép chống ghi trùng lọc `AuditLogs` theo `CreatedAt` — cả hai đều có chỉ mục `CreatedAt` sẵn
+(§5). `IX_SeatHolds_UserId_CreatedAt` phục vụ câu hỏi "một tài khoản cụ thể giữ bao nhiêu lần",
+không phải lượt quét toàn bảng này.
+
+⚠️ **Chốt "một hành vi = một dòng cảnh báo" chỉ đúng khi chạy MỘT bản app.** Phép chống ghi trùng
+đọc lại `AuditLogs` trước khi ghi, nên hai bản app chạy song song có thể cùng đọc lúc bảng còn
+trống rồi cùng ghi — khác hẳn job hết hạn ở §4, nơi unique index `(SeatHoldId, Action)` là chốt
+cứng ở tầng PostgreSQL. Ở đây **cố ý không đặt chốt CSDL**: khoá đó sẽ là `(UserId, Action)` trong
+một khoảng thời gian, mà PostgreSQL không có unique index theo *cửa sổ trượt*. Hệ quả chấp nhận
+được: dư một dòng cảnh báo trùng, không mất hay sai dữ liệu.
+
+⚠️ **Bộ test chạy trên InMemory KHÔNG cưỡng chế chỉ mục**, nên `SeatHoldAbuseServiceTests` xanh
+không nói gì về chuyện `Index` có tồn tại hay không.
