@@ -1,25 +1,31 @@
 import axiosClient from './axiosClient';
 
 // -----------------------------------------------------------------------------
-// API thanh toán — nối với nhóm endpoint của User Story 6 "Cổng thanh toán"
-// (Sprint 3 trong Product_Backlog_Smart_Bus.xlsx).
+// API thanh toán — nối với nhóm endpoint của User Story 6 "Cổng thanh toán" (Sprint 3).
 //
-// Backend CHƯA có endpoint "kiểm tra trạng thái giao dịch + đối soát tự động" — task của
-// Trần Trung Hiếu, hợp đồng chưa vào docs/api-contract.md. Bảng Payments cũng CHƯA migrate
-// (task "Migrate bảng Payments, Transactions, PaymentLogs" của Vàng Thị Dăm). Vì vậy kiểu
-// dưới đây là DỰ KIẾN, bám theo tinh thần A9 ("mã giao dịch cổng + khoá chống trùng") để sau
-// chỉ đổi cờ USE_MOCK_DATA (và tên endpoint nếu hợp đồng chốt khác).
+// Backend CHƯA có bảng Payments và CHƯA có endpoint thanh toán nào trong docs/api-contract.md,
+// nên file này chạy dữ liệu giả (USE_MOCK_DATA = true) — cùng lối seatMapApi.ts / ticketApi.ts.
+// Khi Dăm migrate xong bảng Payments và Hiếu chốt hợp đồng, chỉ cần viết thật nhánh `api` rồi
+// lật cờ.
 //
-// Hợp đồng DỰ KIẾN — chưa chốt, đặt kebab-case theo quy ước D1:
-//   GET /payments/{paymentCode} → PaymentStatus  (kiểm tra trạng thái giao dịch theo mã thanh toán)
+// File này gộp HAI màn của US 6 "Cổng thanh toán" (đều chưa có backend nên dùng chung cờ):
+//   1. "Chọn phương thức thanh toán" (task của Dương Thị Hạnh):
+//        GET  /payment-methods        → danh sách phương thức đang mở (listMethods)
+//        POST /payments               → tạo một giao dịch thanh toán (pay)
+//   2. "Chờ kết quả thanh toán" (task của Nguyễn Đình Băng):
+//        GET  /payments/{paymentCode} → trạng thái giao dịch theo mã thanh toán (getStatus)
 //
-// Màn "chờ kết quả thanh toán" gọi liên tục endpoint này để biết giao dịch đã về Success/Failed
-// chưa: callback của cổng thanh toán về backend là BẤT ĐỒNG BỘ, nên sau khi khách quay về từ
-// cổng, frontend phải poll thay vì tin vào kết quả hiển thị ngay. "Timeout" là khái niệm PHÍA
-// FRONTEND (xem components/paymentWaiting.ts) — không phải trạng thái lưu trong CSDL.
+// Hợp đồng DỰ KIẾN — chưa chốt, đặt kebab-case theo quy ước D1.
 // -----------------------------------------------------------------------------
 
-/** Cổng thanh toán — khớp danh sách US 6 (MoMo, VNPay, ZaloPay, thẻ ngân hàng). */
+/**
+ * Cổng thanh toán — khớp danh sách US 6 (MoMo, VNPay, ZaloPay, thẻ ngân hàng).
+ *
+ * Kiểu này do màn "chờ kết quả thanh toán" dùng để gán nhãn cho `PaymentStatusResult.method`.
+ * LƯU Ý: màn "chọn phương thức thanh toán" đang dùng một kiểu khác (`PaymentMethodCode`) vì hai
+ * task viết song song trước khi backend có enum — hai kiểu cùng chỉ "cổng thanh toán". Khi Dăm
+ * chốt enum backend thì gộp `PaymentMethod` và `PaymentMethodCode` thành một, đừng để lệch lâu.
+ */
 export type PaymentMethod = 'MoMo' | 'VNPay' | 'ZaloPay' | 'BankCard';
 
 /** Trạng thái một giao dịch thanh toán — khớp enum PaymentStatus của backend (lưu chuỗi, A3). */
@@ -55,8 +61,60 @@ export interface PaymentStatusResult {
   message: string | null;
 }
 
+/**
+ * Mã phương thức thanh toán — màn "chọn phương thức thanh toán" dùng để định danh lựa chọn.
+ * Lưu chuỗi theo quy ước A3, khớp enum của backend sau này (xem ghi chú ở `PaymentMethod`).
+ */
+export type PaymentMethodCode = 'VnPay' | 'Momo' | 'ZaloPay' | 'BankTransfer' | 'Cash';
+
+/** Một phương thức thanh toán màn hình liệt kê để hành khách chọn. */
+export interface PaymentMethodOption {
+  code: PaymentMethodCode;
+
+  /** Tên hiển thị — "VNPay", "Ví MoMo"… */
+  name: string;
+
+  /** Một câu mô tả ngắn để hành khách biết phương thức này thanh toán kiểu gì. */
+  description: string;
+
+  /** Biểu tượng hiển thị — emoji ngắn gọn, cùng lối 🚌 của app. */
+  icon: string;
+}
+
+/** Kết quả một giao dịch thanh toán thành công. */
+export interface PaymentResult {
+  /** Mã giao dịch do cổng thanh toán sinh — để đối soát về sau. */
+  transactionId: string;
+
+  methodCode: PaymentMethodCode;
+
+  status: 'Paid';
+
+  /** Thời điểm thanh toán (ISO 8601). */
+  paidAt: string;
+}
+
+/** Dữ liệu gửi đi khi tạo giao dịch thanh toán. */
+export interface PaymentRequest {
+  methodCode: PaymentMethodCode;
+
+  tripId: string;
+
+  /** Các số ghế đang thanh toán, ví dụ ["A1", "A2"] — chỉ để lưu vết, không phải khoá nghiệp vụ. */
+  seatNumbers: string[];
+
+  /** Tổng tiền cần thanh toán (VND). */
+  total: number;
+}
+
 export interface PaymentApi {
-  /** Kiểm tra trạng thái giao dịch theo mã thanh toán (task của Hiếu). */
+  /** Danh sách phương thức thanh toán đang mở (màn chọn phương thức). */
+  listMethods: () => Promise<PaymentMethodOption[]>;
+
+  /** Tạo giao dịch thanh toán — backend chưa có nên nhánh giả chỉ bắt chước thành công. */
+  pay: (request: PaymentRequest) => Promise<PaymentResult>;
+
+  /** Kiểm tra trạng thái giao dịch theo mã thanh toán (màn chờ kết quả). */
   getStatus: (paymentCode: string) => Promise<PaymentStatusResult>;
 }
 
@@ -69,11 +127,54 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
 const api: PaymentApi = {
+  listMethods: () =>
+    axiosClient.get<PaymentMethodOption[], PaymentMethodOption[]>('/payment-methods'),
+
+  pay: (request) => axiosClient.post<PaymentResult, PaymentResult>('/payments', request),
+
   getStatus: (paymentCode) =>
     axiosClient.get<PaymentStatusResult, PaymentStatusResult>(`/payments/${paymentCode}`),
 };
 
 // -------- Dữ liệu giả (dùng khi USE_MOCK_DATA = true) --------
+
+// --- Phương thức thanh toán (màn "chọn phương thức") ---
+// Năm phương thức đại diện cho các kênh phổ biến ở thị trường Việt Nam. Tập mã cố ý đặt
+// PascalCase giống enum backend sẽ khai báo, để sau lật cờ không phải đổi dữ liệu phía UI.
+const MOCK_METHODS: PaymentMethodOption[] = [
+  {
+    code: 'VnPay',
+    name: 'VNPay',
+    description: 'Thanh toán qua cổng VNPay — quét QR, thẻ ATM hoặc internet banking.',
+    icon: '💳',
+  },
+  {
+    code: 'Momo',
+    name: 'Ví MoMo',
+    description: 'Quét mã QR bằng ví MoMo trên điện thoại.',
+    icon: '📱',
+  },
+  {
+    code: 'ZaloPay',
+    name: 'Ví ZaloPay',
+    description: 'Thanh toán nhanh qua ví ZaloPay.',
+    icon: '💬',
+  },
+  {
+    code: 'BankTransfer',
+    name: 'Chuyển khoản ngân hàng',
+    description: 'Chuyển khoản tới tài khoản nhà xe rồi xác nhận biên lai.',
+    icon: '🏦',
+  },
+  {
+    code: 'Cash',
+    name: 'Tiền mặt khi lên xe',
+    description: 'Thanh toán trực tiếp cho nhân viên soát vé khi lên xe.',
+    icon: '💵',
+  },
+];
+
+// --- Trạng thái giao dịch (màn "chờ kết quả") ---
 // Một giao dịch giả để màn "chờ kết quả thanh toán" có gì để demo. Mã thanh toán quyết định
 // kết cục, để vừa demo được đường vui (thành công) vừa demo được đường lỗi:
 //   `demo-fail…`  → Failed sau 5 giây (thấy màn báo "thanh toán thất bại").
@@ -102,6 +203,25 @@ function mockStatus(paymentCode: string): PaymentStatus {
 }
 
 const mock: PaymentApi = {
+  async listMethods() {
+    await delay(300);
+    return MOCK_METHODS.map((method) => ({ ...method }));
+  },
+
+  async pay(request) {
+    // Giả lập cổng thanh toán xử lý — chờ một nhịp rồi trả về mã giao dịch thành công.
+    await delay(900);
+
+    const transactionId = `PAY-${Date.now().toString(36).toUpperCase()}`;
+
+    return {
+      transactionId,
+      methodCode: request.methodCode,
+      status: 'Paid' as const,
+      paidAt: new Date().toISOString(),
+    };
+  },
+
   async getStatus(paymentCode) {
     await delay(400);
 
