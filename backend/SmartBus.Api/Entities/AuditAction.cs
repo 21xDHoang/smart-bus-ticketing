@@ -31,5 +31,22 @@ public enum AuditAction
     Update,
 
     /// <summary>Xoá bản ghi (DELETE).</summary>
-    Delete
+    Delete,
+
+    /// <summary>
+    /// Cảnh báo do hệ thống TỰ phát hiện, không gắn với HTTP verb nào — hàng đợi giữa job nền và
+    /// màn nhật ký của Admin.
+    ///
+    /// Task *"Ghi log và cảnh báo khi một tài khoản giữ chỗ quá nhiều lần"* (Sprint 3, Vàng Thị Dăm)
+    /// là người dùng đầu tiên: job nền phát hiện một tài khoản giữ chỗ quá nhiều lần thì ghi một
+    /// dòng ở đây, Admin đọc được ngay ở <c>GET /api/audit-logs?action=Warning</c>.
+    ///
+    /// <para>
+    /// Cố ý để tên CHUNG (<c>Warning</c> chứ không <c>SeatHoldAbuse</c>): cùng lý do đã ghi ở đầu
+    /// file — enum này ở mức thao tác, không tách theo từng nghiệp vụ, nếu không thì mỗi phép kiểm
+    /// tra bất thường mới lại phải sửa enum. Chi tiết "cảnh báo về cái gì, của ai" nằm ở
+    /// <see cref="AuditLog.Target"/>, còn số liệu cụ thể nằm ở log ứng dụng của job.
+    /// </para>
+    /// </summary>
+    Warning
 }

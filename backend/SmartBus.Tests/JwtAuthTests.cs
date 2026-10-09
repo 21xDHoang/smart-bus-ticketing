@@ -347,9 +347,9 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Đổi ba job nền của app sang bản chạy RỖNG trong host test
+    /// Đổi bốn job nền của app sang bản chạy RỖNG trong host test
     /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>,
-    /// <see cref="NoopSeatHoldExpiryJob"/>).
+    /// <see cref="NoopSeatHoldExpiryJob"/>, <see cref="NoopSeatHoldAbuseJob"/>).
     ///
     /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
     /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
@@ -386,7 +386,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền thứ tư
+    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền thứ năm
     /// thì thêm đúng một dòng ở đây, không phải sửa một biểu thức điều kiện đã dài ra theo mỗi job —
     /// và quên job mới sẽ lộ ra ngay ở <see cref="TestHostKhongChayJobNenTests"/>.
     /// </summary>
@@ -395,6 +395,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         [typeof(TripGenerationBackgroundService)] = typeof(NoopTripGenerationJob),
         [typeof(MonthlyPassExpiryBackgroundService)] = typeof(NoopMonthlyPassExpiryJob),
         [typeof(SeatHoldExpiryBackgroundService)] = typeof(NoopSeatHoldExpiryJob),
+        [typeof(SeatHoldAbuseBackgroundService)] = typeof(NoopSeatHoldAbuseJob),
     };
 
     /// <summary>
@@ -443,6 +444,26 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopSeatHoldExpiryJob(
             IServiceScopeFactory scopeFactory,
             ILogger<SeatHoldExpiryBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="SeatHoldAbuseBackgroundService"/> cho host test — cùng lý do
+    /// với <see cref="NoopTripGenerationJob"/>. Job này còn nguy hiểm hơn ba job kia khi để chạy
+    /// thật trong host test: lượt quét của nó GHI vào bảng AuditLogs, mà rất nhiều test đếm-đúng
+    /// trên chính bảng đó (AuditLogCoverageTests, AuditLogWriteApiTests, AuditLogQueryTests…). Một
+    /// tài khoản lỡ vượt ngưỡng trong dữ liệu seed của test là dư ra một dòng Warning và làm đỏ
+    /// những phép đếm đó — hỏng ngẫu nhiên, đúng kiểu lỗi PR #81.
+    /// </summary>
+    private sealed class NoopSeatHoldAbuseJob : SeatHoldAbuseBackgroundService
+    {
+        public NoopSeatHoldAbuseJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<SeatHoldAbuseBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }

@@ -62,4 +62,17 @@ public class TestHostKhongChayJobNenTests
 
         Assert.NotEqual(typeof(SeatHoldExpiryBackgroundService), job.GetType());
     }
+
+    [Fact]
+    public void Job_canh_bao_giu_cho_qua_nhieu_lan_trong_host_test_la_ban_noop()
+    {
+        using var factory = new TestAppFactory();
+
+        var job = factory.Services
+            .GetServices<IHostedService>()
+            .OfType<SeatHoldAbuseBackgroundService>()
+            .Single();
+
+        Assert.NotEqual(typeof(SeatHoldAbuseBackgroundService), job.GetType());
+    }
 }
