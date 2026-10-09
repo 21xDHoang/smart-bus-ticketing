@@ -35,6 +35,7 @@ import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import MyTicketsPage from './pages/MyTicketsPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
+import VoucherManagePage from './pages/VoucherManagePage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
@@ -334,6 +335,19 @@ function App() {
                   element={
                     <RouteGuard allowedRoles={['Admin', 'Manager']}>
                       <SeatLayoutConfigPage />
+                    </RouteGuard>
+                  }
+                />
+                {/* /vouchers là màn hình quản lý voucher (US 18, task của Dương Thị Hạnh) —
+                    chỉ Admin và Manager vào được (cùng nhóm các màn cấu hình dữ liệu). Backend
+                    Vouchers chưa có nên màn hình đang chạy dữ liệu giả (voucherApi.ts). Dòng
+                    route này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là
+                    file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route
+                  path="/vouchers"
+                  element={
+                    <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                      <VoucherManagePage />
                     </RouteGuard>
                   }
                 />
