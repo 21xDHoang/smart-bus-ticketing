@@ -55,6 +55,9 @@ export interface Ticket {
 export interface TicketApi {
   /** Vé điện tử của chính người gọi. Không vé nào → mảng rỗng, không phải 404. */
   list: () => Promise<Ticket[]>;
+  /** Một vé theo `id` — để màn hình "Mã QR vé" mở trực tiếp một vé trong danh sách.
+      Không tìm thấy → `null` (vé không thuộc người gọi, hoặc id sai), không phải lỗi. */
+  get: (id: string) => Promise<Ticket | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +71,9 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // kiến ở đầu file khi api-contract.md đã chốt.
 const api: TicketApi = {
   async list() {
+    throw new Error('Backend Tickets chưa có — chưa thể tải vé điện tử thật.');
+  },
+  async get() {
     throw new Error('Backend Tickets chưa có — chưa thể tải vé điện tử thật.');
   },
 };
@@ -191,6 +197,11 @@ const mock: TicketApi = {
   async list() {
     await delay(400);
     return MOCK_TICKETS.map((ticket) => ({ ...ticket }));
+  },
+  async get(id) {
+    await delay(300);
+    const ticket = MOCK_TICKETS.find((item) => item.id === id);
+    return ticket ? { ...ticket } : null;
   },
 };
 
