@@ -22,6 +22,7 @@ import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
 import TripSearchResultPage from './pages/TripSearchResultPage';
 import SeatMapPage from './pages/SeatMapPage';
+import PaymentWaitingPage from './pages/PaymentWaitingPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
 import TripSchedulePage from './pages/TripSchedulePage';
@@ -200,6 +201,12 @@ function App() {
                     cứu tuyến → kết quả tìm kiếm chuyến, mọi người đã đăng nhập đều dùng được.
                     Endpoint sơ đồ ghế chưa có nên màn hình đang chạy dữ liệu giả (seatMapApi.ts). */}
                 <Route path="/seat-map" element={<SeatMapPage />} />
+                {/* /payment-waiting là màn hình chờ kết quả thanh toán + xử lý timeout (US 6,
+                    Sprint 3 — task của Nguyễn Đình Băng): poll trạng thái giao dịch sau khi
+                    khách quay về từ cổng thanh toán, hết hạn chờ thì báo timeout. Là bước tiếp
+                    của luồng chọn ghế → thanh toán, mọi người đã đăng nhập đều dùng được.
+                    Endpoint thanh toán chưa có nên màn hình đang chạy dữ liệu giả (paymentApi.ts). */}
+                <Route path="/payment-waiting" element={<PaymentWaitingPage />} />
                 {/* /my-feedback là màn hình danh sách phản ánh của tôi (US 24, Sprint 2) —
                     mọi người đã đăng nhập đều dùng được, không giới hạn vai trò như các màn
                     hình quản trị. */}
