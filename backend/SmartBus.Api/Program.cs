@@ -395,6 +395,12 @@ builder.Services.AddScoped<IPaymentSettlementService, PaymentSettlementService>(
 builder.Services.AddScoped<IVoucherValidationService, VoucherValidationService>();
 builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>();
 
+// Voucher (US 18), phần đọc: thống kê hiệu quả voucher đã phát hành
+// (GET /vouchers/statistics). Task "API thống kê hiệu quả voucher" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Controller tự được AddControllers quét ra, không cần dòng đăng ký riêng.
+builder.Services.AddScoped<IVoucherStatisticsService, VoucherStatisticsService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
