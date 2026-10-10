@@ -140,7 +140,10 @@ export function buildNavItems(role: string | null): MenuProps['items'] {
  * của luồng "Tra cứu tuyến" (đi từ màn đó sang) nên sáng theo mục đó thay vì không sáng gì.
  */
 export function navKeyOf(pathname: string): string {
-  return pathname === '/trip-results' || pathname === '/seat-map' ? '/route-lookup' : pathname;
+  if (pathname === '/trip-results' || pathname === '/seat-map') return '/route-lookup';
+  // /my-tickets/:id/qr là màn con của "Vé của tôi" — vào thẳng đường dẫn vẫn sáng đúng mục.
+  if (pathname.startsWith('/my-tickets/')) return '/my-tickets';
+  return pathname;
 }
 
 /** Danh sách điểm đến (mọi mục lá) theo vai trò — dùng cho lối vào nhanh ở màn Trang chủ. */

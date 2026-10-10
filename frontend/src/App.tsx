@@ -33,6 +33,7 @@ import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import MyTicketsPage from './pages/MyTicketsPage';
+import TicketQrPage from './pages/TicketQrPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import VoucherManagePage from './pages/VoucherManagePage';
@@ -319,6 +320,13 @@ function App() {
                     đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi
                     rõ trong PR để Băng xem. */}
                 <Route path="/my-tickets" element={<MyTicketsPage />} />
+                {/* /my-tickets/:ticketId/qr là màn hình hiển thị mã QR vé + tăng sáng màn hình
+                    khi quét (US 4, Sprint 3 — task của Nguyễn Đình Băng): phóng to mã QR của một
+                    vé trên nền trắng để nhân viên soát vé quét khi khách lên xe, kèm chế độ toàn
+                    màn hình + giữ màn hình sáng trong lúc quét. Vào từ nút "Xem mã QR" trên màn
+                    "Vé của tôi", mọi người đã đăng nhập đều dùng được. Backend Tickets chưa có
+                    nên màn hình đang chạy dữ liệu giả (xem ticketApi.ts). */}
+                <Route path="/my-tickets/:ticketId/qr" element={<TicketQrPage />} />
                 {/* /feedback-submit là màn hình gửi phản ánh (US 24, task của Dương Thị Hạnh) —
                     mọi người đã đăng nhập đều dùng được. Backend gửi phản ánh chưa có nên màn
                     hình đang chạy dữ liệu giả (xem feedbackSubmitApi.ts). */}
