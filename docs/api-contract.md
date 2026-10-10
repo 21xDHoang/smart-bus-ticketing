@@ -1432,14 +1432,40 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 > (docs/26 §1) nên tầng CSDL không đỡ được — chốt phải nằm ở chỗ duy nhất sinh ra mã.
 
 > **Chống hai khách giữ cùng một ghế — chốt ở đâu?** Ở partial unique index
-> `(TripId, SeatId) WHERE Status = 'Holding'` của `SeatHolds` (AppDbContext.Seat.cs). Service vẫn
-> kiểm tra trước để trả 409 kèm số ghế vướng (ca thường gặp, khách hiểu ngay), nhưng phép kiểm ở
-> tầng service **không đủ** cho hai request đồng thời: cả hai cùng đọc thấy ghế trống rồi cùng ghi.
-> Request thua đâm vào unique index lúc `SaveChanges`, service bắt `DbUpdateException` và trả **409**
-> `Một hoặc nhiều ghế vừa được người khác giữ, vui lòng chọn ghế khác.` — câu chung, không kèm số
-> ghế vì lúc đó service không còn biết ghế nào vừa bị giành; muốn biết thì phải hỏi lại CSDL, mà
-> khách chỉ cần một việc: chọn ghế khác. Cả phiên ghi trong **một** `SaveChangesAsync` nên hỏng là
-> hỏng cả phiên — không để lại một phiên giữ được nửa số ghế mà khách tưởng đã giữ đủ.
+> `IX_SeatHolds_TripId_SeatId` — `UNIQUE ("TripId", "SeatId") WHERE "Status" = 'Holding'` — có thật
+> trong migration `20261006122313_Sprint3_Seats_SeatLayouts_SeatHolds` (khối `CreateIndex` với
+> `unique: true` và `filter: "\"Status\" = 'Holding'"`), nên chốt này chạy ở mọi môi trường PostgreSQL
+> chứ không chỉ nằm trong mô hình EF (AppDbContext.Seat.cs). Service vẫn kiểm tra trước để trả 409 kèm
+> số ghế vướng (ca thường gặp, khách hiểu ngay), nhưng phép kiểm ở tầng service **không đủ** cho hai
+> request đồng thời: cả hai cùng đọc thấy ghế trống rồi cùng ghi. Request thua đâm vào unique index lúc
+> `SaveChanges`, service bắt `DbUpdateException` và trả **409**
+> `Một hoặc nhiều ghế vừa được người khác giữ, vui lòng chọn ghế khác.` — câu chung, không kèm số ghế
+> vì lúc đó service không còn biết ghế nào vừa bị giành; muốn biết thì phải hỏi lại CSDL, mà khách chỉ
+> cần một việc: chọn ghế khác. Cả phiên ghi trong **một** `SaveChangesAsync` nên hỏng là hỏng cả phiên
+> — không để lại một phiên giữ được nửa số ghế mà khách tưởng đã giữ đủ.
+
+> ⚠️ Chốt này sống ở tầng PostgreSQL nên **bộ test InMemory không phủ được nó**: provider InMemory bỏ
+> qua unique index kể cả khi mô hình có khai — hai dòng `Holding` trùng `(TripId, SeatId)` cùng chèn
+> lọt. Một bộ test xanh trên InMemory không nói gì về chốt chống trùng ghế; muốn có bằng chứng thì
+> phải chạy trên PostgreSQL thật (task kiểm thử đồng thời của Vàng).
+
+> **Vì sao chống trùng ghế KHÔNG dùng cột row-version?** Vì xung đột ở đây là **hai lượt chèn** hai
+> dòng `SeatHolds` khác nhau, không phải hai luồng cùng sửa một dòng đã có: một cột "phiên bản dòng"
+> không có gì để so khi dòng còn chưa tồn tại. Index còn chặn được cả khi hai bản app ở hai tiến trình
+> cùng ghi — thứ mà một phép kiểm trong bộ nhớ không bao giờ làm được. Đổi lại index không cần thêm
+> cột nào, còn dựng một cột row-version là sửa `Entities/SeatHold.cs` + `AppDbContext.Seat.cs` + sinh
+> migration — đều thuộc chủ CSDL (docs/01-kien-truc.md).
+
+> ⚠️ **Khe hở khác — đúng chỗ một concurrency token mới có ích: hai luồng cùng sửa MỘT dòng
+> `SeatHolds`.** Gia hạn (Trần Trung Hiếu) ghi `ExpiresAt`; nhả ghế (Phùng Duy Hoàng) và job quét
+> (Vàng Thị Dăm) ghi `Status`. Cả ba đọc dòng ra rồi ghi lại mà không có chốt phiên bản dòng, nên khi
+> chúng chồng lên nhau, lượt ghi sau đè mất thay đổi của lượt ghi trước: dòng có thể ra
+> `Status = Expired` kèm `ExpiresAt` vừa được gia hạn, trong khi API gia hạn đã trả **200** `Holding`.
+> Ca dễ gặp nhất là gia hạn trong khe ≤ 1 phút giữa lúc hết hạn và lượt quét kế tiếp — gia hạn cố ý
+> KHÔNG kiểm `ExpiresAt` (cùng lý do đã ghi ở mục `release`). Unique index `(SeatHoldId, Action)` không
+> đỡ được vì ba luồng ghi ba `Action` khác nhau. Bịt khe này cần một concurrency token trên `SeatHolds`
+> — việc của chủ CSDL, không thuộc nhiệm vụ giữ ghế; ghi lại đây để nhóm quyết trước khi `Tickets`
+> được migrate, vì lúc đó một ghế bị nhả oan là một ghế bán được cho người thứ hai.
 
 > **Vì sao mỗi lượt giữ ghi thêm một dòng `SeatHoldLogs` (`Action = 'Held'`)?** Bảng nhật ký chỉ có
 > giá trị nếu **mọi** mốc vòng đời đều được ghi (docs/26 §6) — `Held` là mốc mở đầu. Thiếu nó thì
