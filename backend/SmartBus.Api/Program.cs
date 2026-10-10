@@ -342,6 +342,21 @@ builder.Services.AddScoped<ISeatHoldReleaseService, SeatHoldReleaseService>();
 builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection(VnPayOptions.SectionName));
 builder.Services.AddScoped<IVnPayGatewayService, VnPayGatewayService>();
 
+// Lớp adapter thống nhất cổng thanh toán (US 6): endpoint POST /payments và hai endpoint callback
+// tra cổng qua IPaymentGatewayResolver theo mã phương thức thay vì gọi thẳng client từng cổng —
+// thêm cổng mới chỉ là viết một adapter + một dòng đăng ký ở đây và một dòng trong bảng của
+// PaymentGatewayResolver, không phải sửa endpoint.
+// Task "Adapter pattern thống nhất cổng thanh toán (dễ thêm cổng mới)" — Phùng Duy Hoàng.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Adapter là lớp MỎNG bọc nguyên client MoMo (Hiếu) và VNPay (Kiên) ngay trên — hai client đó
+// không sửa gì. Hai adapter không có cấu hình riêng; thiếu khoá bí mật của cổng nào thì client
+// cổng đó ném ngay khi adapter được dựng, và resolver chỉ dựng đúng cổng được hỏi (luật 2).
+// Đặt ở CUỐI danh sách đăng ký (sau khối VNPay, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<MoMoGatewayAdapter>();
+builder.Services.AddScoped<VnPayGatewayAdapter>();
+builder.Services.AddScoped<IPaymentGatewayResolver, PaymentGatewayResolver>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
