@@ -401,6 +401,37 @@ builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>(
 // Controller tự được AddControllers quét ra, không cần dòng đăng ký riêng.
 builder.Services.AddScoped<IVoucherStatisticsService, VoucherStatisticsService>();
 
+// Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
+// cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
+// Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
+// Service THUẦN ký/kiểm, không chạm CSDL: bên phát hành vé (Hiếu) gọi GenerateCode rồi tự lưu và tự
+// xử lý lượt đâm unique index (gọi lại là có mã mới — nonce); endpoint soát vé dòng 43 / Sprint 4
+// dòng 15 gọi TryVerify trước khi tra bảng. Khoá ký KHÔNG có mặc định trong code (luật 2 — repo
+// PUBLIC): đặt qua dotnet user-secrets hoặc biến môi trường TicketQr__SigningKey; mục "TicketQr"
+// trong appsettings.Development.json.example chỉ là khuôn để điền.
+// Đặt ở CUỐI danh sách đăng ký (sau khối voucher, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<TicketQrOptions>(builder.Configuration.GetSection(TicketQrOptions.SectionName));
+builder.Services.AddScoped<ITicketQrService, TicketQrService>();
+
+// Vé điện tử PDF + gửi kèm qua email (US 4, Sprint 3): vẽ vé A5 có mã QR (QuestPDF + ZXing, font
+// Roboto nhúng trong assembly) rồi gửi qua SMTP (MailKit). Task "Sinh file PDF vé có mã QR + gửi
+// kèm qua email" — Phùng Duy Hoàng.
+// Tầng gửi thư tách khỏi tầng soạn thư: IEmailSender là chỗ DUY NHẤT biết MailKit; ITicketEmailService
+// chỉ soạn nội dung + đính kèm PDF nên test được bằng đồ giả. QR in từ Tickets.Code ĐÃ LƯU — không
+// sinh lại (mỗi lượt sinh ra một mã khác — docs/30 §3.1).
+// Cấu hình SMTP KHÔNG có mặc định trong code (luật 2 — repo PUBLIC): đặt qua dotnet user-secrets
+// hoặc biến môi trường Email__Host/Email__UserName/Email__Password/Email__FromAddress; mục "Email"
+// trong appsettings.Development.json.example chỉ là khuôn để điền.
+// Bên gọi (luồng phát hành vé — Hiếu) bọc try/catch: email hỏng KHÔNG được làm hỏng việc phát hành
+// vé (docs/31 §5).
+// Đặt ở CUỐI danh sách đăng ký (sau khối mã QR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<ITicketPdfService, TicketPdfService>();
+builder.Services.AddScoped<ITicketEmailService, TicketEmailService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
