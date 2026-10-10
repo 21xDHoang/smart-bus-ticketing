@@ -22,6 +22,7 @@ import RouteStopsPage from './pages/RouteStopsPage';
 import RouteLookupPage from './pages/RouteLookupPage';
 import TripSearchResultPage from './pages/TripSearchResultPage';
 import SeatMapPage from './pages/SeatMapPage';
+import PaymentMethodPage from './pages/PaymentMethodPage';
 import PaymentWaitingPage from './pages/PaymentWaitingPage';
 import ProfilePage from './pages/ProfilePage';
 import TripListByDayPage from './pages/TripListByDayPage';
@@ -212,6 +213,13 @@ function App() {
                     cứu tuyến → kết quả tìm kiếm chuyến, mọi người đã đăng nhập đều dùng được.
                     Endpoint sơ đồ ghế chưa có nên màn hình đang chạy dữ liệu giả (seatMapApi.ts). */}
                 <Route path="/seat-map" element={<SeatMapPage />} />
+                {/* /payment là màn hình chọn phương thức thanh toán (US 6, Sprint 4, task của
+                    Dương Thị Hạnh) — bước tiếp theo của luồng tra cứu tuyến → kết quả tìm kiếm
+                    chuyến → sơ đồ ghế, mọi người đã đăng nhập đều dùng được. Backend thanh toán
+                    chưa có nên màn hình đang chạy dữ liệu giả (paymentApi.ts). Dòng route này do
+                    Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung
+                    §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+                <Route path="/payment" element={<PaymentMethodPage />} />
                 {/* /payment-waiting là màn hình chờ kết quả thanh toán + xử lý timeout (US 6,
                     Sprint 3 — task của Nguyễn Đình Băng): poll trạng thái giao dịch sau khi
                     khách quay về từ cổng thanh toán, hết hạn chờ thì báo timeout. Là bước tiếp
