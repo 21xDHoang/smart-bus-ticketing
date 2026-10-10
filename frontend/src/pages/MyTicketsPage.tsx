@@ -196,6 +196,19 @@ export default function MyTicketsPage() {
                     <Text strong style={{ fontSize: 15 }}>
                       {formatVnd(ticket.price)}
                     </Text>
+                    {/* Nút "Xem mã QR" (task của Nguyễn Đình Băng) nối từ danh sách sang màn hình
+                        mã QR phóng to + tăng sáng — chỉ vé còn hiệu lực mới quét được nên chỉ vé
+                        đó mới có nút. */}
+                    {isTicketUsable(status) && (
+                      <Button
+                        size="small"
+                        type="link"
+                        style={{ paddingInline: 0 }}
+                        onClick={() => navigate(`/my-tickets/${ticket.id}/qr`)}
+                      >
+                        Xem mã QR
+                      </Button>
+                    )}
                   </div>
                 </div>
               </List.Item>

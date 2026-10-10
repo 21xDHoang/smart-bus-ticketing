@@ -273,6 +273,21 @@ builder.Services.AddHostedService<SeatHoldAbuseBackgroundService>();
 // Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<ISeatHoldLookupService, SeatHoldLookupService>();
 
+// Cổng thanh toán MoMo (US 6): cấu hình đối tác + client thuần HTTP nói chuyện với cổng.
+// Task "Tích hợp SDK MoMo: tạo giao dịch, nhận callback" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// PartnerCode/AccessKey/SecretKey KHÔNG có giá trị mặc định trong code (luật 2 — repo PUBLIC):
+// đặt qua dotnet user-secrets hoặc biến môi trường MoMo__SecretKey…, mục "MoMo" trong
+// appsettings.Development.json.example chỉ là khuôn để điền. Client chưa đụng CSDL — bảng
+// Payments là migration của Dăm, service nghiệp vụ thanh toán sẽ gọi vào đây khi bảng có.
+// AddHttpClient đăng ký MoMoGatewayService dạng transient (kèm HttpClient có BaseAddress từ
+// cấu hình, timeout mặc định của factory); AddScoped cho interface để controller/service
+// nghiệp vụ chỉ cần biết IMoMoGatewayService. Đặt ở CUỐI danh sách đăng ký để không chèn vào
+// đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<MoMoOptions>(builder.Configuration.GetSection(MoMoOptions.SectionName));
+builder.Services.AddHttpClient<MoMoGatewayService>();
+builder.Services.AddScoped<IMoMoGatewayService>(provider => provider.GetRequiredService<MoMoGatewayService>());
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
