@@ -42,6 +42,17 @@
     "SigningKey": "CHUOI_BI_MAT_KY_MA_QR_DAT_VAO_DAY"
   },
 
+  "Email": {
+    "//": "Cấu hình SMTP gửi vé điện tử kèm PDF (US 4, Sprint 3 — task dòng 42). KHÔNG commit giá trị thật lên repo public (luật 2) — nên đặt qua dotnet user-secrets hoặc biến môi trường (Email__Host, Email__UserName, Email__Password, Email__FromAddress) thay vì để trong file này. Gmail: bật xác thực 2 bước rồi tạo 'mật khẩu ứng dụng' 16 ký tự, KHÔNG dùng mật khẩu đăng nhập thường. Port 587 + UseStartTls=true (mặc định), hoặc 465 + UseStartTls=false. Thiếu bất kỳ mục nào (trừ FromName) là API ném ngay lúc khởi động, không đợi tới lúc gửi vé.",
+    "Host": "smtp.example.com",
+    "Port": 587,
+    "UserName": "TAI_KHOAN_SMTP_DAT_VAO_DAY",
+    "Password": "MAT_KHAU_UNG_DUNG_DAT_VAO_DAY",
+    "FromAddress": "no-reply@example.com",
+    "FromName": "Smart Bus Ticketing",
+    "UseStartTls": true
+  },
+
   "Logging": {
     "LogLevel": {
       "Default": "Information",
