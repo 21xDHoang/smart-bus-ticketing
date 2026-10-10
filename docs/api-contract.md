@@ -3220,7 +3220,8 @@ về y hệt nhau (cùng `vnp_SecureHash`, cùng `vnp_TxnRef`). Endpoint không 
   "methodCode": "MoMo",
   "tripId": "b7c1d2e3-0000-0000-0000-000000000000",
   "seatNumbers": ["A1", "A2"],
-  "total": 48000
+  "total": 48000,
+  "voucherCode": "SUMMER10"
 }
 ```
 
@@ -3229,18 +3230,52 @@ về y hệt nhau (cùng `vnp_SecureHash`, cùng `vnp_TxnRef`). Endpoint không 
 | `methodCode` | ✅ | `'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'` — **cả bốn mã đã có adapter**, `BankCard` đi qua kênh thẻ của VNPay (bảng ánh xạ ở mục Enum chốt trên). Mã ngoài bốn mã này → **400** "chưa mở" kèm danh sách cổng đã mở. Cổng có adapter nhưng **thiếu cấu hình khoá** → **502** nêu đúng tên khoá thiếu (lỗi triển khai, khác hẳn "chưa mở") |
 | `tripId` | ✅ | Chuyến tồn tại |
 | `seatNumbers` | ✅ | Các ghế đang giữ thuộc phiên của người gọi — chỉ để lưu vết, không phải khoá nghiệp vụ |
-| `total` | ✅ | Khớp tổng giá các ghế đã chọn; từ 10.000 đến 50.000.000 (trần của MoMo) |
+| `total` | ✅ | Tổng tiền **TRƯỚC giảm giá**, khớp tổng giá các ghế đã chọn. Mọi ràng buộc giá trị đơn (`minOrderValue` của voucher, trần/sàn của cổng) đều so với con số NÀY, không phải số phải trả |
+| `voucherCode` | ❌ | Mã voucher khách **đã bấm xác nhận** ở màn thanh toán (khác `POST /vouchers/validate` — đó là xem trước). Vắng/null = không dùng mã. **Có mà không dùng được → 409** kèm `errors.voucherCode`, xem 🔴 dưới |
+
+> 🔴 **Voucher không hợp lệ ở `POST /payments` trả 409, KHÔNG phải 200 kèm `valid: false`** — ngược
+> hẳn với `POST /vouchers/validate`. Lý do: ở `/vouchers/validate` khách còn đang gõ mã, "mã không
+> dùng được" là **câu trả lời**; còn ở đây khách đã bấm xác nhận, nên âm thầm thu **đủ tiền** trong
+> khi khách tưởng đã được giảm là lỗi nặng nhất của luồng này. Thà chặn ra 409 để FE bắt khách sửa
+> mã. Đây cũng là lối `ServiceErrorKind.Conflict` đã dùng cho mọi xung đột nghiệp vụ khác.
+>
+> Server **kiểm lại voucher từ đầu** lúc tạo giao dịch (`IVoucherRedemptionService` /
+> `IVoucherValidationService`), **không tin** `discountAmount` mà FE gửi lên — FE gửi được gì thì
+> người ngoài cũng gửi được nấy.
 
 ```json
 // 200 — CreatePaymentResult: FE dùng payUrl để chuyển khách sang MoMo, rồi poll GET /payments/{paymentCode}
 {
   "paymentCode": "PM-8f3a2c1d",
-  "amount": 48000,
+  "originalAmount": 48000,
+  "discountAmount": 4800,
+  "voucherCode": "SUMMER10",
+  "amount": 43200,
   "method": "MoMo",
   "status": "Pending",
   "payUrl": "https://test-payment.momo.vn/v2/gateway/pay?t=..."
 }
 ```
+
+`amount` là **số tiền PHẢI TRẢ, đã trừ giảm giá** — đây là con số gửi lên cổng và là con số khách
+thấy ở màn chờ. Không dùng mã thì `originalAmount == amount` và `discountAmount = 0`,
+`voucherCode = null` — hình dạng trả về không đổi, FE không phải phân nhánh.
+
+> ⚠️ **Sàn của cổng là ràng buộc của CỔNG, không phải của voucher.** MoMo chỉ nhận `total` từ
+> **10.000đ** trở lên. Voucher làm `amount` tụt dưới sàn thì cổng từ chối (MoMo `resultCode != 0`),
+> tức khách ăn một lỗi khó hiểu từ cổng chứ không phải một câu rõ nghĩa từ ta. Vì vậy endpoint
+> `POST /payments` phải kiểm `amount` theo sàn của **chính cổng khách chọn** và trả **409** kèm
+> `errors.voucherCode` ("Mã giảm quá nhiều, số tiền còn lại dưới mức tối thiểu của cổng") trước khi
+> gọi cổng. Voucher **không** tự biết sàn này — cắt giảm cho vừa sàn là áp một luật của MoMo lên
+> VNPay/ZaloPay.
+
+> 📌 **Số tiền giảm ghi ở đâu.** Entity `Payment` hiện **không có** cột voucher — bản ghi của khoản
+> giảm nằm ở `VoucherUsages` (mục "Voucher" dưới), mỗi lượt tiêu thụ một dòng khoá theo
+> `paymentCode`. Muốn in "đã giảm 4.800đ" trên hoá đơn thì đọc `VoucherUsages` theo `paymentCode`.
+> Task này **cố ý không thêm cột** vào `Payment`: `Entities/Payment.cs` + `AppDbContext.Payment.cs`
+> là bàn giao của task dòng 33 (dựng theo uỷ quyền của Dăm) — sửa hình dạng bảng của người khác
+> phải bàn trước (⛔4). Nhóm cần chốt có nên đẩy `VoucherCode` + `DiscountAmount` lên thẳng
+> `Payments` cho tiện đối soát hay không — xem "Câu hỏi mở" cuối mục "Voucher".
 
 Luồng: backend sinh `paymentCode` (khoá chống trùng — A9), lưu `Payment` `status = 'Pending'`,
 gọi `MoMoGatewayService.CreatePaymentAsync` với `orderId = paymentCode` → trả `payUrl` cho FE.
@@ -3264,6 +3299,16 @@ trên trang cổng, kết quả biết được qua chữ ký ở Return URL/IPN
 - `resultCode = 0` → giao dịch `Success`: lưu `gatewayTransactionId` = `transId`, `paidAt` =
   `responseTime`, rồi gọi service **phát hành vé** (mục "Vé điện tử" trên). `resultCode != 0` →
   `Failed` kèm `message` của cổng.
+- **Tiền về thì mới tiêu thụ voucher** — cùng nhánh `resultCode = 0` (và nhánh tương ứng của job
+  đối soát), sau khi đã lật `Success`, gọi `IVoucherRedemptionService.RedeemAsync` với
+  `paymentCode` của giao dịch. Giao dịch không có mã thì bỏ qua bước này.
+  - ⚠️ **Kết quả bước này KHÔNG được làm hỏng callback.** Cổng chỉ chờ 15 giây và gửi lại nếu ta
+    trả lỗi; mà giao dịch đã `Success` trong CSDL rồi thì lần gửi lại không chạy lại bước này (nhánh
+    idempotency ở trên đã chặn). Nên hỏng ở đây chỉ được **ghi log rồi vẫn trả 204** — bản ghi
+    `VoucherUsages` thiếu thì vá được bằng tay, còn tiền thì không.
+  - `RedeemAsync` **idempotent** theo `paymentCode`: gọi lại (callback trùng, job đối soát chạy
+    đè) trả đúng bản ghi cũ, **không** cộng `usedCount` lần hai. Nhờ vậy hai đường này không cần
+    phối hợp với nhau.
 - Trả **204 No Content trong 15 giây** — yêu cầu của MoMo; trả lời chậm thì MoMo gửi lại, mà
   gửi lại là trường hợp idempotency (dưới) phải nuốt gọn.
 - Idempotency (task của Hoàng): callback trùng / gửi lại → kiểm tra `Payment` đã `Success` hay
@@ -3448,3 +3493,277 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > `ProviderResponseCode` **cố ý để trống** thay vì bịa một con số. Đây là điểm KHÁC MoMo
 > (`resultCode`) và VNPay (`vnp_ResponseCode`): đừng đi tìm trường trạng thái trong `data`. Cần mã
 > kết quả thì job đối soát gọi `QueryOrderAsync` (`return_code` 1/2/3).
+
+## Voucher — `/vouchers`
+
+> Story 18 *"Quản lý Voucher"*. Bảng phân công Sprint 3 tách story này thành năm dòng; mục này chốt
+> phần **kiểm tra và áp dụng vào đơn hàng**:
+>
+> | Dòng | Việc | Người | Trạng thái |
+> |---|---|---|---|
+> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | Chờ Dăm sinh migration |
+> | 51 | API CRUD voucher | Trần Trung Hiếu | Chưa làm — dùng chung bề mặt `api/vouchers` |
+> | **52** | **API kiểm tra và áp dụng voucher vào đơn hàng** | **Nguyễn Duy Kiên** | ✅ mục này |
+> | 53 | Validate điều kiện voucher: thời gian, tuyến, giá trị đơn tối thiểu | Phùng Duy Hoàng | ⚠️ **gộp vào dòng 52** — xem dưới |
+> | 54 | API thống kê hiệu quả voucher | Nguyễn Duy Kiên | Chưa làm — nền đã dựng, xem "Nền cho dòng 54" |
+>
+> ⚠️ **Dòng 53 đã nằm trọn trong dòng 52.** "Kiểm tra voucher" và "validate điều kiện voucher" là
+> **một việc**: không có phần kiểm tra thì không có gì để áp dụng, và không có luật nào để kiểm thì
+> endpoint kiểm tra trả về cái gì? Bảng phân công tách đôi vì hai dòng thuộc hai người, nhưng phần
+> ruột chỉ có một. Nhánh này làm trọn cả hai — **Phùng Duy Hoàng dừng dòng 53** để khỏi viết trùng.
+> (Cùng dạng trùng lặp đã gặp ở các dòng 14/16, 15 với 4/18/20, 29/30.)
+
+> ⚠️ **Bảng `Vouchers` / `VoucherUsages` CHƯA migrate.** Entity + cấu hình EF đã có (task dòng 52 —
+> Nguyễn Duy Kiên, Dăm đã cho phép dựng bảng), còn lại là sinh migration — việc của **Vàng Thị
+> Dăm**: xem `docs/27-huong-dan-migrate-vouchers.md`. Endpoint dưới đây chạy được trên CSDL thật
+> ngay khi migration xong; test tích hợp của dự án chạy trên EF InMemory nên **không chờ migration**.
+
+### Entity `Voucher`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | guid | |
+| `code` | varchar(20) | **Duy nhất toàn hệ thống**, lưu CHỮ HOA. Mọi đường đọc/ghi đều chuẩn hoá `trim().ToUpperInvariant()` trước khi tra — CSDL chặn bằng unique index |
+| `name` | varchar(200) | Tên hiển thị ở màn quản lý |
+| `discountType` | varchar(20) | `'Percent' \| 'FixedAmount'` |
+| `discountValue` | numeric(12,2) | `Percent`: 1–100. `FixedAmount`: số tiền VND |
+| `minOrderValue` | numeric(12,2) | Giá trị đơn tối thiểu; `0` = không yêu cầu. So với **tổng tiền TRƯỚC giảm giá** |
+| `maxDiscount` | numeric(12,2) nullable | Trần giảm; chỉ có nghĩa khi `Percent`. `null` = không trần |
+| `routeId` | guid **nullable** | 🔹 điều kiện "tuyến" của dòng 53: `null` = **mọi tuyến**, có giá trị = chỉ tuyến đó |
+| `quantity` | int | Tổng số lượt phát hành |
+| `usedCount` | int | Số lượt đã tiêu thụ. **Backend tăng, FE chỉ đọc** — FE gửi lên cũng bị bỏ qua |
+| `validFrom` | timestamptz | Bắt đầu hiệu lực — **tính cả hai đầu mút** (`>=`) |
+| `validUntil` | timestamptz | Kết thúc hiệu lực — **tính cả hai đầu mút** (`<=`) |
+| `status` | varchar(20) | `'Active' \| 'Inactive'` |
+| `createdAt` / `updatedAt` | timestamptz / nullable | Bảng có sửa (A4) nên có `updatedAt` |
+
+Hình dạng này khớp bản nháp FE `frontend/src/api/voucherApi.ts` (Hạnh) **trừ `routeId`** — bản nháp
+đó chưa có trường tuyến, nên màn quản lý voucher hiện không nhập được điều kiện tuyến. FE cần bổ
+sung; đây là việc của màn quản lý (dòng 51/56–58), không phải của endpoint kiểm tra.
+
+### Entity `VoucherUsage`
+
+Bản ghi **một lượt tiêu thụ** voucher — mỗi giao dịch thành công có mã tối đa một dòng. Bảng chỉ
+GHI THÊM: **không** `updatedAt` (A4), **không** `isDeleted`.
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | guid | |
+| `voucherId` | guid | FK → `Vouchers`, **Restrict** |
+| `userId` | guid | FK → `Users`, **Restrict** — ai đã dùng |
+| `paymentCode` | varchar(64) | Mã giao dịch (`Payments.PaymentCode`) — **duy nhất**, vừa là khoá nghiệp vụ của đơn vừa là **chốt idempotency** |
+| `orderAmount` | numeric(12,2) | Tổng tiền TRƯỚC giảm, ảnh chụp lúc áp |
+| `discountAmount` | numeric(12,2) | Số tiền đã giảm |
+| `createdAt` | timestamptz | |
+
+> 📌 **Vì sao `paymentCode` là cột trần, KHÔNG phải FK sang `Payments`.** Bảng `Payments` cũng **chưa
+> migrate** (xem mục "Thanh toán" trên: Dăm còn nợ `Sprint3_Payments`). Đặt FK bây giờ là buộc
+> migration `Vouchers` phải chạy **sau** migration `Payments` — một ràng buộc thứ tự giữa hai việc
+> của hai người, đổi lấy đúng một cột. Repo đã có sẵn lối này: `Payment.TicketId` cũng là cột trần
+> chờ bảng `Tickets`. Khi `Payments` migrate xong thì nối FK bằng một migration sau, dễ hơn nhiều so
+> với việc gỡ một FK sai thứ tự.
+
+### Endpoints
+
+| Method | Endpoint | Task | Trạng thái |
+|---|---|---|---|
+| POST | `/vouchers/validate` | *"API kiểm tra và áp dụng voucher vào đơn hàng"* — Nguyễn Duy Kiên (dòng 52 + 53) | ✅ mục này |
+| GET | `/vouchers` | Danh sách + lọc (màn quản trị — `voucherApi.list`) | Chưa làm — dòng 51 (Hiếu) |
+| POST | `/vouchers` | Thêm voucher | Chưa làm — dòng 51 (Hiếu) |
+| PUT | `/vouchers/{id}` | Sửa voucher | Chưa làm — dòng 51 (Hiếu) |
+| PATCH | `/vouchers/{id}/status` | Bật/tắt áp dụng | Chưa làm — dòng 51 (Hiếu) |
+| GET | `/vouchers/statistics` | *"API thống kê hiệu quả voucher"* — Nguyễn Duy Kiên | Chưa làm — dòng 54 |
+| — | *áp dụng vào đơn* | Phần "áp dụng" của dòng 52 | ✅ **không phải endpoint riêng** — service nội bộ, `POST /payments` gọi, xem dưới |
+
+Bốn dòng của dòng 51 và `POST /vouchers/validate` **dùng chung bề mặt `api/vouchers` nhưng không
+tranh chấp**: `validate` là một đoạn đường dẫn cố định, `{id}` là tham số, còn `POST /` ở gốc chỉ
+đụng `POST /vouchers/validate` nếu ai đó đặt tên đoạn là `validate` — đừng đặt. Mỗi task một file
+controller, cùng lối `api/seat-holds` và `api/trips` đã làm.
+
+#### `POST /vouchers/validate` — kiểm tra mã và tính số tiền giảm
+
+Màn thanh toán gọi endpoint này **trong lúc khách gõ mã** (debounce) để hiện số tiền được giảm.
+
+```json
+// ValidateVoucherRequest — body
+{
+  "code": "SUMMER10",
+  "tripId": "b7c1d2e3-0000-0000-0000-000000000000",
+  "orderAmount": 150000
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `code` | ✅ | 2–20 ký tự. Backend `Trim().ToUpperInvariant()` trước khi tra — gõ `summer10` vẫn ra |
+| `tripId` | ✅ | Chuyến tồn tại. Dùng để tra `Trip.RouteId` cho điều kiện tuyến. **Không tồn tại → 404** (lỗi phía gọi, KHÁC hẳn "voucher bị từ chối") |
+| `orderAmount` | ✅ | Tổng tiền **trước** giảm giá; `0` … `9999999999.99` |
+
+```json
+// 200 — mã dùng được
+{
+  "valid": true,
+  "reasonCode": null,
+  "message": null,
+  "voucherId": "9a1b2c3d-0000-0000-0000-000000000000",
+  "code": "SUMMER10",
+  "discountType": "Percent",
+  "discountAmount": 15000,
+  "finalAmount": 135000,
+  "maxDiscount": 20000
+}
+```
+
+```json
+// 200 — mã KHÔNG dùng được (vẫn là 200, xem vì sao bên dưới)
+{
+  "valid": false,
+  "reasonCode": "BelowMinOrder",
+  "message": "Đơn hàng chưa đạt giá trị tối thiểu 100.000đ",
+  "voucherId": "3f4e5d6c-0000-0000-0000-000000000000",
+  "code": "FIX20K",
+  "discountType": "FixedAmount",
+  "discountAmount": 0,
+  "finalAmount": 80000,
+  "maxDiscount": null
+}
+```
+
+> 📌 **Vì sao mã bị từ chối trả `200` kèm `valid: false`, KHÔNG phải 400/404/409.** Màn thanh toán
+> gọi endpoint này **mỗi lần khách gõ**. "Mã này không dùng được" là **câu trả lời** của một câu hỏi
+> hợp lệ, không phải request hỏng — trả 4xx sẽ buộc FE phân nhánh theo HTTP status cho một luồng
+> hoàn toàn bình thường, làm ngập log lỗi và lệch với cách `GET /payments/{paymentCode}` trả 200 kèm
+> `status: 'Failed'`. Chỉ **body sai khuôn** (thiếu `code`/`tripId`/`orderAmount`, `code` ngoài
+> 2–20 ký tự) mới là **400** theo khuôn `{ message, errors }`; `tripId` không tồn tại là **404**.
+>
+> 🔴 **Ở `POST /payments` thì ngược lại — mã không hợp lệ là 409.** Ở đó khách đã **bấm xác nhận**,
+> nên âm thầm thu đủ tiền là lỗi nặng; xem 🔴 ở mục "Thanh toán".
+
+**Bảng mã từ chối (`reasonCode`)** — hằng trong `Dtos/Vouchers/VoucherReasonCodes.cs`. FE **dịch
+theo `reasonCode`**, KHÔNG so chuỗi `message` (câu chữ sẽ còn đổi):
+
+| `reasonCode` | Điều kiện | `message` |
+|---|---|---|
+| `NotFound` | Không có voucher với `code` (sau chuẩn hoá HOA) | Mã voucher không tồn tại |
+| `Inactive` | `status = 'Inactive'` | Mã voucher đã ngừng áp dụng |
+| `NotStarted` | `now < validFrom` | Mã voucher chưa tới thời gian áp dụng |
+| `Expired` | `now > validUntil` | Mã voucher đã hết hiệu lực |
+| `OutOfStock` | `usedCount >= quantity` | Mã voucher đã hết lượt sử dụng |
+| `WrongRoute` | `routeId != null && routeId != trip.routeId` | Mã voucher không áp dụng cho tuyến này |
+| `BelowMinOrder` | `orderAmount < minOrderValue` | Đơn hàng chưa đạt giá trị tối thiểu {minOrderValue}đ |
+
+**Thứ tự kiểm tra — thứ tự này LÀ một phần của hợp đồng**, vì câu trả về là điều kiện **đầu tiên**
+không thoả, nên nó quyết định câu khách nhìn thấy:
+
+```
+NotFound → Inactive → NotStarted → Expired → OutOfStock → WrongRoute → BelowMinOrder
+```
+
+> **Vì sao thứ tự này?** Năm điều kiện đầu là **sự thật tuyệt đối về voucher** — khách có sửa gì
+> trong giỏ hàng cũng không cứu được, nên hỏi trước. Hai điều kiện cuối **phụ thuộc giỏ hàng**, hỏi
+> sau. Trong nhóm tuyệt đối, `Inactive` đứng trước nhóm thời gian vì "ngừng áp dụng" là quyết định
+> hiện tại của người vận hành, mạnh hơn một mốc ngày có thể họ chưa xem lại. `OutOfStock` đứng
+> trước hai điều kiện giỏ hàng vì bảo khách "thêm 100.000đ nữa đi" cho một mã **đã hết lượt** là câu
+> sai đường tệ nhất có thể trả. Trong nhóm giỏ hàng, tuyến trước giá trị đơn: tuyến là **dùng được
+> hay không** (mã vốn không thuộc chuyến này), còn giá trị đơn là **gợi ý khách làm được gì đó**.
+
+**Cách tính tiền giảm** — chốt ở đây, không chỉ ở code:
+
+```
+Percent:      raw      = orderAmount * discountValue / 100
+              rounded  = Round(raw, 0, MidpointRounding.AwayFromZero)   // đồng nguyên
+              discount = maxDiscount != null ? Min(rounded, maxDiscount) : rounded
+FixedAmount:  discount = discountValue
+
+Cả hai:       discount    = Min(discount, orderAmount)   // không bao giờ âm
+              finalAmount = orderAmount - discount       // >= 0
+```
+
+> 🔴 **Làm tròn về ĐỒNG NGUYÊN, không giữ phần lẻ.** VND không có đơn vị lẻ, và quan trọng hơn:
+> `PaymentInitiationRequest.Amount` là `long` — số gửi lên cổng buộc phải nguyên. Giữ 2 số thập
+> phân ở đây thì `amount` gửi cổng (đã làm tròn) **không khớp** `payment.Amount` trong CSDL, và
+> `PaymentSettlementService.SettleAsync` so `payment.Amount != callback.Amount` sẽ **404 mọi
+> callback** — không giao dịch nào chốt được. Làm tròn ngay tại đây giữ cho
+> `originalAmount - discountAmount == amount` đúng tuyệt đối, tức hoá đơn cộng lại khớp.
+
+> 📌 **`Min(discount, orderAmount)` là dòng bắt buộc.** Không có nó thì một mã `FixedAmount`
+> 50.000đ áp lên đơn 20.000đ cho ra `finalAmount = -30.000` — số tiền âm chảy thẳng xuống cổng.
+> `finalAmount` **không bao giờ âm**, và `discountAmount` không bao giờ lớn hơn đơn.
+
+> ⚠️ **`validate` là XEM TRƯỚC, không phải CHỐT.** Giữa lúc khách thấy "giảm 15.000đ" và lúc bấm
+> xác nhận, mã có thể hết lượt (người khác vừa dùng) hoặc hết hạn. Số tiền giảm chỉ được **chốt
+> lại** ở tầng thanh toán. FE **không** được coi kết quả `validate` là bảo đảm.
+
+#### Áp dụng voucher vào giao dịch — phần "áp dụng" của dòng 52
+
+**Không có endpoint riêng.** "Áp dụng vào đơn hàng" xảy ra ở hai chỗ, cả hai đều **không phải**
+endpoint mới:
+
+| Chỗ | Việc | Ai gọi |
+|---|---|---|
+| `POST /payments` lúc **tạo** giao dịch | Kiểm lại voucher, trừ vào `total` để ra `amount` gửi cổng. Mã không hợp lệ → **409** | Endpoint của Hiếu |
+| Callback/job đối soát lúc tiền **về** (`Success`) | Gọi `IVoucherRedemptionService.RedeemAsync` để ghi `VoucherUsages` + tăng `usedCount` | Endpoint của Hiếu |
+
+Hai thời điểm **khác nhau và không được gộp**: lúc tạo giao dịch thì voucher mới chỉ được **giữ
+chỗ** (khách còn có thể bỏ ngang), chỉ khi tiền về mới thực sự **tiêu thụ**. Gộp lại thì mọi giao
+dịch khách bỏ ngang đều ăn mất một lượt voucher.
+
+`RedeemAsync(paymentCode, voucherCode, ...)`:
+
+1. **Idempotent theo `paymentCode`** — đã có `VoucherUsage` cùng `paymentCode` thì trả bản ghi cũ,
+   **không** tăng `usedCount`. Đây là chốt cho callback trùng của cổng (MoMo gửi lại tới khi nhận
+   204) và cho job đối soát chạy đè.
+2. **Kiểm lại từ đầu** (gọi lại `IVoucherValidationService`) — không tin kết quả `validate` trước đó,
+   không tin con số FE gửi lên.
+3. Ghi `VoucherUsage` + tăng `Vouchers.UsedCount` trong **một** `SaveChangesAsync`.
+
+Kết quả: `Ok` (kể cả lượt gửi lại) · `Conflict` khi mã vừa hết lượt hoặc vừa bị người khác dùng.
+
+### Chống tiêu thụ quá `quantity` — hai lớp
+
+| Lớp | Cơ chế | Chặn được gì |
+|---|---|---|
+| Kiểm trong service | `usedCount >= quantity` → `OutOfStock`; lượt ghi cũng kiểm lại | Đường đi thông thường |
+| **Concurrency token `xmin`** trên `Vouchers` | EF thêm `WHERE xmin = …` vào câu `UPDATE`; lượt thua nhận `DbUpdateConcurrencyException` → **409** | Hai lượt áp dụng **song song** cùng đọc `usedCount = quantity - 1` rồi cùng ghi |
+
+`xmin` là **cột hệ thống của PostgreSQL**, không sinh cột mới trong migration — cùng đúng một dòng
+mà `AppDbContext.Payment.cs` đã dùng cho nhánh đua callback trùng (dòng 33, Hoàng). Ở đây nó chặn
+đúng ca: hai khách cùng bấm xác nhận lượt voucher **cuối cùng**.
+
+> ⚠️ **Provider InMemory BỎ QUA concurrency token** — bộ test của dự án **không chứng minh được**
+> chốt này, đúng như mục "Giữ chỗ" đã ghi cho partial unique index chống trùng ghế. Test chỉ ghim
+> được **hành vi của service** (thấy `Conflict` thì không ghi gì); phần thật sự đua nhau phải tin
+> vào PostgreSQL. Đừng đọc "test xanh" thành "đã chống được đua".
+
+> 📌 **Vì sao KHÔNG kẹp `usedCount <= quantity` bằng check constraint.** Đó sẽ là check constraint
+> **đầu tiên** của dự án (hiện có 0) — một lối mới cho cả nhóm, đổi lấy một ràng buộc mà `xmin` đã
+> phủ. Muốn thêm thì bàn ở tầng nhóm, không tự ý đưa vào migration.
+
+### Nền cho dòng 54 — API thống kê hiệu quả voucher
+
+Chưa làm, nhưng `VoucherUsages` đã dựng sẵn đúng thứ dòng 54 cần: mỗi lượt tiêu thụ là một dòng có
+`voucherId`, `orderAmount`, `discountAmount`, `createdAt` → đếm lượt, cộng tiền giảm, tính tỉ lệ tiêu
+thụ (`usedCount / quantity`) đều là truy vấn gộp trên bảng này, không phải sửa hình dạng. Index
+`(VoucherId, CreatedAt)` đã có sẵn cho đúng truy vấn đó.
+
+### Câu hỏi mở cho nhóm — chưa chốt, chưa cài
+
+| Câu hỏi | Hiện trạng |
+|---|---|
+| **Mỗi khách chỉ dùng một lần?** Luật "mỗi người một lượt" chưa có trong bảng phân công, bản nháp FE cũng chỉ có `quantity`/`usedCount` **toàn cục** (không phải mỗi người) | **Chưa cài.** `VoucherUsage.UserId` đã ghi sẵn nên thêm luật này sau **không phải migrate lại** — chỉ thêm một điều kiện `EXISTS` vào chuỗi kiểm tra |
+| **Một đơn dùng được nhiều mã?** Hợp đồng và bản nháp FE đều là **một** `code` mỗi đơn | Một mã. `VoucherUsages` nhiều dòng cho một `paymentCode` là chuyện chưa chốt — unique index trên `paymentCode` đang **chặn cứng** điều đó |
+| **Đẩy `VoucherCode` + `DiscountAmount` lên `Payments`?** | Chưa — xem 📌 ở mục "Thanh toán". Hiện đọc qua `VoucherUsages` |
+| **Voucher sinh từ đâu?** Bảng phân công chỉ có CRUD tay (dòng 51); không có story nào cho mã tự sinh hay phát theo chiến dịch | Ngoài phạm vi — CRUD tay |
+| **US 18 thuộc sprint nào?** Bảng tính xếp **Sprint 3**; `docs/02-sprint-roadmap.md` lại đề xuất chuyển US 18 từ Sprint 5 sang **Sprint 4**; quy ước A9 xếp nhóm bảng này ở Sprint 4 | Nhóm cần chốt **một** bảng phân công (cùng dạng xung đột đã ghi ở mục "Thanh toán") |
+
+### Việc của Dăm — sinh migration
+
+Đúng **một** lệnh, cùng khuôn `docs/24-huong-dan-migrate-feedbacks.md`:
+
+```bash
+cd backend/SmartBus.Api
+dotnet ef migrations add Sprint3_Vouchers_VoucherUsages
+```
+
+Checklist soát migration, danh sách file đã có sẵn, và các chốt cần đối chiếu: xem
+**`docs/27-huong-dan-migrate-vouchers.md`**.
