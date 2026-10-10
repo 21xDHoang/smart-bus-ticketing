@@ -29,6 +29,14 @@
     "PaymentUrl": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
   },
 
+  "ZaloPay": {
+    "//": "Cổng thanh toán ZaloPay (US 6). Ba giá trị đối tác do ZaloPay cấp — KHÔNG commit giá trị thật lên repo public (luật 2). Nên đặt qua dotnet user-secrets hoặc biến môi trường (ZaloPay__AppId, ZaloPay__Key1, ZaloPay__Key2) thay vì để trong file này; để đây chỉ khi máy local riêng. ZaloPay dùng HAI khoá cho HAI CHIỀU: Key1 ký request ta gửi đi, Key2 xác thực callback cổng gửi về — đừng dùng lẫn. AppId phải là số nguyên (ví dụ 2553), không có số 0 thừa. Đăng ký tài khoản + lấy khoá ở docs.zalopay.vn (sandbox sb-openapi.zalopay.vn).",
+    "AppId": "APP_ID_ZALOPAY_CAP_VAO_DAY",
+    "Key1": "KHOA_KY_REQUEST_ZALOPAY_CAP_VAO_DAY",
+    "Key2": "KHOA_XAC_THUC_CALLBACK_ZALOPAY_CAP_VAO_DAY",
+    "Endpoint": "https://sb-openapi.zalopay.vn"
+  },
+
   "Logging": {
     "LogLevel": {
       "Default": "Information",

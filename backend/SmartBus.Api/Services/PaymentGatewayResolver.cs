@@ -28,6 +28,9 @@ public class PaymentGatewayResolver : IPaymentGatewayResolver
         {
             [PaymentProviderCodes.MoMo] = typeof(MoMoGatewayAdapter),
             [PaymentProviderCodes.VnPay] = typeof(VnPayGatewayAdapter),
+            [PaymentProviderCodes.ZaloPay] = typeof(ZaloPayGatewayAdapter),
+            // BankCard KHÔNG phải một cổng riêng: nó là kênh thẻ của VNPay (xem BankCardGatewayAdapter).
+            [PaymentProviderCodes.BankCard] = typeof(BankCardGatewayAdapter),
         };
 
     private readonly IServiceProvider _services;
