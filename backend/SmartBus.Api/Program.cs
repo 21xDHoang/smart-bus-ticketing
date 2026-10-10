@@ -395,6 +395,19 @@ builder.Services.AddScoped<IPaymentSettlementService, PaymentSettlementService>(
 builder.Services.AddScoped<IVoucherValidationService, VoucherValidationService>();
 builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>();
 
+// Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
+// cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
+// Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
+// Service THUẦN ký/kiểm, không chạm CSDL: bên phát hành vé (Hiếu) gọi GenerateCode rồi tự lưu và tự
+// xử lý lượt đâm unique index (gọi lại là có mã mới — nonce); endpoint soát vé dòng 43 / Sprint 4
+// dòng 15 gọi TryVerify trước khi tra bảng. Khoá ký KHÔNG có mặc định trong code (luật 2 — repo
+// PUBLIC): đặt qua dotnet user-secrets hoặc biến môi trường TicketQr__SigningKey; mục "TicketQr"
+// trong appsettings.Development.json.example chỉ là khuôn để điền.
+// Đặt ở CUỐI danh sách đăng ký (sau khối voucher, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<TicketQrOptions>(builder.Configuration.GetSection(TicketQrOptions.SectionName));
+builder.Services.AddScoped<ITicketQrService, TicketQrService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
