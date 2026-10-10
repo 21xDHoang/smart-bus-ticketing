@@ -14,6 +14,14 @@
     "RefreshTokenDays": 7
   },
 
+  "MoMo": {
+    "//": "Cổng thanh toán MoMo (US 6). Ba giá trị đối tác do MoMo cấp — KHÔNG commit giá trị thật lên repo public (luật 2). Nên đặt qua dotnet user-secrets hoặc biến môi trường (MoMo__PartnerCode, MoMo__AccessKey, MoMo__SecretKey) thay vì để trong file này; để đây chỉ khi máy local riêng. Đăng ký tài khoản + lấy khoá ở developers.momo.vn (sandbox).",
+    "PartnerCode": "MA_DOI_TAC_MOMO_CAP_VAO_DAY",
+    "AccessKey": "ACCESS_KEY_MOMO_CAP_VAO_DAY",
+    "SecretKey": "SECRET_KEY_MOMO_CAP_VAO_DAY",
+    "Endpoint": "https://test-payment.momo.vn"
+  },
+
   "Logging": {
     "LogLevel": {
       "Default": "Information",

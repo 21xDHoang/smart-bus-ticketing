@@ -2825,3 +2825,204 @@ trả về.
 | `content` trống hoặc quá 2000 ký tự | 400 | `errors.content` |
 | `rating` ngoài khoảng 1..5 | 400 | `errors.rating` |
 | `attachmentUrl` quá 2000 ký tự | 400 | `errors.attachmentUrl` |
+
+## Vé điện tử — `/tickets`
+
+> Story 4 *"Vé điện tử QR"*. ⚠️ **Bảng `Tickets` + `TicketQRCodes` CHƯA migrate** (task
+> *"Migrate bảng Tickets, TicketQRCodes"* — Vàng Thị Dăm, Sprint 3). Mục này chốt hình dạng để
+> Dăm và frontend (`frontend/src/api/ticketApi.ts` — Băng/Hạnh đã viết bản nháp mock) cùng dựa
+> vào; endpoint sẽ có khi migration xong.
+
+### Hình dạng `Ticket` — chốt theo bản nháp FE
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `code` | `string` | Mã vé = nội dung mã QR soát vé. **Duy nhất toàn hệ thống** (A6) |
+| `routeCode` | `string` | Mã tuyến hiển thị — `"01"`, `"B10"` |
+| `routeName` | `string` | Tên tuyến |
+| `origin` / `destination` | `string` | Tên điểm đầu / điểm cuối |
+| `departureTime` | `string` | Giờ khởi hành (ISO 8601) — căn cứ suy "hết hạn": chuyến đã đi mà chưa soát |
+| `seatNumber` | `string` | Số ghế đã chọn |
+| `boardingStopName` / `alightingStopName` | `string` | Tên trạm lên/xuống — lưu để hiển thị, không phải khoá nghiệp vụ (A8.1) |
+| `price` | `number` | Giá đã thanh toán (VND) — `numeric(12,2)` |
+| `status` | `string` | `"Paid"` / `"Used"` / `"Cancelled"` — do nghiệp vụ đặt (A3) |
+| `createdAt` | `string` | Thời điểm phát hành |
+| `usedAt` | `string \| null` | Thời điểm soát vé — chỉ khi `status = 'Used'` |
+
+### Endpoints
+
+| Method | Endpoint | Task | Trạng thái |
+|---|---|---|---|
+| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | Chưa làm — chờ bảng |
+| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | Chưa làm — chờ bảng |
+| — | *phát hành vé* | *"API phát hành vé điện tử sau khi thanh toán thành công"* — Trần Trung Hiếu | ⚠️ xem luồng dưới |
+
+### Phát hành vé sau khi thanh toán — KHÔNG phải endpoint riêng
+
+Đây là **service nội bộ**, gọi từ hai nơi khi giao dịch về `Success`: callback của cổng (IPN) và
+job đối soát (mục "Thanh toán" dưới). Mỗi lần gọi làm một chuỗi:
+
+1. Chống phát hành trùng: mỗi `paymentCode` chỉ phát hành **một lần** — kiểm tra trạng thái giao
+   dịch trước khi đổi (idempotency, task của Hoàng — xem mục Thanh toán).
+2. Sinh vé: tạo `Ticket` với `status = 'Paid'`, `code` = mã QR duy nhất — **service sinh mã QR là
+   task của Nguyễn Duy Kiên** (*"Service sinh mã QR duy nhất + ký số chống làm giả"*); nếu chưa có,
+   tạm dùng `Guid` để đứng vững khung luồng rồi nối service của Kiên sau.
+3. Chốt chỗ: lật `SeatHolds` của phiên sang `Confirmed` + ghi `SeatHoldLogs` `Action = 'Confirmed'`
+   (docs/26 §1) — đây là lúc ghế chính thức thuộc về vé.
+4. Trả vé để FE hiển thị QR ngay sau khi khách quay về từ cổng.
+
+> **Vì sao không phải endpoint?** Không có người gọi hợp lệ nào: hành khách không tự phát hành vé
+> (chỉ cổng mới biết tiền đã về), và FE không nên là nơi kích hoạt việc sinh vé — vé phải tồn tại
+> NGAY KHI giao dịch thành công, kể cả lúc khách tắt máy chưa quay về. Nơi duy nhất biết "tiền đã
+> về" là IPN và đối soát, cả hai đều ở backend.
+
+### Chống bán trùng ghế (A6)
+
+Partial unique index trên `Tickets` — cùng tinh thần index đang giữ `SeatHolds`:
+
+```sql
+CREATE UNIQUE INDEX "IX_Tickets_TripId_SeatId_Active"
+    ON "Tickets" ("TripId", "SeatId")
+    WHERE "Status" IN ('Held', 'Paid');
+```
+
+Vé đã huỷ (`Cancelled`) không chặn ghế. EF Core không sinh được partial index bằng attribute —
+phải viết trong `OnModelCreating` (file của Dăm).
+
+## Thanh toán — `/payments`
+
+> Story 6 *"Cổng thanh toán"*. ⚠️ **Bảng `Payments` CHƯA migrate** (task *"Migrate bảng Payments,
+> Transactions, PaymentLogs"* — Vàng Thị Dăm). Phần **client cổng MoMo đã có** trên backend
+> (`MoMoGatewayService` — Trần Trung Hiếu): tạo giao dịch, kiểm chữ ký IPN, hỏi trạng thái cổng —
+> test bằng HTTP giả, chưa đụng CSDL. Endpoint dưới đây sẽ có khi migration xong; mục này chốt
+> hình dạng để FE (`frontend/src/api/paymentApi.ts` — Băng đã code màn chờ, Hạnh đang code màn
+> chọn phương thức) dựa vào.
+
+> ⚠️ **Việc cần báo nhóm (xung đột tài liệu):** bảng phân công Sprint 3 giao migration Payments ở
+> Sprint 3, nhưng quy ước A9 xếp bảng `Payments` ở **Sprint 4**, và `Transactions`/`PaymentLogs`
+> **không nằm trong 20 bảng đóng băng của A9**. `docs/02-sprint-roadmap.md` cũng xếp story 4 và 6
+> vào Sprint 4. Nhóm cần chốt một bảng phân công duy nhất (cùng cách xử lý "Xung đột #7" trong
+> quy ước mục J). Mục này viết theo bảng phân công Sprint 3 mà Hiếu nhận.
+
+### Enum chốt — gộp hai bản nháp FE
+
+Hai bản nháp FE đang lệch nhau, chốt như sau (FE đổi theo mục này):
+
+| Khái niệm | Bản nháp Băng (màn chờ) | Bản nháp Hạnh (màn chọn) | **Chốt** | Vì sao |
+|---|---|---|---|---|
+| Mã phương thức | `'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'` | `'VnPay'\|'Momo'\|'ZaloPay'\|'BankTransfer'\|'Cash'` | **`'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'`** | Đúng danh sách US 6; `BankTransfer`/`Cash` không có cổng nào triển khai trong dự án; viết hoa CamelCase đúng A3 |
+| Trạng thái giao dịch | `'Pending'\|'Success'\|'Failed'` | `'Paid'` | **`'Pending'\|'Success'\|'Failed'`** | Khớp màn chờ: giao dịch có trạng thái trung gian Pending; `Paid` là trạng thái của **vé**, không phải giao dịch |
+| Khoá hỏi trạng thái | `paymentCode` | `transactionId` | **`paymentCode`** (nội bộ) + **`gatewayTransactionId`** (của cổng) | Cần cả hai: mã nội bộ là khoá chống trùng (A9), mã cổng để đối soát; Băng đã code đủ hai trường |
+
+### Endpoints
+
+| Method | Endpoint | Task | Trạng thái |
+|---|---|---|---|
+| GET | `/payment-methods` | Danh sách phương thức đang mở — chưa có chủ trong bảng phân công (gợi ý: thuộc phần adapter của Hoàng, màn của Hạnh) | Chưa làm |
+| POST | `/payments` | Tạo giao dịch + gọi cổng — Trần Trung Hiếu | Chờ bảng |
+| POST | `/payments/momo/callback` | IPN MoMo — Trần Trung Hiếu | Chờ bảng |
+| GET | `/payments/{paymentCode}` | *"API kiểm tra trạng thái giao dịch"* — Trần Trung Hiếu | Chờ bảng |
+| — | *job đối soát* | *"đối soát tự động"* — Trần Trung Hiếu | Chờ bảng — chốt dưới |
+
+#### `POST /payments` — tạo giao dịch (đã có client cổng, chờ bảng để lưu)
+
+```json
+// CreatePaymentRequest — body
+{
+  "methodCode": "MoMo",
+  "tripId": "b7c1d2e3-0000-0000-0000-000000000000",
+  "seatNumbers": ["A1", "A2"],
+  "total": 48000
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `methodCode` | ✅ | `'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'` — chưa làm cổng nào thì trả 400 "chưa mở" |
+| `tripId` | ✅ | Chuyến tồn tại |
+| `seatNumbers` | ✅ | Các ghế đang giữ thuộc phiên của người gọi — chỉ để lưu vết, không phải khoá nghiệp vụ |
+| `total` | ✅ | Khớp tổng giá các ghế đã chọn; từ 10.000 đến 50.000.000 (trần của MoMo) |
+
+```json
+// 200 — CreatePaymentResult: FE dùng payUrl để chuyển khách sang MoMo, rồi poll GET /payments/{paymentCode}
+{
+  "paymentCode": "PM-8f3a2c1d",
+  "amount": 48000,
+  "method": "MoMo",
+  "status": "Pending",
+  "payUrl": "https://test-payment.momo.vn/v2/gateway/pay?t=..."
+}
+```
+
+Luồng: backend sinh `paymentCode` (khoá chống trùng — A9), lưu `Payment` `status = 'Pending'`,
+gọi `MoMoGatewayService.CreatePaymentAsync` với `orderId = paymentCode` → trả `payUrl` cho FE.
+Cổng từ chối (`resultCode != 0`) → **502** kèm `message` của cổng (lỗi phía cổng, không phải lỗi
+dữ liệu gửi lên).
+
+#### `POST /payments/momo/callback` — IPN của MoMo
+
+- **CÔNG KHAI** (không `[Authorize]`): người gọi là máy chủ MoMo, không phải người dùng đăng nhập
+  — tin request chỉ dựa trên **chữ ký**, không dựa trên token.
+- Hai kiểm tra bắt buộc của tài liệu MoMo, theo đúng thứ tự:
+  1. **Chữ ký** `MoMoGatewayService.IsValidCallback` (HMAC-SHA256, so sánh hằng thời gian) —
+     sai → **400**.
+  2. **Đối chiếu bảng Payments**: `partnerCode`/`orderId`/`amount` khớp bản ghi `Pending` —
+     lệch hoặc không tìm thấy → **404** (không xác nhận sự tồn tại cho người ngoài).
+- `resultCode = 0` → giao dịch `Success`: lưu `gatewayTransactionId` = `transId`, `paidAt` =
+  `responseTime`, rồi gọi service **phát hành vé** (mục "Vé điện tử" trên). `resultCode != 0` →
+  `Failed` kèm `message` của cổng.
+- Trả **204 No Content trong 15 giây** — yêu cầu của MoMo; trả lời chậm thì MoMo gửi lại, mà
+  gửi lại là trường hợp idempotency (dưới) phải nuốt gọn.
+- Idempotency (task của Hoàng): callback trùng / gửi lại → kiểm tra `Payment` đã `Success` hay
+  `Failed` rồi thì **bỏ qua, vẫn trả 204** — không trừ tiền 2 lần, không phát hành vé 2 lần.
+  Chốt CSDL: `paymentCode` unique trên `Payments` + kiểm trạng thái trước khi đổi.
+
+#### `GET /payments/{paymentCode}` — kiểm tra trạng thái giao dịch (task "API kiểm tra trạng thái giao dịch")
+
+Khớp đúng bản nháp Băng đã code (`PaymentStatusResult`):
+
+```json
+// 200
+{
+  "paymentCode": "PM-8f3a2c1d",
+  "amount": 48000,
+  "method": "MoMo",
+  "status": "Pending",
+  "paidAt": null,
+  "gatewayTransactionId": null,
+  "message": null
+}
+```
+
+- Yêu cầu đăng nhập, chỉ chủ giao dịch xem được (điều kiện `UserId` trong truy vấn — phiên/giao
+  dịch của người khác trả **404**, cùng lối `/seat-holds/{sessionCode}`).
+- `status` chỉ lật qua **callback hoặc job đối soát** — endpoint này là cửa sổ đọc, không tự hỏi
+  cổng (hỏi cổng là việc của job, không phải của từng lần poll của FE).
+- Màn chờ poll mỗi 3 giây, tự hết thời gian chờ sau 60 giây — timeout là khái niệm PHÍA FRONTEND,
+  không có trạng thái "Timeout" trong CSDL.
+
+#### Job đối soát tự động (task "đối soát tự động")
+
+IPN có thể lọt mất (mạng nghẽn, app restart đúng lúc callback bay tới). Job nền — cùng khuôn
+`SeatHoldExpiryBackgroundService` — quét `Payments` còn `Pending` **quá 5 phút**, gọi
+`MoMoGatewayService.QueryTransactionAsync(orderId = paymentCode)`:
+
+- `resultCode = 0` → lật `Success`, lưu `transId`, phát hành vé — y hệt nhánh IPN thành công.
+- `resultCode != 0` → lật `Failed` kèm `message` của cổng.
+- Cổng không trả lời được → bỏ qua lượt này, lượt sau quét tiếp (không đổi trạng thái — không
+  biết thì không đoán).
+
+| Chốt | Giá trị | Vì sao |
+|---|---|---|
+| Nhịp quét | **1 phút** | Khách ngồi màn chờ tối đa 60 giây rồi bỏ cuộc — đối soát chậm hơn một nhịp là bắt khách bỏ cuộc oan |
+| Ngưỡng quá hạn | **5 phút** | IPN bình thường về trong vài giây; chờ 5 phút tránh hỏi cổng trùng lúc IPN còn đang bay |
+| Hằng số trong code | có | Không phải tham số của story nào — cùng lối nhịp job quét hold hết hạn (docs/26 §4) |
+
+### Cấu hình cổng MoMo
+
+`MoMoOptions` đọc section `MoMo`: `PartnerCode` / `AccessKey` / `SecretKey` / `Endpoint` (mặc
+định sandbox `https://test-payment.momo.vn`). 🔴 **LUẬT 2 — repo PUBLIC**: ba giá trị đối tác đặt
+qua `dotnet user-secrets` hoặc biến môi trường (`MoMo__PartnerCode`…), KHÔNG commit giá trị thật;
+khuôn trống đã có trong `appsettings.Development.json.example`. Thiếu cấu hình thì lần gọi đầu
+tiên báo lỗi nêu đúng tên khoá thiếu.
