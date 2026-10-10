@@ -35,8 +35,19 @@ public sealed class AuditLogMiddleware
     ///
     /// Đánh đổi đã biết: đăng ký tài khoản nằm dưới /api/auth nên middleware không ghi. Việc tạo
     /// tài khoản qua màn hình quản trị (POST /api/admin/users) vẫn được ghi bình thường.
+    ///
+    /// /api/vouchers/validate: kiểm tra một mã voucher là phép ĐỌC thuần — không ghi gì xuống CSDL
+    /// (Nguyễn Duy Kiên, US 18, dòng 52). Dùng POST vì có body (code/tripId/orderAmount) chứ không
+    /// phải vì nó đổi dữ liệu, nên đây là ca "POST nhưng chỉ đọc" đầu tiên của dự án. Không loại trừ
+    /// thì mỗi lần khách gõ thêm một ký tự trong ô mã (màn thanh toán gọi có debounce) sinh một dòng
+    /// nhật ký Create giả, với Target là "Validate" — một bảng không tồn tại.
+    ///
+    /// ⚠️ Đây là cách xử lý RIÊNG LẺ, chưa phải quy ước. Cùng dạng còn có POST /api/tickets/validate
+    /// ở Sprint 4 (đã ghi ở <see cref="ResolveTableName"/>) và các endpoint hành động con của
+    /// /seat-holds. Nhóm cần chốt MỘT cách chung cho nhóm "POST chỉ đọc" trước khi Sprint 4 thêm
+    /// endpoint thứ ba, thay vì mỗi task tự thêm một dòng vào đây.
     /// </summary>
-    private static readonly PathString[] IgnoredPaths = [new("/api/auth")];
+    private static readonly PathString[] IgnoredPaths = [new("/api/auth"), new("/api/vouchers/validate")];
 
     private readonly RequestDelegate _next;
 

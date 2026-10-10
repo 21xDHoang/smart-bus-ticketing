@@ -25,6 +25,7 @@ public partial class AppDbContext : DbContext
         ConfigureFeedback(modelBuilder);
         ConfigureSeat(modelBuilder);
         ConfigurePayment(modelBuilder);
+        ConfigureVoucher(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -53,4 +54,9 @@ public partial class AppDbContext : DbContext
     // *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"* (Phùng Duy Hoàng).
     // Xem AppDbContext.Payment.cs.
     partial void ConfigurePayment(ModelBuilder modelBuilder);
+
+    // US 18 (Vouchers + VoucherUsages — dòng 50, Vàng Thị Dăm): dựng theo uỷ quyền cho task dòng 52
+    // *"API kiểm tra và áp dụng voucher vào đơn hàng"* (Nguyễn Duy Kiên). Migration còn thiếu — việc
+    // của Dăm, xem docs/27-huong-dan-migrate-vouchers.md. Xem AppDbContext.Voucher.cs.
+    partial void ConfigureVoucher(ModelBuilder modelBuilder);
 }
