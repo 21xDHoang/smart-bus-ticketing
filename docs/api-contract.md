@@ -949,9 +949,10 @@ Tham số query (đều không bắt buộc):
 > ✅ Backend đã có (`TripSearchController` — Phùng Duy Hoàng, story 1, task *"API trả về kết quả gồm
 > giá vé, giờ chạy, số ghế còn trống"*).
 >
-> **Đây là endpoint CÔNG KHAI duy nhất của mục `/trips`** — gọi không cần đăng nhập. Story 1 mở đầu
+> **Đây là một trong hai endpoint CÔNG KHAI của mục `/trips`** — gọi không cần đăng nhập. Story 1 mở đầu
 > bằng *"Là hành khách, tôi muốn tìm kiếm tuyến xe…"*: tra cứu chuyến là việc trước khi đăng nhập,
-> đăng nhập là bước của màn hình đặt vé. Mọi endpoint còn lại của mục này (kể cả `GET /trips` ngay
+> đăng nhập là bước của màn hình đặt vé. Endpoint công khai còn lại là `GET /trips/{id}/seats` (sơ
+> đồ ghế — story 2). Mọi endpoint khác của mục này (kể cả `GET /trips` ngay
 > trên) đều yêu cầu `Admin`/`Manager`.
 >
 > Endpoint trả lời câu hỏi *"tuyến này, trong khoảng ngày này, có những chuyến nào — giá bao nhiêu,
@@ -1146,6 +1147,93 @@ cùng — lặp lại ở từng dòng chỉ làm response phình ra mà không 
 > **Vì sao KHÔNG trả `seatsRemaining` (số ghế còn trống)?** Màn hình điều hành đọc thời gian biểu,
 > không bán vé — giá và ghế trống là chuyện của màn hình tra cứu dành cho hành khách, đã có ở
 > `GET /trips/search` (story 1, Phùng Duy Hoàng). Màn hình cần giá/ghế thì gọi endpoint đó.
+
+#### `GET /trips/{id}/seats` — sơ đồ ghế theo chuyến + trạng thái từng ghế
+
+> ✅ Backend đã có (`TripSeatMapController` — Trần Trung Hiếu, story 2, task *"API lấy sơ đồ ghế
+> theo chuyến + trạng thái từng ghế"*).
+>
+> **Endpoint CÔNG KHAI thứ hai của mục `/trips`** — cùng lối `GET /trips/search`: hành khách xem sơ
+> đồ để chọn ghế trống **trước khi đăng nhập**, đăng nhập là bước của API giữ ghế (US 3). Đây là
+> nửa "đọc" của luồng chọn ghế; nửa "ghi" (giữ ghế / nhả ghế) là các task khác của Sprint 3.
+
+```json
+// TripSeatMapResponse — ví dụ GET /trips/a1c7f0e2-0000-0000-0000-000000000000/seats
+{
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "busType": "Xe buýt 45 chỗ",
+  "floors": 1,
+  "pricePerSeat": 7000,
+  "vipSurcharge": null,
+  "seats": [
+    {
+      "id": "5f9c2d31-0000-0000-0000-000000000000",
+      "seatNumber": "A1",
+      "floor": 1,
+      "rowIndex": 1,
+      "columnIndex": 1,
+      "seatType": "Vip",
+      "status": "Held",
+      "price": 7000
+    }
+  ]
+}
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `tripId` | `string` (GUID) | Khoá chuyến — lặp lại để màn hình không phải tự nhớ đang gọi cho chuyến nào |
+| `busType` | `string` | Loại xe của chuyến — "Xe buýt 45 chỗ" |
+| `floors` | `number` | Số tầng của sơ đồ (`SeatLayouts.NumberOfFloors`). Loại xe chưa có sơ đồ → `0` kèm `seats: []` |
+| `pricePerSeat` | `number` \| `null` | Giá vé phổ thông của tuyến (đồng) — cùng nguồn và cùng nghĩa với `price` của `GET /trips/search`. Tuyến chưa cấu hình giá → `null` |
+| `vipSurcharge` | `number` \| `null` | Phụ trội ghế VIP (đồng). **Hôm nay luôn `null`**: chưa có nguồn dữ liệu nào lưu phụ trội VIP — phần "giá theo ghế + tổng tiền tạm tính" là task của Dương Thị Hạnh, khi đó mới chốt con số này |
+| `seats[]` | mảng | Toàn bộ ghế của xe chạy chuyến — kể cả ghế đã bán / đang giữ (xem ghi chú "Vì sao" bên dưới) |
+
+Mỗi phần tử `seats[]`:
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá ghế (`Seats.Id`) — màn hình gửi lại cho API giữ ghế (US 3) |
+| `seatNumber` | `string` | Số ghế hiển thị — "A1"; xe hai tầng thêm tiền tố tầng "T2-A1" (quy cách mã ghế: docs/26-csdl-so-do-ghe.md §2) |
+| `floor` | `number` | Tầng của ghế, bắt đầu từ 1 |
+| `rowIndex` | `number` | Hàng trong tầng, 1 là hàng đầu |
+| `columnIndex` | `number` | Cột trong hàng, 1 là cột trái cùng |
+| `seatType` | `string` | `"Standard"` hoặc `"Vip"` |
+| `status` | `string` | `"Available"` / `"Held"` / `"Paid"` — suy ra theo CHUYẾN, xem quy tắc bên dưới |
+| `price` | `number` \| `null` | Giá ghế này = `pricePerSeat` + `vipSurcharge` khi ghế là VIP và phụ trội đã có. `pricePerSeat` là `null` → `price` cũng `null` |
+
+**Trạng thái ghế — suy ra ở tầng service, không phải cột của `Seats`:**
+
+- `Held` — có dòng `SeatHolds` (`TripId` = chuyến này, `SeatId` = ghế này) với `Status = Holding`.
+  Chỉ trạng thái này mới chặn ghế; hold đã `Expired` / `Released` / `Confirmed` không chặn.
+- `Paid` — ghế đã bán cho chuyến (bảng `Tickets`). ⚠️ **Bảng `Tickets` chưa được migrate** (task của
+  Vàng Thị Dăm, US 4) nên hôm nay chưa có ghế nào trả về `Paid` — hợp đồng chốt hình dạng trường
+  ngay từ bây giờ để màn hình chọn ghế ghép được mà không phải sửa hợp đồng lần nữa (⛔5); khi bảng
+  vé vào, chỉ phần truy vấn trong `TripSeatMapService` đổi, hình dạng response giữ nguyên.
+- `Available` — mọi trường hợp còn lại.
+
+- Thứ tự `seats`: `floor` tăng dần → `rowIndex` → `columnIndex`; hai dòng trùng cả ba (dữ liệu lỗi
+  ngoài khuôn lưới) xếp tiếp theo `id` để thứ tự hiển thị luôn ổn định.
+- Không lọc theo trạng thái chuyến: endpoint trả sơ đồ của chuyến có thật, việc chỉ dẫn khách tới
+  chuyến `Scheduled` là của `GET /trips/search` — cùng lối `GET /trips/{id}`.
+- Loại xe chưa có sơ đồ (`SeatLayouts.BusType` chưa khớp) → **200** với `floors: 0`, `seats: []` —
+  trạng thái dữ liệu hợp lệ (xe chưa được sinh ghế), không phải lỗi. Xem docs/26-csdl-so-do-ghe.md §1.
+- Chuyến không tồn tại, hoặc chuyến có thật nhưng xe của nó đã biến mất khỏi CSDL → **404**
+  `Không tìm thấy chuyến xe` — cùng lối `GET /trips/{id}`.
+- `id` sai định dạng GUID → **404** (ràng buộc `{id:guid}`), cùng lối các endpoint khác của mục này.
+
+> **Vì sao trả cả ghế đã bán / đang giữ mà không chỉ ghế còn trống?** Màn hình chọn ghế vẽ nguyên
+> sơ đồ xe — ghế đã bán phải hiện màu khác chứ không phải biến mất khỏi lưới. Cắt bớt ở server thì
+> màn hình phải tự "lấp" lại các ô thiếu; trả đủ cả dàn thì việc vẽ chỉ là đọc thẳng mảng về.
+>
+> **Vì sao trạng thái suy ra theo chuyến mà không lưu một cột trên `Seats`?** Vì trạng thái là của
+> CẶP (chuyến, ghế): cùng một ghế, chuyến này đã bán còn chuyến khác vẫn trống. Cột trên `Seats`
+> không biểu diễn được điều đó — `SeatHolds` và `Tickets` mới là nơi lưu, endpoint này chỉ cộng lại.
+>
+> **Vì sao đứng ở controller riêng (`TripSeatMapController`) chứ không gộp vào `GET /trips/{id}`?**
+> Cùng lối `TripSearchController`: mỗi bề mặt một controller, hai task thuộc hai người (chi tiết
+> chuyến là Vàng Thị Dăm, sơ đồ ghế là Trần Trung Hiếu). Route template khác nhau
+> (`api/trips/{id:guid}/seats` so với `api/trips/{id:guid}`) nên không tranh chấp.
 
 #### `PATCH /trips/{id}/assignment` — đổi xe / đổi tài xế khi có sự cố
 
