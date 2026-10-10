@@ -128,6 +128,16 @@ public class AuditLogCoverageTests
         // đổi hai ca này và middleware cùng một lúc.
         ("POST",   "/api/seat-holds/{sessionCode}/release",      CachGhi.Middleware),
 
+        // Giữ ghế tạm thời — story 3, Nguyễn Duy Kiên. Middleware tự ghi (POST → Create); route
+        // không có tham số nào nên tên bảng suy từ đoạn tĩnh cuối là "SeatHolds".
+        // Đánh đổi đã biết: một phiên giữ NHIỀU ghế sinh NHIỀU dòng SeatHolds, nhưng body trả về là
+        // hình dạng PHIÊN (SeatHoldSessionResponse) — không có trường "id" nào để middleware đọc, mà
+        // đường dẫn cũng không có {id}. Target vì vậy chỉ còn tên bảng "SeatHolds" (không kèm id
+        // nào), đúng nhánh "endpoint không trả về id thì ghi lại tên bảng" của ResolveTarget. Muốn
+        // tra vết tới từng dòng phải hỏi theo sessionCode — nhưng khoá phiên nằm trong body, không
+        // nằm trên đường dẫn. Cùng nhóm giới hạn với hai dòng {sessionCode} ở trên.
+        ("POST",   "/api/seat-holds",                            CachGhi.Middleware),
+
         // Xử lý phản ánh — story 24, Phùng Duy Hoàng. Middleware tự ghi (PATCH → Update,
         // POST → Create); tên bảng suy từ đoạn tĩnh ngay trước {id} là "Feedbacks" — kể cả POST
         // .../{id}/replies (KHÔNG phải "FeedbackReplies": đây là endpoint con của phản ánh, nhật
