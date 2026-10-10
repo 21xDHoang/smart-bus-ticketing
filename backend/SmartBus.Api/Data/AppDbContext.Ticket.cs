@@ -57,8 +57,15 @@ public partial class AppDbContext
             // một luật cứng, và nếu nhóm sau này cho vé sinh ngay từ lúc giữ chỗ thì chỉ mục đã sẵn.
             //
             // EF Core không sinh được partial index bằng attribute — phải viết ở đây.
+            //
+            // HasDatabaseName: A6 viết tên chỉ mục này trong đoạn DDL mẫu của mục "khoá duy nhất"
+            // (IX_Tickets_TripId_SeatId_Active). EF mặc định đặt tên theo cột
+            // (IX_Tickets_TripId_SeatId), nên phải ghim tường minh cho khớp A6 — chốt 10/10/2026:
+            // A6 là luật cứng, và mọi tài liệu (docs/28 §3, api-contract.md) đều chép nguyên tên đó,
+            // tức tài liệu = A6 = đối tượng thật trong CSDL. Bỏ dòng này là ba nguồn lệch nhau.
             e.HasIndex(t => new { t.TripId, t.SeatId })
              .IsUnique()
+             .HasDatabaseName("IX_Tickets_TripId_SeatId_Active")
              .HasFilter("\"Status\" IN ('Held', 'Paid')");
 
             // "Danh sách khách của chuyến" (A6): WHERE TripId = @t, KHÔNG kèm điều kiện Status.

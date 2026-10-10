@@ -5,14 +5,19 @@
 > Task **dòng 50 — "Migrate bảng `Vouchers`, `VoucherUsages`"** (Vàng Thị Dăm) là việc còn lại duy
 > nhất để nhánh này chạy được trên CSDL thật.
 >
-> 🟡 **CẤU HÌNH ĐÃ XONG 10/10/2026 — MIGRATION CHƯA SINH.** Vàng Thị Dăm đã soát lại toàn bộ entity +
+> ✅ **XONG 10/10/2026 — MIGRATION ĐÃ SINH VÀ ĐÃ SOÁT.** Vàng Thị Dăm đã soát lại toàn bộ entity +
 > cấu hình EF của Kiên theo checklist dưới: **không thiếu mục nào** (bảng, cột, kiểu, 3 FK `Restrict`,
-> 6 index, `xmin`, `UpdatedAt`). Việc còn lại đúng **MỘT lệnh** `dotnet ef migrations add`.
+> 6 index, `xmin`, `UpdatedAt`). Migration
+> `Sprint3_Payments_Vouchers_Tickets` (`Migrations/20261010105248_…`) đã sinh và soát đạt cả checklist
+> này lẫn checklist
+> của `docs/28-csdl-ve-dien-tu.md` — xem mục "Đã soát file migration sinh ra" ở cuối tài liệu.
 >
-> Lệnh đó sinh **một** migration gộp cả ba thứ còn nợ của Sprint 3 (`Payments`, `Vouchers`,
-> `VoucherUsages`) cùng bảng `Tickets` mới, vì EF diff TOÀN BỘ model trong một lệnh và không tách
-> được. Tên migration vì thế khác tên dự kiến ghi dưới đây; phần còn lại của ghi chú này vẫn dùng
-> được nguyên vẹn làm checklist soát.
+> Migration đó gộp cả ba thứ còn nợ của Sprint 3 (`Payments`, `Vouchers`, `VoucherUsages`) cùng bảng
+> `Tickets` mới, vì EF diff TOÀN BỘ model trong một lệnh và không tách được. Tên migration vì thế khác
+> tên dự kiến ghi dưới đây; phần còn lại của ghi chú này vẫn dùng được nguyên vẹn làm checklist soát.
+>
+> **Còn lại:** PR → merge `main` → rồi mới áp lên CSDL chung (`dotnet ef database update`), đúng thứ tự
+> ở `docs/25-huong-dan-csdl-chung.md` §4. Trước khi merge thì CSDL chung chưa có bốn bảng này.
 >
 > Vàng Thị Dăm đã cho phép Kiên dựng entity + cấu hình EF cho hai bảng này (trao đổi trực tiếp trong
 > nhóm), nên phần dưới đã xong. **Migration vẫn là việc của Dăm** — luật 3.
@@ -51,7 +56,7 @@ quả soát 5 file trên, đối chiếu **checklist của chính ghi chú này*
 | 3 FK đều `Restrict`; `VoucherUsages→Vouchers` **không** Cascade (`VoucherUsages.cs` chép nguyên văn nỗi lo này) | ✅ |
 | Đủ 6 index | ✅ `Code`(unique), `(Status,ValidFrom,ValidUntil)`, `RouteId`, `PaymentCode`(unique), `(VoucherId,CreatedAt)`, `UserId` |
 | `UpdatedAt` có ở `Vouchers`, không ở `VoucherUsages`; không `IsDeleted` | ✅ |
-| `xmin` khai bằng `IsRowVersion()` trên cột hệ thống, không sinh cột mới | ✅ (còn soi lại trong file migration) |
+| `xmin` khai bằng `IsRowVersion()` trên cột hệ thống, không sinh cột mới | ✅ có dòng trong file `.cs` là **đúng**, SQL sinh ra **0** lần `xmin` — đã kiểm |
 | Nối dây `ConfigureVoucher` + `partial void` | ✅ `AppDbContext.cs:29` và `:68` |
 
 → **Không thiếu mục nào**, nên không có gì phải "bổ sung". Việc thật của dòng 50 đúng là **sinh
@@ -64,14 +69,15 @@ trước không còn. Nhưng mục "Nhắc nhóm" số 2 dưới đây ghi rõ v
 đồng có cả khối 📌 giải thích thiết kế cột trần → đổi là phải sửa `api-contract.md` trước (luật 5).
 **Không đổi trong lúc soát migration.**
 
-## Việc cần làm — đúng MỘT lệnh
+## Việc cần làm — đúng MỘT lệnh ✅ đã chạy 10/10/2026
 
 ```bash
 cd backend/SmartBus.Api
 dotnet ef migrations add Sprint3_Payments_Vouchers_Tickets
 ```
 
-(`dotnet ef` chưa cài thì chạy `dotnet tool restore` trước.)
+(`dotnet ef` chưa cài thì chạy `dotnet tool restore` trước. Repo **không** có
+`.config/dotnet-tools.json`, nên máy nào đã cài `dotnet ef` global thì bỏ qua bước này.)
 
 ⚠️ Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì lệnh trên **vẫn
 cần** hai biến môi trường, nếu không host design-time chết trước khi EF kịp đọc model — `Program.cs`
@@ -117,12 +123,28 @@ trước. **Không cần** sửa entity, không cần viết API. `api-contract.
       `timestamp` thiếu múi giờ.
 - [ ] `Vouchers` **có** `UpdatedAt` (nullable), `VoucherUsages` **không có** `UpdatedAt`; không bảng
       nào có cột `IsDeleted`.
-- [ ] ⚠️ **Không có cột `xmin` nào được sinh ra.** `Vouchers` có khai
+- [ ] ⚠️ **`xmin` phải KHÔNG xuất hiện trong SQL sinh ra** — nhưng **có** xuất hiện trong file
+      migration `.cs`, và đó là chuyện bình thường. `Vouchers` khai
       `e.Property<uint>("xmin").HasColumnName("xmin").IsRowVersion();` — đây là **cột hệ thống** của
       PostgreSQL dùng làm concurrency token, đã có sẵn trong mọi bảng, **không phải cột mới**.
-      Npgsql nhận ra tên `xmin` và bỏ qua khi sinh `CreateTable`; nếu file migration **có** dòng
-      khai cột `xmin` (hoặc `AlterColumn`/`AddColumn` tên đó) thì **đừng commit** — báo Kiên ngay,
-      vì như vậy là cấu hình token sai và cả chốt chống tiêu thụ quá `Quantity` sẽ không chạy.
+      EF luôn ghi đủ mọi cột của model vào khối `CreateTable` của file `.cs` (kể cả cột hệ thống), nên
+      sẽ thấy đúng dòng
+      `xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)`. **Đừng xoá dòng
+      đó, đừng vì nó mà bỏ commit** — Npgsql mới là bên quyết định SQL, và nó bỏ qua cột hệ thống.
+
+      Phép kiểm đúng, không cần CSDL thật:
+
+      ```bash
+      dotnet ef migrations script --no-build -o /tmp/sprint3.sql && grep -c xmin /tmp/sprint3.sql
+      ```
+
+      Kết quả phải là **`0`**. Chỉ khi SQL **có** `xmin` (dạng cột trong `CREATE TABLE`, hay
+      `AddColumn`/`AlterColumn` tên đó) thì mới là cấu hình token sai — lúc đó báo Kiên, đừng commit,
+      vì cả chốt chống tiêu thụ quá `Quantity` sẽ không chạy.
+
+      ✅ **Đã kiểm 10/10/2026 trên migration `20261010105248_Sprint3_Payments_Vouchers_Tickets`:
+      `grep -c xmin` trả về `0` trên 556 dòng SQL.** (Mục này trước đây viết ngược — nói "file
+      migration có dòng khai cột `xmin` thì đừng commit", tức sẽ chặn nhầm một migration đúng.)
 
 ## Hai chốt của tính năng này chỉ sống ở PostgreSQL
 
@@ -185,3 +207,48 @@ yêu cầu.
    Ghi chú cũ viện dẫn `Payment.TicketId` như một "cột trần chờ bảng" — **nay cấu hình FK đó đã nối
    sẵn** (`Restrict`, trong `AppDbContext.Payment.cs`), cùng migration này sinh luôn bảng `Tickets`.
    Xem `docs/28-csdl-ve-dien-tu.md` §5.
+
+## Đã soát file migration sinh ra — 10/10/2026
+
+File `Migrations/<mốc-thời-gian>_Sprint3_Payments_Vouchers_Tickets.cs` (+ `.Designer.cs`, và
+`AppDbContextModelSnapshot.cs` bị sửa). Hai phép kiểm chạy được **không cần CSDL thật**:
+
+| Phép kiểm | Lệnh | Kết quả |
+|---|---|---|
+| Migration bắt trọn model | `dotnet ef migrations has-pending-model-changes --no-build` | ✅ "No changes have been made to the model since the last migration" |
+| Không sinh cột `xmin` | `dotnet ef migrations script --no-build -o /tmp/sprint3.sql` rồi `grep -c xmin` | ✅ `0` (trên 556 dòng SQL) |
+
+Đối chiếu checklist ở trên bằng **SQL sinh ra**, không phải bằng file `.cs`:
+
+| Hạng mục | Trong SQL |
+|---|---|
+| 2 bảng `Vouchers`, `VoucherUsages` (+ `Tickets`, `Payments` cùng lệnh) | ✅ 4 `CREATE TABLE` |
+| `Code` varchar(20), `Name` varchar(200) NOT NULL | ✅ |
+| `Status` varchar(20) `DEFAULT 'Active'`; `DiscountType` varchar(20) **không** default | ✅ đúng cả hai vế |
+| 5 cột tiền `numeric(12,2)` | ✅ `DiscountValue`, `MinOrderValue`, `MaxDiscount`, `OrderAmount`, `DiscountAmount` |
+| `UsedCount` `DEFAULT 0`; `RouteId` nullable | ✅ |
+| `PaymentCode` varchar(64) NOT NULL + UNIQUE | ✅ |
+| 3 FK `ON DELETE RESTRICT`, không `CASCADE` nào | ✅ `Vouchers→Routes`, `VoucherUsages→Vouchers`, `VoucherUsages→Users` |
+| 6 index | ✅ `IX_Vouchers_Code`(unique), `IX_Vouchers_Status_ValidFrom_ValidUntil`, `IX_Vouchers_RouteId`, `IX_VoucherUsages_PaymentCode`(unique), `IX_VoucherUsages_VoucherId_CreatedAt`, `IX_VoucherUsages_UserId` |
+| Mọi mốc thời gian là `timestamp with time zone` | ✅ không có `timestamp` trần |
+| `UpdatedAt` có ở `Vouchers`, không ở `VoucherUsages`; không `IsDeleted` | ✅ |
+| `Down()` xoá theo thứ tự ngược | ✅ `Payments` → `VoucherUsages` → `Tickets` → `Vouchers` |
+
+Bảng `Tickets` và `Payments` soát theo checklist riêng ở `docs/28-csdl-ve-dien-tu.md` — cùng đạt.
+
+⚠️ **Một chỗ đã phải sửa trước khi commit:** tên chỉ mục chống trùng ghế. A6 viết
+`IX_Tickets_TripId_SeatId_Active` trong đoạn DDL mẫu, nhưng EF mặc định đặt tên theo cột nên lần sinh
+đầu ra `IX_Tickets_TripId_SeatId`. Chốt 10/10/2026: **ghim tên theo A6** bằng
+`.HasDatabaseName("IX_Tickets_TripId_SeatId_Active")` trong `AppDbContext.Ticket.cs`, để A6 = tài liệu =
+đối tượng thật trong CSDL là một.
+
+Đã **xoá migration cũ và sinh lại** (không sửa tay file EF sinh — giữ lối của cả repo). Bằng chứng
+việc sinh lại không kéo theo thay đổi nào khác: `diff` hai bản SQL chỉ ra **đúng 2 dòng** khác nhau —
+tên chỉ mục, và mốc thời gian trong bảng `__EFMigrationsHistory`:
+
+```
+536c536
+< CREATE UNIQUE INDEX "IX_Tickets_TripId_SeatId" ON "Tickets" ("TripId", "SeatId") WHERE "Status" IN ('Held', 'Paid');
+---
+> CREATE UNIQUE INDEX "IX_Tickets_TripId_SeatId_Active" ON "Tickets" ("TripId", "SeatId") WHERE "Status" IN ('Held', 'Paid');
+```

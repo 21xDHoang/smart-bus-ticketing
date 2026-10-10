@@ -3083,11 +3083,12 @@ trả về.
 
 ## Vé điện tử — `/tickets`
 
-> Story 4 *"Vé điện tử QR"*. 🟡 **Bảng `Tickets` — cấu hình ĐÃ XONG, MIGRATION CHƯA SINH** (task
-> *"Migrate bảng Tickets, TicketQRCodes"* — Vàng Thị Dăm, Sprint 3). Bảng ra đời trong migration
+> Story 4 *"Vé điện tử QR"*. 🟢 **Bảng `Tickets` — migration ĐÃ SINH VÀ ĐÃ SOÁT 10/10/2026, CHƯA MERGE**
+> (task *"Migrate bảng Tickets, TicketQRCodes"* — Vàng Thị Dăm, Sprint 3). Bảng ra đời trong migration
 > `Sprint3_Payments_Vouchers_Tickets`, gộp cả nợ của dòng 27 (`Payments`) và dòng 50 (`Vouchers`,
-> `VoucherUsages`) vì EF diff toàn bộ model trong một lệnh — xem `docs/27`. Chạy bằng đúng một lệnh
-> `dotnet ef migrations add`; tới lúc đó entity đã sẵn để người khác code và test trên InMemory.
+> `VoucherUsages`) vì EF diff toàn bộ model trong một lệnh — xem `docs/27` và `docs/28` §8. Bảng chỉ
+> có thật trên CSDL chung **sau khi PR được merge rồi chạy `database update`** (thứ tự ở `docs/25` §4);
+> trước đó entity đã sẵn để người khác code và test trên InMemory.
 > ⚠️ Chỉ **một** bảng: mã QR là cột `Code` của `Tickets`, KHÔNG có bảng `TicketQRCodes` riêng —
 > A6 đặt khoá duy nhất `QrCode` trên chính bảng vé, và A9 không có bảng đó. Lý do đầy đủ:
 > `docs/28-csdl-ve-dien-tu.md` §2. Mục này chốt hình dạng để Hiếu dựng endpoint và frontend
@@ -3114,8 +3115,8 @@ trả về.
 
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
-| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | Chưa làm — entity đã có, chờ lệnh sinh migration |
-| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | Chưa làm — entity đã có, chờ lệnh sinh migration |
+| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | Chưa làm — bảng có sau khi merge PR migration |
+| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | Chưa làm — bảng có sau khi merge PR migration |
 | — | *phát hành vé* | *"API phát hành vé điện tử sau khi thanh toán thành công"* — Trần Trung Hiếu | ⚠️ xem luồng dưới |
 
 ### Phát hành vé sau khi thanh toán — KHÔNG phải endpoint riêng
@@ -3156,12 +3157,13 @@ phải viết trong `OnModelCreating` (file của Dăm).
 
 ## Thanh toán — `/payments`
 
-> Story 6 *"Cổng thanh toán"*. 🟡 **Bảng `Payments` — cấu hình ĐÃ XONG, MIGRATION CHƯA SINH** — entity
-> `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent (`PaymentSettlementService`)
-> — task *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"* (Phùng Duy Hoàng, dựng bảng
-> theo uỷ quyền của Dăm 10/10/2026). Bảng ra đời trong migration `Sprint3_Payments_Vouchers_Tickets`
-> (Vàng Thị Dăm), **cùng lệnh** với `Tickets` và `Vouchers`; FK `TicketId` → `Tickets` cũng nối trong
-> chính migration đó. Chờ đúng một lệnh `dotnet ef migrations add` — xem `docs/27`.
+> Story 6 *"Cổng thanh toán"*. 🟢 **Bảng `Payments` — migration ĐÃ SINH VÀ ĐÃ SOÁT 10/10/2026, CHƯA
+> MERGE** — entity `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent
+> (`PaymentSettlementService`) — task *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"*
+> (Phùng Duy Hoàng, dựng bảng theo uỷ quyền của Dăm 10/10/2026). Bảng ra đời trong migration
+> `Sprint3_Payments_Vouchers_Tickets` (Vàng Thị Dăm), **cùng lệnh** với `Tickets` và `Vouchers`; FK
+> `TicketId` → `Tickets` cũng nối trong chính migration đó (`ON DELETE RESTRICT`). Có thật trên CSDL
+> chung **sau khi PR được merge rồi chạy `database update`** — xem `docs/27` và `docs/28` §8.
 > ⚠️ **`Transactions` và `PaymentLogs` KHÔNG được dựng** — cả hai không nằm trong danh sách bảng
 > đóng băng A9 và không có entity/cấu hình nào trong repo; muốn có thì nhóm phải bổ sung A9 trước.
 > Xem `docs/28-csdl-ve-dien-tu.md` §7.
@@ -3514,7 +3516,7 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 >
 > | Dòng | Việc | Người | Trạng thái |
 > |---|---|---|---|
-> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | 🟡 Cấu hình đã soát xong 10/10/2026 — chờ sinh migration |
+> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | 🟢 Migration đã sinh + đã soát 10/10/2026, chờ merge |
 > | 51 | API CRUD voucher | Trần Trung Hiếu | Chưa làm — dùng chung bề mặt `api/vouchers` |
 > | **52** | **API kiểm tra và áp dụng voucher vào đơn hàng** | **Nguyễn Duy Kiên** | ✅ mục này |
 > | 53 | Validate điều kiện voucher: thời gian, tuyến, giá trị đơn tối thiểu | Phùng Duy Hoàng | ⚠️ **gộp vào dòng 52** — xem dưới |
@@ -3526,12 +3528,13 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > ruột chỉ có một. Nhánh này làm trọn cả hai — **Phùng Duy Hoàng dừng dòng 53** để khỏi viết trùng.
 > (Cùng dạng trùng lặp đã gặp ở các dòng 14/16, 15 với 4/18/20, 29/30.)
 
-> ⚠️ **Bảng `Vouchers` / `VoucherUsages` CHƯA migrate.** Entity + cấu hình EF đã có (task dòng 52 —
-> Nguyễn Duy Kiên, Dăm đã cho phép dựng bảng); **Dăm đã soát lại toàn bộ 10/10/2026: không thiếu mục
-> nào** (bảng, cột, kiểu, 3 FK `Restrict`, 6 index, `xmin`, `UpdatedAt`). Còn lại đúng MỘT lệnh sinh
-> migration — việc của **Vàng Thị Dăm**:
-> xem `docs/27-huong-dan-migrate-vouchers.md`. Endpoint dưới đây chạy được trên CSDL thật
-> ngay khi migration xong; test tích hợp của dự án chạy trên EF InMemory nên **không chờ migration**.
+> 🟢 **Bảng `Vouchers` / `VoucherUsages` — migration đã sinh và đã soát 10/10/2026, chưa merge.**
+> Entity + cấu hình EF do Nguyễn Duy Kiên dựng (task dòng 52, Dăm đã cho phép dựng bảng); **Dăm đã
+> soát lại toàn bộ 10/10/2026: không thiếu mục nào** (bảng, cột, kiểu, 3 FK `Restrict`, 6 index,
+> `xmin`, `UpdatedAt`), và file migration sinh ra đã đối chiếu đạt cả checklist của
+> `docs/27-huong-dan-migrate-vouchers.md`. Bảng có thật trên CSDL chung **sau khi PR được merge rồi
+> chạy `database update`** (`docs/25` §4). Endpoint dưới đây chạy được trên CSDL thật ngay sau bước
+> đó; test tích hợp của dự án chạy trên EF InMemory nên **không chờ migration**.
 
 ### Entity `Voucher`
 
@@ -3750,6 +3753,11 @@ Kết quả: `Ok` (kể cả lượt gửi lại) · `Conflict` khi mã vừa h�
 `xmin` là **cột hệ thống của PostgreSQL**, không sinh cột mới trong migration — cùng đúng một dòng
 mà `AppDbContext.Payment.cs` đã dùng cho nhánh đua callback trùng (dòng 33, Hoàng). Ở đây nó chặn
 đúng ca: hai khách cùng bấm xác nhận lượt voucher **cuối cùng**.
+
+✅ **Đã kiểm bằng SQL sinh ra 10/10/2026** (`dotnet ef migrations script` rồi `grep -c xmin` → `0`):
+file migration `.cs` **có** dòng `xmin = table.Column<uint>(type: "xid", rowVersion: true, …)` — đó là
+EF ghi đủ cột của model, **bình thường, đừng xoá** — còn SQL gửi xuống PostgreSQL thì **không** có
+`xmin`, đúng như câu trên.
 
 > ⚠️ **Provider InMemory BỎ QUA concurrency token** — bộ test của dự án **không chứng minh được**
 > chốt này, đúng như mục "Giữ chỗ" đã ghi cho partial unique index chống trùng ghế. Test chỉ ghim

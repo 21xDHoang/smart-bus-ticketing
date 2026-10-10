@@ -4,12 +4,12 @@
 > thanh toán), **Kiên** (service sinh mã QR duy nhất + ký số chống làm giả), **Băng/Hạnh/Thịnh**
 > (màn hình "Vé của tôi" và màn QR đang chạy mock ở `frontend/src/api/ticketApi.ts`).
 >
-> 🟡 **Trạng thái 10/10/2026:** entity `Ticket` + cấu hình `AppDbContext.Ticket.cs` **đã xong**; bảng
-> `Tickets` sẽ ra đời trong migration `Sprint3_Payments_Vouchers_Tickets` — Vàng Thị Dăm, task Sprint 3
-> *"Migrate bảng Tickets, TicketQRCodes"* — **chạy bằng đúng một lệnh `dotnet ef migrations add` còn
-> nợ**. Cùng lệnh đó trả luôn nợ migration của `Payments` (dòng 27) và `Vouchers` + `VoucherUsages`
-> (dòng 50). Cho tới lúc đó, test tích hợp vẫn chạy được trên EF InMemory, nhưng InMemory **không**
-> cưỡng chế chỉ mục/FK — xem cảnh báo ở §3.
+> 🟢 **Trạng thái 10/10/2026:** entity `Ticket` + cấu hình `AppDbContext.Ticket.cs` **đã xong**, và
+> migration `Sprint3_Payments_Vouchers_Tickets` (Vàng Thị Dăm, task Sprint 3 *"Migrate bảng Tickets,
+> TicketQRCodes"*) **đã sinh + đã soát** — xem §8. Cùng lệnh đó trả luôn nợ migration của `Payments`
+> (dòng 27) và `Vouchers` + `VoucherUsages` (dòng 50). **Chưa merge, chưa áp lên CSDL chung**: bảng
+> `Tickets` chỉ có thật sau khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp
+> vẫn chạy được trên EF InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem cảnh báo ở §3.
 
 ## 1. Bảng `Tickets` — một vé đã phát hành
 
@@ -167,7 +167,7 @@ seed thêm dòng `Tickets` thật, đừng nới FK.
   Hình dạng response **không đổi** — đã chốt trong `api-contract.md`. Lưu ý thêm: nhánh `'Held'`
   trong chỉ mục §3 không sinh ra dòng nào, nên chỉ cần hỏi `'Paid'`.
 - **Băng / Hạnh** — `frontend/src/api/ticketApi.ts` đang `USE_MOCK_DATA = true` và ném lỗi ở nhánh
-  thật. Bảng **sắp có** (entity + cấu hình đã xong, chờ lệnh sinh migration ở §8) nhưng **endpoint
+  thật. Bảng **có thật sau khi PR migration được merge + `database update`** (§8) nhưng **endpoint
   chưa** — chờ Hiếu xong rồi mới lật cờ, đừng lật trước.
 - **Ai cần thêm cột** — nhắn Dăm, không tự sửa `Migrations/*`, `ModelSnapshot.cs`, `Entities/`.
 
@@ -195,28 +195,47 @@ seed thêm dòng `Tickets` thật, đừng nới FK.
    liệu phân công trái nhau thì theo phân công nhận trực tiếp từ Scrum Master. Nhóm vẫn nên chốt lại
    để `docs/02-sprint-roadmap.md` không còn nói ngược.
 6. **`docs/api-contract.md` đã cập nhật trạng thái** ở hai mục "Vé điện tử" và "Thanh toán": từ
-   *"CHƯA migrate"* (sai — lượt trước viết nhầm thành "ĐÃ migrate" khi migration chưa tồn tại) thành
-   🟡 *"cấu hình ĐÃ XONG, MIGRATION CHƯA SINH"* + tên migration sẽ sinh. **Không đụng bảng trường,
-   không đổi hình dạng endpoint nào** (⛔ luật 5) — chỉ đổi dòng trạng thái.
+   *"CHƯA migrate"* (sai — có lượt viết nhầm thành "ĐÃ migrate" khi migration chưa tồn tại) thành
+   🟢 *"migration ĐÃ SINH VÀ ĐÃ SOÁT 10/10/2026, CHƯA MERGE"* + tên migration. **Không đụng bảng
+   trường, không đổi hình dạng endpoint nào** (⛔ luật 5) — chỉ đổi dòng trạng thái.
 
-## 8. Việc còn lại — đúng MỘT lệnh (Dăm tự chạy)
+## 8. Migration đã sinh và đã soát — 10/10/2026
 
-```bash
-cd backend/SmartBus.Api
-dotnet ef migrations add Sprint3_Payments_Vouchers_Tickets
+File `Migrations/<mốc-thời-gian>_Sprint3_Payments_Vouchers_Tickets.cs` (kèm `.Designer.cs`, và
+`AppDbContextModelSnapshot.cs` bị sửa). Hai phép kiểm, **không cần CSDL thật**:
+
+| Phép kiểm | Kết quả |
+|---|---|
+| `dotnet ef migrations has-pending-model-changes --no-build` | ✅ "No changes have been made to the model since the last migration" |
+| `dotnet ef migrations script --no-build -o /tmp/sprint3.sql` rồi `grep -c xmin` | ✅ `0` — không cột `xmin` nào lọt vào SQL |
+
+SQL sinh ra khớp §1 (cột), §3 (chỉ mục điều kiện), §4 (các chỉ mục) và §5 (FK): `Tickets` 5 FK
+`ON DELETE RESTRICT`, `Price numeric(12,2)`, mọi mốc thời gian `timestamp with time zone`, và
+
+```sql
+CREATE UNIQUE INDEX "IX_Tickets_TripId_SeatId_Active"
+    ON "Tickets" ("TripId", "SeatId") WHERE "Status" IN ('Held', 'Paid');
 ```
 
-Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì cần thêm hai biến
-môi trường **giá trị giả** để host design-time dựng được model — `migrations add` không mở kết nối
-nào; đừng tạo file `appsettings.Development.json` thật:
+⚠️ **Tên chỉ mục trên phải ghim tay.** A6 viết `IX_Tickets_TripId_SeatId_Active`, nhưng EF mặc định
+đặt tên theo cột nên lần sinh đầu ra `IX_Tickets_TripId_SeatId`. Đã thêm
+`.HasDatabaseName("IX_Tickets_TripId_SeatId_Active")` vào `AppDbContext.Ticket.cs` và **sinh lại
+migration** cho A6 = tài liệu = CSDL là một. Ai đọc A6 rồi gõ tay `DROP INDEX`/`REINDEX` theo tên
+trong tài liệu sẽ không trượt.
+
+**Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4:**
+
+1. PR nhánh này → có người khác approve → **Squash and merge** vào `main`.
+2. **Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.
+   Trước bước đó, CSDL chung **chưa có** `Tickets`, `Payments`, `Vouchers`, `VoucherUsages` — endpoint
+   nào chạm bốn bảng này sẽ lỗi `relation "…" does not exist`.
+
+Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì mọi lệnh `dotnet ef`
+cần hai biến môi trường **giá trị giả** để host design-time dựng được model — `migrations add` và
+`migrations script` đều **không mở kết nối** nào; đừng tạo file `appsettings.Development.json` thật:
 
 ```bash
 ConnectionStrings__Default="<chuoi-ket-noi-gia — chi can dung dinh dang>" \
 Jwt__Key="<chuoi-bat-ky-dai-it-nhat-32-byte>" \
 dotnet ef migrations add Sprint3_Payments_Vouchers_Tickets
 ```
-
-Sau đó soát file migration theo checklist ở `docs/27` (mục "Checklist soát migration") **cộng** các
-mục riêng của bảng vé ở §1 (cột), §3–§4 (chỉ mục) và §5 (FK `Payments.TicketId`) của tài liệu này.
-`dotnet ef migrations has-pending-model-changes` phải sạch — đó là phép kiểm cho biết migration đã
-bắt trọn model.
