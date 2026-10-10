@@ -342,19 +342,37 @@ builder.Services.AddScoped<ISeatHoldReleaseService, SeatHoldReleaseService>();
 builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection(VnPayOptions.SectionName));
 builder.Services.AddScoped<IVnPayGatewayService, VnPayGatewayService>();
 
+// Cổng thanh toán ZaloPay (US 6): cấu hình đối tác + client thuần HTTP gọi cổng.
+// Task "Tích hợp ZaloPay và thẻ ngân hàng" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cùng lối khối MoMo ở trên (AddHttpClient), KHÁC khối VNPay ngay trên: ZaloPay tạo đơn bằng HTTP
+// POST sang cổng nên cần HttpClient. Ba giá trị AppId/Key1/Key2 KHÔNG có mặc định trong code
+// (luật 2 — repo PUBLIC): đặt qua dotnet user-secrets hoặc biến môi trường ZaloPay__Key1…, mục
+// "ZaloPay" trong appsettings.Development.json.example chỉ là khuôn để điền. Client chưa đụng CSDL —
+// bảng Payments là migration của Dăm, service nghiệp vụ thanh toán sẽ gọi vào đây khi bảng có.
+// Đặt ở CUỐI danh sách đăng ký (sau khối VNPay, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<ZaloPayOptions>(builder.Configuration.GetSection(ZaloPayOptions.SectionName));
+builder.Services.AddHttpClient<ZaloPayGatewayService>();
+builder.Services.AddScoped<IZaloPayGatewayService>(provider => provider.GetRequiredService<ZaloPayGatewayService>());
+
 // Lớp adapter thống nhất cổng thanh toán (US 6): endpoint POST /payments và hai endpoint callback
 // tra cổng qua IPaymentGatewayResolver theo mã phương thức thay vì gọi thẳng client từng cổng —
 // thêm cổng mới chỉ là viết một adapter + một dòng đăng ký ở đây và một dòng trong bảng của
 // PaymentGatewayResolver, không phải sửa endpoint.
 // Task "Adapter pattern thống nhất cổng thanh toán (dễ thêm cổng mới)" — Phùng Duy Hoàng.
 // File này của Hoàng nên nhờ Hoàng xem qua trong PR.
-// Adapter là lớp MỎNG bọc nguyên client MoMo (Hiếu) và VNPay (Kiên) ngay trên — hai client đó
-// không sửa gì. Hai adapter không có cấu hình riêng; thiếu khoá bí mật của cổng nào thì client
-// cổng đó ném ngay khi adapter được dựng, và resolver chỉ dựng đúng cổng được hỏi (luật 2).
-// Đặt ở CUỐI danh sách đăng ký (sau khối VNPay, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// Adapter là lớp MỎNG bọc nguyên client MoMo (Hiếu) và VNPay/ZaloPay (Kiên) ngay trên — các client
+// đó không sửa gì. Adapter không có cấu hình riêng; thiếu khoá bí mật của cổng nào thì client cổng
+// đó ném ngay khi adapter được dựng, và resolver chỉ dựng đúng cổng được hỏi (luật 2).
+// Bốn adapter ứng với bốn mã phương thức của hợp đồng: MoMo, VNPay, ZaloPay, BankCard (BankCard
+// dùng lại client VNPay với kênh thẻ ghim sẵn — xem BankCardGatewayAdapter).
+// Đặt ở CUỐI danh sách đăng ký (sau khối ZaloPay, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<MoMoGatewayAdapter>();
 builder.Services.AddScoped<VnPayGatewayAdapter>();
+builder.Services.AddScoped<ZaloPayGatewayAdapter>();
+builder.Services.AddScoped<BankCardGatewayAdapter>();
 builder.Services.AddScoped<IPaymentGatewayResolver, PaymentGatewayResolver>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
