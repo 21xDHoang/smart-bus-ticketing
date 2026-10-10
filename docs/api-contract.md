@@ -3083,11 +3083,11 @@ trả về.
 
 ## Vé điện tử — `/tickets`
 
-> Story 4 *"Vé điện tử QR"*. 🟢 **Bảng `Tickets` — migration ĐÃ SINH VÀ ĐÃ SOÁT 10/10/2026, CHƯA MERGE**
+> Story 4 *"Vé điện tử QR"*. ✅ **Bảng `Tickets` — migration ĐÃ SINH, ĐÃ SOÁT VÀ ĐÃ MERGE (PR #144)**
 > (task *"Migrate bảng Tickets, TicketQRCodes"* — Vàng Thị Dăm, Sprint 3). Bảng ra đời trong migration
 > `Sprint3_Payments_Vouchers_Tickets`, gộp cả nợ của dòng 27 (`Payments`) và dòng 50 (`Vouchers`,
 > `VoucherUsages`) vì EF diff toàn bộ model trong một lệnh — xem `docs/27` và `docs/28` §8. Bảng chỉ
-> có thật trên CSDL chung **sau khi PR được merge rồi chạy `database update`** (thứ tự ở `docs/25` §4);
+> có thật trên CSDL chung **sau khi chạy `database update`** (thứ tự ở `docs/25` §4);
 > trước đó entity đã sẵn để người khác code và test trên InMemory.
 > ⚠️ Chỉ **một** bảng: mã QR là cột `Code` của `Tickets`, KHÔNG có bảng `TicketQRCodes` riêng —
 > A6 đặt khoá duy nhất `QrCode` trên chính bảng vé, và A9 không có bảng đó. Lý do đầy đủ:
@@ -3157,13 +3157,13 @@ phải viết trong `OnModelCreating` (file của Dăm).
 
 ## Thanh toán — `/payments`
 
-> Story 6 *"Cổng thanh toán"*. 🟢 **Bảng `Payments` — migration ĐÃ SINH VÀ ĐÃ SOÁT 10/10/2026, CHƯA
-> MERGE** — entity `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent
+> Story 6 *"Cổng thanh toán"*. ✅ **Bảng `Payments` — migration ĐÃ SINH, ĐÃ SOÁT VÀ ĐÃ MERGE (PR #144)**
+> — entity `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent
 > (`PaymentSettlementService`) — task *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"*
 > (Phùng Duy Hoàng, dựng bảng theo uỷ quyền của Dăm 10/10/2026). Bảng ra đời trong migration
 > `Sprint3_Payments_Vouchers_Tickets` (Vàng Thị Dăm), **cùng lệnh** với `Tickets` và `Vouchers`; FK
 > `TicketId` → `Tickets` cũng nối trong chính migration đó (`ON DELETE RESTRICT`). Có thật trên CSDL
-> chung **sau khi PR được merge rồi chạy `database update`** — xem `docs/27` và `docs/28` §8.
+> chung **sau khi chạy `database update`** — xem `docs/27` và `docs/28` §8.
 > ⚠️ **`Transactions` và `PaymentLogs` KHÔNG được dựng** — cả hai không nằm trong danh sách bảng
 > đóng băng A9 và không có entity/cấu hình nào trong repo; muốn có thì nhóm phải bổ sung A9 trước.
 > Xem `docs/28-csdl-ve-dien-tu.md` §7.
@@ -3516,11 +3516,11 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 >
 > | Dòng | Việc | Người | Trạng thái |
 > |---|---|---|---|
-> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | 🟢 Migration đã sinh + đã soát 10/10/2026, chờ merge |
+> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | ✅ Đã merge (PR #144) — còn bước `database update` trên CSDL chung |
 > | 51 | API CRUD voucher | Trần Trung Hiếu | Chưa làm — dùng chung bề mặt `api/vouchers` |
 > | **52** | **API kiểm tra và áp dụng voucher vào đơn hàng** | **Nguyễn Duy Kiên** | ✅ mục này |
 > | 53 | Validate điều kiện voucher: thời gian, tuyến, giá trị đơn tối thiểu | Phùng Duy Hoàng | ⚠️ **gộp vào dòng 52** — xem dưới |
-> | 54 | API thống kê hiệu quả voucher | Nguyễn Duy Kiên | Chưa làm — nền đã dựng, xem "Nền cho dòng 54" |
+> | **54** | **API thống kê hiệu quả voucher** | **Nguyễn Duy Kiên** | ✅ mục "GET /vouchers/statistics" dưới đây |
 >
 > ⚠️ **Dòng 53 đã nằm trọn trong dòng 52.** "Kiểm tra voucher" và "validate điều kiện voucher" là
 > **một việc**: không có phần kiểm tra thì không có gì để áp dụng, và không có luật nào để kiểm thì
@@ -3528,13 +3528,16 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > ruột chỉ có một. Nhánh này làm trọn cả hai — **Phùng Duy Hoàng dừng dòng 53** để khỏi viết trùng.
 > (Cùng dạng trùng lặp đã gặp ở các dòng 14/16, 15 với 4/18/20, 29/30.)
 
-> 🟢 **Bảng `Vouchers` / `VoucherUsages` — migration đã sinh và đã soát 10/10/2026, chưa merge.**
+> ✅ **Bảng `Vouchers` / `VoucherUsages` — migration đã merge (PR #144).**
 > Entity + cấu hình EF do Nguyễn Duy Kiên dựng (task dòng 52, Dăm đã cho phép dựng bảng); **Dăm đã
 > soát lại toàn bộ 10/10/2026: không thiếu mục nào** (bảng, cột, kiểu, 3 FK `Restrict`, 6 index,
 > `xmin`, `UpdatedAt`), và file migration sinh ra đã đối chiếu đạt cả checklist của
-> `docs/27-huong-dan-migrate-vouchers.md`. Bảng có thật trên CSDL chung **sau khi PR được merge rồi
-> chạy `database update`** (`docs/25` §4). Endpoint dưới đây chạy được trên CSDL thật ngay sau bước
-> đó; test tích hợp của dự án chạy trên EF InMemory nên **không chờ migration**.
+> `docs/27-huong-dan-migrate-vouchers.md`.
+>
+> ⏳ **Còn nợ đúng một bước: `dotnet ef database update`** trên CSDL chung (`docs/25` §4). Bảng chỉ
+> có **thật** sau bước đó — trước đó thì mọi endpoint dưới đây vẫn **500 trên CSDL thật**. Test tích
+> hợp của dự án chạy trên EF InMemory nên **không chờ migration**, đổi lại bộ test xanh **không**
+> chứng minh được bảng đã tồn tại.
 
 ### Entity `Voucher`
 
@@ -3596,13 +3599,18 @@ GHI THÊM: **không** `updatedAt` (A4), **không** `isDeleted`.
 | POST | `/vouchers` | Thêm voucher | Chưa làm — dòng 51 (Hiếu) |
 | PUT | `/vouchers/{id}` | Sửa voucher | Chưa làm — dòng 51 (Hiếu) |
 | PATCH | `/vouchers/{id}/status` | Bật/tắt áp dụng | Chưa làm — dòng 51 (Hiếu) |
-| GET | `/vouchers/statistics` | *"API thống kê hiệu quả voucher"* — Nguyễn Duy Kiên | Chưa làm — dòng 54 |
+| GET | `/vouchers/statistics` | *"API thống kê hiệu quả voucher"* — Nguyễn Duy Kiên (dòng 54) | ✅ mục này |
 | — | *áp dụng vào đơn* | Phần "áp dụng" của dòng 52 | ✅ **không phải endpoint riêng** — service nội bộ, `POST /payments` gọi, xem dưới |
 
-Bốn dòng của dòng 51 và `POST /vouchers/validate` **dùng chung bề mặt `api/vouchers` nhưng không
-tranh chấp**: `validate` là một đoạn đường dẫn cố định, `{id}` là tham số, còn `POST /` ở gốc chỉ
-đụng `POST /vouchers/validate` nếu ai đó đặt tên đoạn là `validate` — đừng đặt. Mỗi task một file
-controller, cùng lối `api/seat-holds` và `api/trips` đã làm.
+Bốn dòng của dòng 51, `POST /vouchers/validate` và `GET /vouchers/statistics` **dùng chung bề mặt
+`api/vouchers` nhưng không tranh chấp**: `validate` và `statistics` là hai đoạn đường dẫn cố định,
+`{id}` là tham số, còn `POST /` ở gốc chỉ đụng `POST /vouchers/validate` nếu ai đó đặt tên đoạn là
+`validate` — đừng đặt. Mỗi task một file controller, cùng lối `api/seat-holds` và `api/trips` đã làm.
+
+🔴 **`GET /vouchers/{id}` của dòng 51 PHẢI giữ ràng buộc `{id:guid}`.** Bề mặt này nay có **hai**
+đoạn literal (`validate`, `statistics`); nới `:guid` thành `{id}` trần là `statistics` bị nuốt và
+endpoint chi tiết nhận một chuỗi không phải GUID — đúng cái bẫy mà `{id:guid}` của
+`/admin/feedbacks` đang tránh (xem "Thống kê phản ánh").
 
 #### `POST /vouchers/validate` — kiểm tra mã và tính số tiền giảm
 
@@ -3743,6 +3751,146 @@ dịch khách bỏ ngang đều ăn mất một lượt voucher.
 
 Kết quả: `Ok` (kể cả lượt gửi lại) · `Conflict` khi mã vừa hết lượt hoặc vừa bị người khác dùng.
 
+#### `GET /vouchers/statistics` — thống kê hiệu quả voucher đã phát hành
+
+> Task *"API thống kê hiệu quả voucher"* (dòng 54, US 18, Sprint 3, Nguyễn Duy Kiên).
+
+Một endpoint duy nhất, trả về **một dòng cho mỗi voucher đã phát hành** — kể cả voucher **chưa ai
+dùng** — cộng các con số tổng của cả chương trình khuyến mãi.
+
+| Method | Endpoint | Mô tả | Trả về |
+|---|---|---|---|
+| GET | `/vouchers/statistics` | Hiệu quả của từng voucher đã phát hành | `VoucherStatistics` |
+
+Yêu cầu vai trò `Manager` hoặc `Admin` — cùng lý do nhóm `/admin/feedbacks`: đây là số liệu vận hành
+của nhà xe, không phải dữ liệu của một hành khách. Không đăng nhập → **401**; không đủ quyền →
+**403**. Endpoint **không có tham số nào**, nên không có nhánh 400/404: đúng quyền là luôn **200**,
+kể cả khi chưa có voucher nào (`items` rỗng, mọi con đếm bằng 0).
+
+```json
+// VoucherStatistics — ví dụ GET /vouchers/statistics
+{
+  "totalVouchers": 8,
+  "totalIssued": 3600,
+  "totalUsed": 1025,
+  "totalOrderAmount": 51200000,
+  "totalDiscountAmount": 6400000,
+  "neverUsedVouchers": 3,
+  "items": [
+    {
+      "voucherId": "9a1b2c3d-0000-0000-0000-000000000000",
+      "code": "SUMMER10",
+      "name": "Giảm 10% mùa hè",
+      "status": "Active",
+      "routeId": null,
+      "routeCode": null,
+      "routeName": null,
+      "quantity": 500,
+      "usedCount": 320,
+      "uniqueCustomers": 210,
+      "totalOrderAmount": 48000000,
+      "totalDiscountAmount": 4800000,
+      "firstUsedAt": "2026-06-01T02:15:00Z",
+      "lastUsedAt": "2026-08-30T11:40:00Z",
+      "validFrom": "2026-06-01T00:00:00Z",
+      "validUntil": "2026-08-31T23:59:59Z"
+    }
+  ]
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `totalVouchers` | number | Tổng số voucher đã phát hành — **mọi trạng thái**, kể cả `Inactive` |
+| `totalIssued` | number | Tổng `quantity` — tổng số lượt đã phát hành |
+| `totalUsed` | number | Tổng lượt đã tiêu thụ. Nguồn: `VoucherUsages` — xem 📌 |
+| `totalOrderAmount` | numeric | Tổng tiền **trước** giảm của mọi lượt đã tiêu thụ |
+| `totalDiscountAmount` | numeric | Tổng tiền đã giảm |
+| `neverUsedVouchers` | number | Số voucher đã phát hành mà **chưa ai dùng** (`usedCount = 0`) |
+| `items` | mảng | Một dòng mỗi voucher đã phát hành, kể cả voucher chưa ai dùng |
+
+Một dòng của `items`:
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `voucherId`, `code`, `name` | guid / string / string | |
+| `status` | varchar(20) | `'Active' \| 'Inactive'` |
+| `routeId` | guid nullable | `null` = **mọi tuyến** |
+| `routeCode`, `routeName` | string nullable | Ghép sẵn để màn hình không phải gọi `GET /routes/{id}` cho từng dòng, cùng lối `byRoute` của thống kê phản ánh |
+| `quantity` / `usedCount` | number | `usedCount` **đếm từ `VoucherUsages`**, không đọc cột `Vouchers.UsedCount` — xem 📌 |
+| `uniqueCustomers` | number | Số khách **khác nhau** đã dùng mã này. **Nhỏ hơn `usedCount` là bình thường** — luật "mỗi khách một lượt" chưa được chốt (xem "Câu hỏi mở") |
+| `totalOrderAmount` / `totalDiscountAmount` | numeric | Của riêng voucher này |
+| `firstUsedAt` / `lastUsedAt` | timestamptz nullable | **`null` khi `usedCount = 0`** |
+| `validFrom` / `validUntil` | timestamptz | Khoảng hiệu lực — đọc kèm để biết **vì sao** một dòng bằng 0 |
+
+Năm đẳng thức luôn đúng — màn hình được phép dựa vào, test khoá lại:
+
+```
+sum(items[].usedCount)            == totalUsed
+sum(items[].totalOrderAmount)     == totalOrderAmount
+sum(items[].totalDiscountAmount)  == totalDiscountAmount
+count(items)                      == totalVouchers
+count(items where usedCount == 0) == neverUsedVouchers
+```
+
+> 📌 **Vì sao đẳng thức ở đây là phép kiểm THẬT, không phải chuyện đương nhiên.** Sáu con số tổng
+> đến từ **truy vấn gộp độc lập** trên hai bảng, **không** cộng lại từ `items` — nếu cộng từ `items`
+> thì mọi đẳng thức đúng theo định nghĩa và không test nào có thể đỏ. Đây đúng lối
+> `FeedbackStatisticsService` đã làm cho thống kê phản ánh: đếm thẳng bằng một truy vấn riêng thì
+> đẳng thức mới bắt được lỗi lọc rơi dòng.
+
+> 📌 **Vì sao voucher chưa ai dùng VẪN có một dòng.** Đó là câu trả lời đắt nhất của một bảng "thống
+> kê hiệu quả": mã đã phát hành mà không ai dùng là **hiệu quả bằng 0**. Một phép gộp ngây thơ trên
+> `VoucherUsages` sẽ **làm rơi** đúng những dòng đó. Nên nguồn của `items` là bảng `Vouchers` (mọi
+> dòng, **KHÔNG lọc `status`**), còn `VoucherUsages` chỉ ghép số liệu vào. Cùng lối lập luận đã dùng
+> cho `byType` của thống kê phản ánh: trục cố định — tháng không có khiếu nại nào thì màn hình phải
+> vẽ cột 0 chứ không phải thiếu mất một cột.
+>
+> Hệ quả: nếu ai đó lọc `items` chỉ lấy `Active`, `sum(items[].usedCount)` sẽ **tụt xuống dưới**
+> `totalUsed` và đẳng thức đỏ ngay.
+
+> 📌 **Vì sao `usedCount` đếm từ `VoucherUsages`, KHÔNG đọc cột `Vouchers.UsedCount`.**
+> `Vouchers.UsedCount` là **bộ đếm denormalized** do `VoucherRedemptionService` tăng, tồn tại để
+> đường kiểm mã (`usedCount >= quantity` → `OutOfStock`) không phải `COUNT(*)` mỗi lần khách gõ. Nó
+> **không phải bản ghi sự thật** — `VoucherUsages` mới là, và hai cột tiền cũng nằm ở đó. `usedCount`
+> với tiền **phải cùng một nguồn**, nếu không một dòng có thể tự mâu thuẫn (`usedCount: 5` nhưng tiền
+> chỉ cộng từ 4 dòng). Hệ quả **có chủ ý**: nếu bộ đếm vênh, bảng thống kê là **bên đúng** và **phơi
+> ra** chỗ vênh, thay vì nhân bản nó thêm một lần nữa.
+
+> 📌 **Vì sao KHÔNG join `Payments`.** `VoucherUsage.PaymentCode` là **cột trần không FK** (xem 📌 ở
+> mục Entity `VoucherUsage`), nên join là **inner join** và sẽ **làm rơi** mọi dòng usage không có
+> payment tương ứng. Hai cột tiền đã có sẵn ngay trên `VoucherUsages` (`orderAmount`/`discountAmount`
+> là ảnh chụp lúc áp) — không cần đi đâu xa. Hợp đồng đã chốt đúng điều này ở câu hỏi mở *"Đẩy
+> `VoucherCode` + `DiscountAmount` lên `Payments`?"*: **chưa, hiện đọc qua `VoucherUsages`**.
+
+**Sắp xếp:** `usedCount` giảm dần — mã hiệu quả nhất lên đầu, đúng lối `byRoute` sắp theo `count`
+giảm dần; trùng số thì theo `code` tăng dần (ordinal) cho thứ tự tất định. Hệ quả **đã biết**: voucher
+chưa ai dùng nằm **cuối** bảng, còn `neverUsedVouchers` cho màn hình biết có bao nhiêu để tự lọc.
+Muốn đảo thành "mã bị bỏ xó lên đầu" thì chốt ở nhóm rồi sửa mục này trước (⛔5).
+
+**Cố ý CHƯA có:** lọc theo khoảng thời gian, lọc theo trạng thái, lọc theo tuyến, phân trang, và
+**trường tỉ lệ tiêu thụ tính sẵn ở server**. Task chỉ hỏi "hiệu quả voucher"; khoảng
+`validFrom..validUntil` của **chính voucher** đã là khoảng chiến dịch của nó (một lượt chỉ ghi được
+khi voucher còn hiệu lực — xem bảng `reasonCode` ở `POST /vouchers/validate`), nên số liệu trọn đời
+của voucher **chính là** số liệu chiến dịch. Thêm tham số lọc hay thêm trường là **đổi hình dạng
+API** — phải bàn ở nhóm rồi sửa mục này trước khi code (⛔5), đừng tự thêm.
+
+> 🔹 **Tỉ lệ tiêu thụ là giá trị DẪN XUẤT, FE tự tính** (`usedCount / quantity`) — **không** phải
+> trường của API. Cặp `quantity`/`usedCount` đã chính xác và không thể hiểu sai, còn một trường tỉ lệ
+> mở ra ba tranh luận không cần thiết: chia cho 0 (`quantity = 0`), đơn vị (phân số hay phần trăm), và
+> **tỉ lệ vượt 100%** khi dòng 51 sửa giảm `quantity` xuống dưới `usedCount` — chuyện có thật, vì CRUD
+> cho sửa `quantity`. Cùng luật đã chốt cho thống kê phản ánh: `FeedbackTypeCountResponse` không có
+> trường nào ngoài cặp mã/đếm.
+>
+> 🔹 **Các trường cấu hình `discountType` / `discountValue` / `minOrderValue` / `maxDiscount` cố ý
+> KHÔNG có ở đây** — chúng thuộc `GET /vouchers` (dòng 51). Bảng này trả lời "hiệu quả thế nào",
+> không trả lời "luật của mã là gì".
+>
+> 🔹 Index `VoucherUsages (VoucherId, CreatedAt)` được dựng **có chủ ý** cho việc lọc theo khoảng
+> ngày, nên ngày nhóm chốt thêm bộ lọc thì hạ tầng đã sẵn — chỉ còn sửa mục này trước. Lưu ý khi đó:
+> rút ngắn `validUntil` sau khi đã có lượt dùng làm những lượt cũ rơi **ra ngoài** khoảng hiệu lực
+> mới, nên bộ lọc mặc định lấy `[validFrom, validUntil]` sẽ **mất** chúng.
+
 ### Chống tiêu thụ quá `quantity` — hai lớp
 
 | Lớp | Cơ chế | Chặn được gì |
@@ -3768,13 +3916,6 @@ EF ghi đủ cột của model, **bình thường, đừng xoá** — còn SQL g
 > **đầu tiên** của dự án (hiện có 0) — một lối mới cho cả nhóm, đổi lấy một ràng buộc mà `xmin` đã
 > phủ. Muốn thêm thì bàn ở tầng nhóm, không tự ý đưa vào migration.
 
-### Nền cho dòng 54 — API thống kê hiệu quả voucher
-
-Chưa làm, nhưng `VoucherUsages` đã dựng sẵn đúng thứ dòng 54 cần: mỗi lượt tiêu thụ là một dòng có
-`voucherId`, `orderAmount`, `discountAmount`, `createdAt` → đếm lượt, cộng tiền giảm, tính tỉ lệ tiêu
-thụ (`usedCount / quantity`) đều là truy vấn gộp trên bảng này, không phải sửa hình dạng. Index
-`(VoucherId, CreatedAt)` đã có sẵn cho đúng truy vấn đó.
-
 ### Câu hỏi mở cho nhóm — chưa chốt, chưa cài
 
 | Câu hỏi | Hiện trạng |
@@ -3785,13 +3926,16 @@ thụ (`usedCount / quantity`) đều là truy vấn gộp trên bảng này, kh
 | **Voucher sinh từ đâu?** Bảng phân công chỉ có CRUD tay (dòng 51); không có story nào cho mã tự sinh hay phát theo chiến dịch | Ngoài phạm vi — CRUD tay |
 | **US 18 thuộc sprint nào?** Bảng tính xếp **Sprint 3**; `docs/02-sprint-roadmap.md` lại đề xuất chuyển US 18 từ Sprint 5 sang **Sprint 4**; quy ước A9 xếp nhóm bảng này ở Sprint 4 | Nhóm cần chốt **một** bảng phân công (cùng dạng xung đột đã ghi ở mục "Thanh toán") |
 
-### Việc của Dăm — sinh migration
+### Việc của Dăm — migration ✅ đã xong, còn `database update`
 
-Đúng **một** lệnh, cùng khuôn `docs/24-huong-dan-migrate-feedbacks.md`:
+Migration đã sinh, đã soát và **đã merge** (`20261010105248_Sprint3_Payments_Vouchers_Tickets`,
+PR #144) — **đừng chạy lại `migrations add`**, sẽ sinh migration trùng.
+
+⏳ Việc còn lại **đúng một lệnh**, trên máy có `dotnet-ef` và chuỗi kết nối:
 
 ```bash
 cd backend/SmartBus.Api
-dotnet ef migrations add Sprint3_Vouchers_VoucherUsages
+dotnet ef database update
 ```
 
 Checklist soát migration, danh sách file đã có sẵn, và các chốt cần đối chiếu: xem

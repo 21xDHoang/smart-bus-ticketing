@@ -35,11 +35,15 @@ public class VoucherUsage
     /// chốt chống tiêu thụ hai lần: callback cổng gửi lại hay job đối soát chạy đè đều đâm vào
     /// unique index này chứ không cộng thêm một lượt.
     ///
-    /// ⚠️ Cố ý là CỘT TRẦN, không phải FK sang <c>Payments</c>: bảng đó cũng chưa migrate, đặt FK
-    /// bây giờ là buộc migration <c>Vouchers</c> phải chạy sau migration <c>Payments</c> — một ràng
-    /// buộc thứ tự giữa hai việc của hai người, đổi lấy đúng một cột. Repo đã có sẵn lối này:
-    /// <see cref="Payment.TicketId"/> cũng là cột trần chờ bảng <c>Tickets</c>. Nối FK bằng một
-    /// migration sau, khi <c>Payments</c> đã có bảng.
+    /// ⚠️ Vẫn là CỘT TRẦN, không phải FK sang <c>Payments</c>. Lý do ban đầu ("bảng kia chưa
+    /// migrate") nay KHÔNG còn đúng — <c>Payments</c> đã có bảng từ migration
+    /// <c>Sprint3_Payments_Vouchers_Tickets</c> (PR #144) — nhưng migration đó đã merge rồi, mà
+    /// <c>Migrations/*</c> là phần của Vàng Thị Dăm (luật 3), nên cột cứ để nguyên cho tới khi có
+    /// người yêu cầu nối.
+    ///
+    /// Hệ quả còn nguyên và là lý do API thống kê hiệu quả voucher (dòng 54) CỐ Ý không join sang
+    /// <c>Payments</c>: không có FK thì phép join là INNER JOIN, và mọi lượt tiêu thụ chưa có bản ghi
+    /// thanh toán tương ứng sẽ lặng lẽ rơi khỏi thống kê.
     /// </summary>
     public string PaymentCode { get; set; } = string.Empty;
 

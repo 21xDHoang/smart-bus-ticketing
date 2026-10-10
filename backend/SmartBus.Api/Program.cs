@@ -395,6 +395,12 @@ builder.Services.AddScoped<IPaymentSettlementService, PaymentSettlementService>(
 builder.Services.AddScoped<IVoucherValidationService, VoucherValidationService>();
 builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>();
 
+// Voucher (US 18), phần đọc: thống kê hiệu quả voucher đã phát hành
+// (GET /vouchers/statistics). Task "API thống kê hiệu quả voucher" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Controller tự được AddControllers quét ra, không cần dòng đăng ký riêng.
+builder.Services.AddScoped<IVoucherStatisticsService, VoucherStatisticsService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.

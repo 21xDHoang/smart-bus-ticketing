@@ -5,9 +5,11 @@ namespace SmartBus.Api.Entities;
 /// voucher vào đơn hàng"* (dòng 52, Nguyễn Duy Kiên, Sprint 3). Hình dạng chốt ở mục
 /// "Voucher — /vouchers" của docs/api-contract.md.
 ///
-/// ⚠️ Bảng CHƯA có migration. Entity + cấu hình (Data/AppDbContext.Voucher.cs) viết để API biên dịch
-/// và test được trên EF InMemory — Vàng Thị Dăm đã cho phép dựng bảng, và việc chạy
-/// <c>dotnet ef migrations add</c> vẫn là của Dăm: xem docs/27-huong-dan-migrate-vouchers.md.
+/// ✅ Bảng <c>Vouchers</c> ĐÃ có migration và đã merge
+/// (<c>Sprint3_Payments_Vouchers_Tickets</c>, PR #144 — Vàng Thị Dăm). Còn nợ đúng một bước:
+/// <c>dotnet ef database update</c> trên CSDL chung; trước bước đó endpoint vẫn 500 trên CSDL thật.
+/// Bộ test của dự án chạy trên EF InMemory nên không chờ migration — đổi lại, test xanh KHÔNG chứng
+/// minh được bảng đã tồn tại.
 ///
 /// Vòng đời một voucher: quản lý tạo (dòng 51 — Trần Trung Hiếu) → khách gõ mã ở màn thanh toán →
 /// <c>POST /vouchers/validate</c> trả lời dùng được hay không (KHÔNG tiêu thụ gì) → khách bấm xác
