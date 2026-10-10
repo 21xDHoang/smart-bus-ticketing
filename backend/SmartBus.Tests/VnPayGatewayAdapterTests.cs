@@ -72,6 +72,11 @@ public class VnPayGatewayAdapterTests
         Assert.Equal(175_000m, result.Amount);
         Assert.Equal("14000001", result.GatewayTransactionId);
         Assert.Equal("00", result.ProviderResponseCode);
+
+        // vnp_PayDate "20261010153200" là giờ GMT+7 — adapter phải quy về UTC (08:32:00) cho cột
+        // PaidAt (timestamptz); giữ nguyên Kind = Utc để Npgsql ghi được.
+        Assert.Equal(new DateTime(2026, 10, 10, 8, 32, 0, DateTimeKind.Utc), result.PaidAt);
+        Assert.Equal(DateTimeKind.Utc, result.PaidAt!.Value.Kind);
     }
 
     [Fact]

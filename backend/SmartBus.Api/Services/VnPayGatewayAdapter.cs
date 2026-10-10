@@ -55,6 +55,7 @@ public class VnPayGatewayAdapter : IPaymentGateway
             PaymentCode = Value(input.Query, "vnp_TxnRef"),
             Amount = ParseAmount(Value(input.Query, "vnp_Amount")),
             GatewayTransactionId = Value(input.Query, "vnp_TransactionNo"),
+            PaidAt = ParsePayDate(Value(input.Query, "vnp_PayDate")),
             ProviderResponseCode = responseCode,
             // vnp_Message không phải tham số bắt buộc của mọi bản cổng — thiếu thì để trống, muốn
             // biết vì sao hỏng thì tra ProviderResponseCode theo tài liệu VNPay.
@@ -76,4 +77,14 @@ public class VnPayGatewayAdapter : IPaymentGateway
         => long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var minorUnits)
             ? minorUnits / 100m
             : 0m;
+
+    /// <summary>
+    /// vnp_PayDate là giờ Việt Nam (GMT+7) dạng "yyyyMMddHHmmss" — đổi về UTC cho khớp cột
+    /// PaidAt (timestamptz, quy ước A2). Không đọc được thì trả null — bên gọi lấy giờ hệ thống.
+    /// </summary>
+    private static DateTime? ParsePayDate(string raw)
+        => DateTime.TryParseExact(raw, "yyyyMMddHHmmss", CultureInfo.InvariantCulture,
+               DateTimeStyles.None, out var gmt7)
+            ? DateTime.SpecifyKind(gmt7 - TimeSpan.FromHours(7), DateTimeKind.Utc)
+            : null;
 }

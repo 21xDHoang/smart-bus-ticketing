@@ -38,6 +38,13 @@ public class PaymentCallbackResult
     public string GatewayTransactionId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Thời điểm cổng ghi nhận thu tiền, quy về UTC (MoMo responseTime mili-giây epoch / VNPay
+    /// vnp_PayDate GMT+7 — adapter tự đổi múi giờ). Null khi cổng không kèm hoặc không đọc được;
+    /// bên gọi lấy giờ hệ thống thay thế. KHÔNG phải điều kiện để lật trạng thái.
+    /// </summary>
+    public DateTime? PaidAt { get; set; }
+
+    /// <summary>
     /// Mã kết quả thô của cổng (MoMo resultCode / VNPay vnp_ResponseCode), giữ nguyên dạng chuỗi.
     /// VNPay không có trường thông báo — muốn biết vì sao hỏng thì tra mã này theo tài liệu cổng.
     /// </summary>

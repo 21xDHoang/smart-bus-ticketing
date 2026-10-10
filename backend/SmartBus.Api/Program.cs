@@ -357,6 +357,16 @@ builder.Services.AddScoped<MoMoGatewayAdapter>();
 builder.Services.AddScoped<VnPayGatewayAdapter>();
 builder.Services.AddScoped<IPaymentGatewayResolver, PaymentGatewayResolver>();
 
+// Chốt thanh toán idempotent (US 6): điểm vào duy nhất cho callback cổng (MoMo IPN / VNPay
+// Return+IPN) và job đối soát — kiểm trạng thái trước khi lật, callback trùng bị bỏ qua.
+// Task "Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng" — Phùng Duy Hoàng.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service chỉ chốt TRẠNG THÁI giao dịch; bước phát hành vé + xác nhận giữ chỗ là của người gọi
+// (chưa dựng — chờ bảng Tickets; đọc cờ ShouldIssueTickets trong PaymentSettlementOutcome).
+// Đặt ở CUỐI danh sách đăng ký (sau khối adapter cổng, trước phần hạ tầng JWT/RBAC/CORS) để
+// không chèn vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
