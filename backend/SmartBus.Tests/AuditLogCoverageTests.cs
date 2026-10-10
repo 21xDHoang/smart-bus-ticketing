@@ -110,6 +110,16 @@ public class AuditLogCoverageTests
         // về, không phải vé cũ trên đường dẫn — ca này cố ý để lộ điều đó ra test Phần 2.
         ("POST",   "/api/monthly-passes/{id:guid}/renew",        CachGhi.Middleware),
 
+        // Gia hạn giữ chỗ — story 3, Trần Trung Hiếu. Middleware tự ghi (POST → Create) nhưng
+        // Target chỉ là "Extend" chứ KHÔNG phải "SeatHolds:<mã phiên>": route dùng tham số
+        // {sessionCode} (khớp hợp đồng chung của bề mặt /seat-holds) nên middleware không tìm
+        // thấy {id}, rơi về đoạn tĩnh đầu tiên sau tham số cuối — chính là tên hành động.
+        // Giới hạn đã ghi nhận ở AuditLogMiddleware.ResourceSegmentIndex ("POST /api/tickets/
+        // validate" ở Sprint 4 cũng sẽ dính). Ca này cố ý để lộ điều đó ra test Phần 2; task
+        // release của Hoàng gặp đúng vấn đề này — nhóm cần chốt một cách xử lý chung cho các
+        // endpoint hành động con của bề mặt /seat-holds.
+        ("POST",   "/api/seat-holds/{sessionCode}/extend",       CachGhi.Middleware),
+
         // Xử lý phản ánh — story 24, Phùng Duy Hoàng. Middleware tự ghi (PATCH → Update,
         // POST → Create); tên bảng suy từ đoạn tĩnh ngay trước {id} là "Feedbacks" — kể cả POST
         // .../{id}/replies (KHÔNG phải "FeedbackReplies": đây là endpoint con của phản ánh, nhật
@@ -676,6 +686,40 @@ public class AuditLogCoverageTests
         await AssertMotBanGhiAsync(factory, AuditAction.Create, $"MonthlyPasses:{veMoi}", chuVe);
     }
 
+    // ------------------------------------------------------- Giữ chỗ — gia hạn (story 3)
+
+    // Story 3, Trần Trung Hiếu: gia hạn thời gian giữ chỗ. Người gọi phải là CHÍNH CHỦ PHIÊN —
+    // service lọc theo UserId trong truy vấn nên token Admin gia hạn hộ phiên của người khác sẽ
+    // ra 404, không phải 200. Vì vậy ca này đăng nhập bằng tài khoản hành khách, không dùng
+    // SignInAsAdminAsync (cùng lối ca renew vé tháng ở trên).
+    [Fact]
+    public async Task Post_seat_holds_extend_ghi_Create_voi_Target_Extend()
+    {
+        using var factory = new TestAppFactory();
+        await EnsureAllRolesAsync(factory);
+        var chuPhien = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var client = ClientWith(factory, factory.CreateTokenFor(chuPhien));
+
+        var trip = await SeedTripAsync(factory);
+        var seat = await SeedSeatAsync(factory);
+        await SeedHoldAsync(factory, chuPhien.Id, trip.Id, seat.Id, "PHIEN-AUDIT");
+
+        var response = await client.PostAsync("/api/seat-holds/PHIEN-AUDIT/extend", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target chỉ là "Extend", KHÔNG phải "SeatHolds:<mã phiên>": route dùng tham
+        // số {sessionCode} để khớp hợp đồng chung của bề mặt (GET dùng chính tên này) nên
+        // middleware không tìm thấy {id} để suy tên bảng — rơi về đoạn tĩnh đầu tiên sau tham số
+        // cuối, đúng vào tên hành động "extend". Response của bề mặt (SeatHoldSession) không có
+        // trường "id" nên không có id nào để ghép vào Target. Hành động Create do POST suy ra, dù
+        // nghiệp vụ thật là cập nhật hạn — cùng kiểu đánh đổi đã ghi nhận ở ca renew vé tháng.
+        // Giới hạn suy tên bảng nằm ở AuditLogMiddleware.ResourceSegmentIndex; test này ghim sự
+        // thật lại để khi nhóm chốt cách xử lý cho các endpoint hành động con của /seat-holds
+        // (release của Hoàng cũng dính) thì đổi ở đây và ở AuditLogMiddleware cùng một lúc.
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, "Extend", chuPhien);
+    }
+
     // ------------------------------------------------- Phản ánh — Admin phản hồi (story 24)
 
     // Story 24, Phùng Duy Hoàng: Admin/Manager xử lý phản ánh. Hai endpoint ghi đều đi qua
@@ -1199,6 +1243,65 @@ public class AuditLogCoverageTests
         await factory.SeedAsync(db => db.Feedbacks.Add(feedback));
 
         return feedback;
+    }
+
+    /// <summary>
+    /// Chuyến chỉ có khoá ngoại, không gán navigation — InMemory không cưỡng chế khoá ngoại nên
+    /// không cần seed Route/Bus cho ca này (đúng lệ "seed dòng mồ côi" của TripDetailApiTests).
+    /// </summary>
+    private static async Task<Trip> SeedTripAsync(TestAppFactory factory)
+    {
+        var trip = new Trip
+        {
+            Id = Guid.NewGuid(),
+            RouteId = Guid.NewGuid(),
+            BusId = Guid.NewGuid(),
+            DepartureTime = new DateTime(2026, 10, 1, 1, 0, 0, DateTimeKind.Utc),
+        };
+
+        await factory.SeedAsync(db => db.Trips.Add(trip));
+
+        return trip;
+    }
+
+    private static async Task<Seat> SeedSeatAsync(TestAppFactory factory)
+    {
+        var seat = new Seat
+        {
+            Id = Guid.NewGuid(),
+            BusId = Guid.NewGuid(),
+            SeatLayoutId = Guid.NewGuid(),
+            Floor = 1,
+            RowIndex = 1,
+            ColumnIndex = 1,
+            SeatNumber = "A1",
+        };
+
+        await factory.SeedAsync(db => db.Seats.Add(seat));
+
+        return seat;
+    }
+
+    /// <summary>Lượt giữ chỗ đang Holding — đủ để endpoint gia hạn chạy thành công (story 3).</summary>
+    private static async Task SeedHoldAsync(
+        TestAppFactory factory,
+        Guid userId,
+        Guid tripId,
+        Guid seatId,
+        string sessionCode)
+    {
+        var hold = new SeatHold
+        {
+            Id = Guid.NewGuid(),
+            TripId = tripId,
+            SeatId = seatId,
+            UserId = userId,
+            SessionCode = sessionCode,
+            Status = SeatHoldStatus.Holding,
+            ExpiresAt = new DateTime(2026, 10, 1, 1, 10, 0, DateTimeKind.Utc),
+        };
+
+        await factory.SeedAsync(db => db.SeatHolds.Add(hold));
     }
 
     private const string LoginUrl = "/api/auth/login";
