@@ -1334,12 +1334,12 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 > Hai bảng `SeatHolds` + `SeatHoldLogs` đã migrate (Vàng Thị Dăm — docs/26-csdl-so-do-ghe.md).
 > Bề mặt này của US 3 *"tự động giữ chỗ trong 10 phút khi khách đang thao tác thanh toán"* gồm
 > bốn endpoint, mỗi endpoint một task của bảng phân công Sprint 3 — mục này chốt endpoint ĐÃ có,
-> ba endpoint còn lại bổ sung vào đây khi task của chúng hoàn thành:
+> endpoint còn lại bổ sung vào đây khi task của nó hoàn thành:
 
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
 | GET | `/seat-holds/{sessionCode}` | *"API kiểm tra trạng thái giữ chỗ theo mã phiên"* — Trần Trung Hiếu | ✅ dưới đây |
-| POST | `/seat-holds` | *"API giữ ghế tạm thời (khóa ghế theo phiên)"* — Nguyễn Duy Kiên | Chưa làm |
+| POST | `/seat-holds` | *"API giữ ghế tạm thời (khóa ghế theo phiên)"* — Nguyễn Duy Kiên | ✅ dưới đây |
 | POST | `/seat-holds/{sessionCode}/release` | *"API nhả ghế khi hết hạn hoặc khách huỷ thao tác"* — Phùng Duy Hoàng | Chưa làm |
 | POST | `/seat-holds/{sessionCode}/extend` | *"API gia hạn thời gian giữ chỗ (tối đa 1 lần)"* — Trần Trung Hiếu | ✅ dưới đây |
 
@@ -1352,7 +1352,7 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 Một phiên giữ NHIỀU ghế = nhiều dòng `SeatHolds` cùng `SessionCode` (cột KHÔNG unique —
 docs/26 §1), nên đối tượng trả về gom các ghế lại thành một PHIÊN chứ không phải một dòng:
 mọi thao tác (tra trạng thái, gia hạn, đếm ngược, nhả cả phiên) đều hỏi theo `SessionCode`.
-Ba endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng này.
+Endpoint chưa làm ở bảng trên (nhả ghế) cũng trả về đúng hình dạng này.
 
 ```json
 // SeatHoldSessionResponse — ví dụ GET /seat-holds/PHIEN-8f3a2c1d
@@ -1374,6 +1374,84 @@ Ba endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng nà
 | `status` | `string` | `"Holding"` / `"Confirmed"` / `"Expired"` / `"Released"` — giá trị cột `SeatHolds.Status` |
 | `expiresAt` | `string` | Hạn giữ chỗ (ISO 8601, UTC). Mọi dòng cùng phiên cùng hạn — docs/26 §1 |
 | `canExtend` | `boolean` | Còn lượt gia hạn không — màn hình dùng để bật/tắt nút "Gia hạn". Xem quy tắc ở mục GET dưới |
+
+### `POST /seat-holds` — giữ ghế tạm thời (khóa ghế theo phiên)
+
+> ✅ Backend đã có (`SeatHoldCreateController` — Nguyễn Duy Kiên, story 3, task *"API giữ ghế tạm
+> thời (khóa ghế theo phiên)"*). Đây là endpoint **SINH ra mã phiên**: màn hình chọn ghế gọi nó một
+> lần với cả nhóm ghế khách vừa chọn, nhận về `sessionCode` rồi chạy đếm ngược 10 phút trong lúc
+> khách thanh toán. Ba endpoint kia của bề mặt đều xoay quanh mã phiên do endpoint này sinh ra —
+> chưa gọi được endpoint này thì chưa có phiên nào để tra, gia hạn hay nhả.
+
+- **Yêu cầu đăng nhập** (`[Authorize]` trần, không policy vai trò): hành khách tự giữ ghế cho mình.
+  Không có token → **401**. Người giữ là người đang đăng nhập — `userId` KHÔNG có trong body (lấy
+  từ claim `NameIdentifier`), nên không ai giữ ghế hộ người khác được.
+- **Body**:
+```json
+// POST /seat-holds
+{
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "seatIds": ["6b1f0c94-0000-0000-0000-000000000000", "9c02a7e1-0000-0000-0000-000000000000"]
+}
+```
+- `tripId` thiếu hẳn trong body → **400** `errors.tripId` (model binding; để `Guid?` + `[Required]`
+  chứ không phải `Guid` — thiếu trường thì `Guid` lặng lẽ nhận `Guid.Empty` và `[Required]` không
+  bắt được, cùng lối `AssignDriverToTripsRequest.DriverId`). Có giá trị nhưng không trỏ tới chuyến
+  nào — kể cả `Guid.Empty` — → **404** `Không tìm thấy chuyến xe`.
+- Chuyến đã huỷ → **409** `Chuyến đã hủy, không thể giữ ghế`; chuyến đã chạy xong → **409**
+  `Chuyến đã hoàn thành, không thể giữ ghế` — cùng câu chữ và cùng lối chặn của
+  `ITripAssignmentService` / `IRouteTripsService` khi đổi xe, đổi tài xế.
+- `seatIds` rỗng, thiếu hẳn, chứa `Guid.Empty` hoặc trùng nhau → **400** `errors.seatIds`.
+- Ghế không tồn tại, hoặc **không thuộc xe của chuyến** → **400** `errors.seatIds`: dữ liệu gửi lên
+  không dựng được một phiên hợp lệ, và không có tham số nào để dò ghế của xe khác. (Ràng buộc "thuộc
+  xe của chuyến" cũng là trần số ghế: không thể giữ nhiều ghế hơn sức chứa của xe.)
+- **Ghế đang có người giữ** — `SeatHolds` còn dòng `Status = 'Holding'` cho cùng
+  `(tripId, seatId)`, bất kể của ai → **409** kèm số ghế vướng, ví dụ
+  `Ghế A1, A2 đang được giữ cho chuyến này.` Đây là ca thường gặp nhất của màn hình chọn ghế: hai
+  khách cùng bấm giữ một ghế.
+- Thành công → **201 Created** kèm đúng hình dạng `SeatHoldSession` ở trên, với `status = "Holding"`,
+  `expiresAt` = lúc tạo + **10 phút**, `canExtend = true` (phiên mới chưa dùng lượt gia hạn nào).
+- `seatNumbers` xếp theo toạ độ sơ đồ (`Floor` → `RowIndex` → `ColumnIndex`) — cùng thứ tự vẽ của
+  `GET /trips/{id}/seats`, nên màn hình hiển thị nhóm ghế vừa giữ đúng chỗ trên sơ đồ.
+
+```json
+// 201 — ví dụ POST /seat-holds
+{
+  "sessionCode": "PHIEN-8f3a2c1d",
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "seatNumbers": ["A1", "A2"],
+  "status": "Holding",
+  "expiresAt": "2026-10-01T01:10:00Z",
+  "canExtend": true
+}
+```
+
+> **Vì sao mã phiên sinh ở tầng service chứ không nhận từ client?** Mã phiên là khoá tra cứu của cả
+> phiên giữ chỗ (GET, gia hạn, nhả đều hỏi theo nó). Để client tự đặt thì hai khách có thể gửi trùng
+> mã và mọi thao tác theo phiên sẽ trộn hai phiên vào nhau. Cột `SessionCode` **KHÔNG unique**
+> (docs/26 §1) nên tầng CSDL không đỡ được — chốt phải nằm ở chỗ duy nhất sinh ra mã.
+
+> **Chống hai khách giữ cùng một ghế — chốt ở đâu?** Ở partial unique index
+> `(TripId, SeatId) WHERE Status = 'Holding'` của `SeatHolds` (AppDbContext.Seat.cs). Service vẫn
+> kiểm tra trước để trả 409 kèm số ghế vướng (ca thường gặp, khách hiểu ngay), nhưng phép kiểm ở
+> tầng service **không đủ** cho hai request đồng thời: cả hai cùng đọc thấy ghế trống rồi cùng ghi.
+> Request thua đâm vào unique index lúc `SaveChanges`, service bắt `DbUpdateException` và trả **409**
+> `Một hoặc nhiều ghế vừa được người khác giữ, vui lòng chọn ghế khác.` — câu chung, không kèm số
+> ghế vì lúc đó service không còn biết ghế nào vừa bị giành; muốn biết thì phải hỏi lại CSDL, mà
+> khách chỉ cần một việc: chọn ghế khác. Cả phiên ghi trong **một** `SaveChangesAsync` nên hỏng là
+> hỏng cả phiên — không để lại một phiên giữ được nửa số ghế mà khách tưởng đã giữ đủ.
+
+> **Vì sao mỗi lượt giữ ghi thêm một dòng `SeatHoldLogs` (`Action = 'Held'`)?** Bảng nhật ký chỉ có
+> giá trị nếu **mọi** mốc vòng đời đều được ghi (docs/26 §6) — `Held` là mốc mở đầu. Thiếu nó thì
+> câu hỏi "tài khoản này đã giữ chỗ bao nhiêu lần" (task cảnh báo của Dăm, đếm thẳng trên bảng log
+> theo chỉ mục `(UserId, CreatedAt)`) đếm thiếu đúng những lượt giữ thành công.
+
+> ⚠️ Ghế đã `Confirmed` **không** chặn lượt giữ mới (partial index chỉ lọc `Status = 'Holding'`,
+> đúng đặc tả docs/26 §1) và bảng `Tickets` chưa migrate — khe hở có thật của luồng đặt vé, đã ghi
+> ở docs/26 §7, ngoài phạm vi task này.
+
+> **Vì sao đứng ở controller riêng (`SeatHoldCreateController`)?** Cùng lý do hai mục dưới: bốn
+> endpoint của bề mặt `api/seat-holds` thuộc bốn task của bốn người, mỗi task một controller.
 
 ### `GET /seat-holds/{sessionCode}` — kiểm tra trạng thái giữ chỗ theo mã phiên
 

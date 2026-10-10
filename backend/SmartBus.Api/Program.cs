@@ -290,6 +290,16 @@ builder.Services.AddScoped<ISeatHoldLookupService, SeatHoldLookupService>();
 // Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<ITripSeatMapService, TripSeatMapService>();
 
+// Giữ ghế tạm thời (khóa ghế theo phiên): POST /api/seat-holds (US 2 "Chọn vị trí ghế còn trống").
+// Task "API giữ ghế tạm thời (khóa ghế theo phiên)" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự giữ ghế cho mình, người giữ lấy
+// từ claim NameIdentifier chứ không có trong body. Đây là endpoint SINH mã phiên của cả bề mặt
+// /seat-holds: ba endpoint kia (tra trạng thái, gia hạn, nhả ghế) đều hỏi theo sessionCode do nó
+// trả về. Đặt ở CUỐI danh sách đăng ký, cạnh khối SeatHold, để không chèn vào đúng khe mà các
+// nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<ISeatHoldCreateService, SeatHoldCreateService>();
+
 // Cổng thanh toán MoMo (US 6): cấu hình đối tác + client thuần HTTP nói chuyện với cổng.
 // Task "Tích hợp SDK MoMo: tạo giao dịch, nhận callback" — Trần Trung Hiếu.
 // File này của Hoàng nên nhờ Hoàng xem qua trong PR.
