@@ -3152,7 +3152,9 @@ phải viết trong `OnModelCreating` (file của Dăm).
 > (`MoMoGatewayService` — Trần Trung Hiếu): tạo giao dịch, kiểm chữ ký IPN, hỏi trạng thái cổng —
 > test bằng HTTP giả, chưa đụng CSDL. **Client cổng VNPay cũng đã có** (`VnPayGatewayService` —
 > Nguyễn Duy Kiên, chi tiết ở mục "Cấu hình cổng VNPay" cuối mục này): dựng URL thanh toán ký
-> HMAC-SHA512 + kiểm chữ ký tham số cổng trả về — không gọi mạng nên test được ngay. Endpoint dưới
+> HMAC-SHA512 + kiểm chữ ký tham số cổng trả về — không gọi mạng nên test được ngay. **Client cổng
+> ZaloPay cũng đã có** (`ZaloPayGatewayService` — Nguyễn Duy Kiên, mục "Cấu hình cổng ZaloPay"):
+> tạo đơn, xác thực callback, hỏi trạng thái — test bằng HTTP giả như MoMo. Endpoint dưới
 > đây sẽ có khi migration xong; mục này chốt hình dạng để FE (`frontend/src/api/paymentApi.ts` —
 > Băng đã code màn chờ, Hạnh đang code màn chọn phương thức) dựa vào.
 
@@ -3171,6 +3173,29 @@ Hai bản nháp FE đang lệch nhau, chốt như sau (FE đổi theo mục này
 | Mã phương thức | `'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'` | `'VnPay'\|'Momo'\|'ZaloPay'\|'BankTransfer'\|'Cash'` | **`'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'`** | Đúng danh sách US 6; `BankTransfer`/`Cash` không có cổng nào triển khai trong dự án; viết hoa CamelCase đúng A3 |
 | Trạng thái giao dịch | `'Pending'\|'Success'\|'Failed'` | `'Paid'` | **`'Pending'\|'Success'\|'Failed'`** | Khớp màn chờ: giao dịch có trạng thái trung gian Pending; `Paid` là trạng thái của **vé**, không phải giao dịch |
 | Khoá hỏi trạng thái | `paymentCode` | `transactionId` | **`paymentCode`** (nội bộ) + **`gatewayTransactionId`** (của cổng) | Cần cả hai: mã nội bộ là khoá chống trùng (A9), mã cổng để đối soát; Băng đã code đủ hai trường |
+
+#### Bốn mã phương thức đi cổng nào — chốt
+
+`'MoMo'|'VNPay'|'ZaloPay'|'BankCard'` là **mã phương thức của hợp đồng, KHÔNG phải tên cổng**: ba
+mã đầu trùng tên cổng, mã thứ tư thì không. Chốt ở task *"Tích hợp ZaloPay và thẻ ngân hàng"*
+(Nguyễn Duy Kiên):
+
+| `methodCode` | Cổng thật | Kênh thanh toán |
+|---|---|---|
+| `MoMo` | MoMo | ví MoMo (`requestType = captureWallet`) |
+| `ZaloPay` | ZaloPay | ví ZaloPay (`embed_data.preferred_payment_method`) |
+| `VNPay` | VNPay | để trống `vnp_BankCode` — **khách tự chọn** trên trang VNPay (QR, thẻ ATM, thẻ quốc tế) |
+| `BankCard` | **VNPay** | ghim `vnp_BankCode = VNBANK` — **thẻ ATM nội địa / tài khoản ngân hàng** |
+
+**Vì sao `BankCard` chạy qua VNPay:** dự án không có cổng riêng nào cho "thẻ ngân hàng", còn VNPay
+đã có sẵn kênh thẻ trong cùng một cổng. Nhờ vậy hai mã khác nhau thật: `VNPay` để khách tự chọn,
+`BankCard` ghim thẳng kênh thẻ nội địa. VNPay còn mã `INTCARD` cho thẻ quốc tế — muốn tách "thẻ
+quốc tế" thành mã riêng thì thêm một adapter nữa, **không đổi bốn mã này**.
+
+Hệ quả ở tầng adapter: `BankCard` là một adapter riêng (`BankCardGatewayAdapter`) nhưng **đứng trên
+đúng client VNPay** — chỉ khác tham số lúc khởi tạo, còn phần đọc callback dùng chung, vì cổng trả
+về y hệt nhau (cùng `vnp_SecureHash`, cùng `vnp_TxnRef`). Endpoint không cần biết điều này: nó tra
+`methodCode` như mọi cổng khác.
 
 ### Endpoints
 
@@ -3197,7 +3222,7 @@ Hai bản nháp FE đang lệch nhau, chốt như sau (FE đổi theo mục này
 
 | Trường | Bắt buộc | Ràng buộc |
 |---|---|---|
-| `methodCode` | ✅ | `'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'` — chưa làm cổng nào thì trả 400 "chưa mở" |
+| `methodCode` | ✅ | `'MoMo'\|'VNPay'\|'ZaloPay'\|'BankCard'` — **cả bốn mã đã có adapter**, `BankCard` đi qua kênh thẻ của VNPay (bảng ánh xạ ở mục Enum chốt trên). Mã ngoài bốn mã này → **400** "chưa mở" kèm danh sách cổng đã mở. Cổng có adapter nhưng **thiếu cấu hình khoá** → **502** nêu đúng tên khoá thiếu (lỗi triển khai, khác hẳn "chưa mở") |
 | `tripId` | ✅ | Chuyến tồn tại |
 | `seatNumbers` | ✅ | Các ghế đang giữ thuộc phiên của người gọi — chỉ để lưu vết, không phải khoá nghiệp vụ |
 | `total` | ✅ | Khớp tổng giá các ghế đã chọn; từ 10.000 đến 50.000.000 (trần của MoMo) |
@@ -3321,19 +3346,97 @@ Task *"Adapter pattern thống nhất cổng thanh toán (dễ thêm cổng mớ
 `IPaymentGatewayResolver` theo `methodCode` rồi nói chuyện qua `IPaymentGateway` bằng DTO trung
 tính (`Dtos/Payments`: `PaymentInitiationRequest`/`Result`, `PaymentCallbackInput`/`Result`). Mỗi
 cổng một adapter mỏng bọc client sẵn có — `MoMoGatewayAdapter` bọc `MoMoGatewayService` (Hiếu),
-`VnPayGatewayAdapter` bọc `VnPayGatewayService` (Kiên); hai client cổng **không đổi**.
+`VnPayGatewayAdapter` bọc `VnPayGatewayService` (Kiên), `ZaloPayGatewayAdapter` bọc
+`ZaloPayGatewayService` (Kiên), `BankCardGatewayAdapter` cũng đứng trên client VNPay (Kiên); bốn
+client cổng **không đổi một dòng nào** khi lắp adapter.
 
-- Mã cổng khớp **KHÔNG phân biệt hoa thường** (`vnpay` = `VNPay`). Mã chưa có adapter (hiện
-  `ZaloPay`, `BankCard`) là **chưa mở** — endpoint trả **400** kèm danh sách `SupportedProviders`.
-  Cổng có adapter nhưng **thiếu cấu hình** thì ném ngay khi dựng adapter, nêu đúng tên khoá thiếu
-  (luật 2) — cố ý khác hẳn "chưa mở", vì đó là lỗi triển khai chứ không phải cổng không tồn tại.
+- Bốn mã của hợp đồng (`MoMo`, `VNPay`, `ZaloPay`, `BankCard`) **đều đã có adapter**. Mã NGOÀI bốn
+  mã đó là **chưa mở** — endpoint trả **400** kèm danh sách `SupportedProviders`.
+- Mã cổng khớp **KHÔNG phân biệt hoa thường** (`vnpay` = `VNPay`). Cổng có adapter nhưng **thiếu
+  cấu hình** thì ném ngay khi dựng adapter, nêu đúng tên khoá thiếu (luật 2) — cố ý khác hẳn "chưa
+  mở", vì đó là lỗi triển khai chứ không phải cổng không tồn tại.
 - Adapter chuẩn hoá **kết luận**, không chỉ hình dạng: `PaymentCallbackResult.Succeeded` **luôn
   false khi chữ ký chưa hợp lệ** — kể cả cổng báo mã thành công (không xác nhận tiền trên dữ liệu
   chưa kiểm chữ ký). Hai endpoint callback vẫn phải **đối chiếu `PaymentCode`/`Amount` với bản ghi
   Payments** trước khi lật trạng thái — adapter không thay bước đó (bước này cần CSDL).
-- Thêm cổng mới (ví dụ ZaloPay) = **3 việc, không đụng endpoint**: (1) viết client cổng + adapter
-  cài `IPaymentGateway`, (2) thêm hằng mã vào `PaymentProviderCodes`, (3) thêm một dòng vào bảng
-  đăng ký trong `PaymentGatewayResolver` + một dòng `AddScoped` adapter trong `Program.cs`.
-  Cố ý **KHÔNG** đưa "hỏi trạng thái cổng" (`QueryTransactionAsync`) vào interface chung ở bước
-  này: mới MoMo có API đó, VNPay v2.1.0 không có — job đối soát (bảng trên) gọi thẳng client MoMo;
-  khi có cổng thứ hai hỗ trợ hỏi trạng thái thì mở rộng interface sau.
+- Thêm cổng mới = **3 việc, không đụng endpoint**: (1) viết client cổng + adapter cài
+  `IPaymentGateway`, (2) thêm hằng mã vào `PaymentProviderCodes`, (3) thêm một dòng vào bảng đăng
+  ký trong `PaymentGatewayResolver` + một dòng `AddScoped` adapter trong `Program.cs`. ZaloPay và
+  `BankCard` đã đi đúng con đường đó — không file nào của lớp adapter phải sửa thêm.
+- Cố ý **KHÔNG** đưa "hỏi trạng thái cổng" vào interface chung: hiện MoMo và **ZaloPay** có API
+  hỏi trạng thái, còn **VNPay v2.1.0 không có** — đưa vào interface là bắt VNPay cài một hàm ném
+  `NotSupportedException`, che mất sự thật rằng cổng đó không hỏi được. Job đối soát (bảng trên)
+  gọi thẳng client của cổng hỗ trợ. Khi có cổng thứ ba hỗ trợ hỏi trạng thái thì mở rộng interface
+  sau, lúc đó mới đủ cơ sở để chốt hình dạng chung.
+
+Hai adapter của task *"Tích hợp ZaloPay và thẻ ngân hàng"* (Kiên) — chỗ endpoint cần biết:
+
+- **`ZaloPayGatewayAdapter`** — endpoint vẫn chỉ thấy `paymentCode` trần như mọi cổng: adapter
+  **ghép** tiền tố `yymmdd_` lúc gửi và **bỏ** tiền tố lúc nhận callback, nên `PaymentCode` trong
+  `PaymentCallbackResult` là mã nội bộ, KHÔNG phải `261010_PM-…`. `app_user` hiện là hằng
+  `"smartbus"` (cổng bắt buộc có trường này, MoMo không có): muốn gửi mã hành khách thật thì phải
+  thêm trường vào `PaymentInitiationRequest` — tức **đổi hình dạng API, luật 5**, sửa file này trước.
+- **`BankCardGatewayAdapter`** — ghim `vnp_BankCode = VNBANK` lúc dựng URL, còn `VerifyCallback` thì
+  **uỷ thác nguyên cho `VnPayGatewayAdapter`** (cùng cổng, cùng tham số `vnp_`, cùng chữ ký SHA512)
+  nên hai adapter kết luận giống nhau từng trường. Hệ quả cho endpoint: **kênh thẻ gọi về CHÍNH
+  endpoint callback của VNPay** (`/payments/vnpay/callback`) — không có endpoint riêng cho
+  `BankCard`; phân biệt giao dịch nào là thẻ là việc của cột `method` trong bảng Payments.
+
+### Cấu hình cổng ZaloPay
+
+`ZaloPayOptions` đọc section `ZaloPay`: `AppId` / `Key1` / `Key2` / `Endpoint` (mặc định sandbox
+`https://sb-openapi.zalopay.vn`). 🔴 **LUẬT 2 — repo PUBLIC**: **cả `Key1` lẫn `Key2` đều là bí
+mật** — `Key1` ký request gửi đi, `Key2` xác thực callback cổng gửi về; hai khoá KHÁC NHAU, dùng
+lẫn là chữ ký sai. Đặt qua `dotnet user-secrets` hoặc biến môi trường (`ZaloPay__AppId`,
+`ZaloPay__Key1`, `ZaloPay__Key2`), KHÔNG commit giá trị thật; khuôn trống đã có trong
+`appsettings.Development.json.example`.
+
+Khác MoMo ở chỗ ZaloPay ký **hai khoá cho hai chiều**, và cấu trúc callback khác hẳn:
+
+| Điểm | Chuẩn ZaloPay | Ghi chú |
+|---|---|---|
+| Tạo đơn | HMAC-SHA256, khoá `Key1`, chuỗi nối bằng `\|`: `app_id\|app_trans_id\|app_user\|amount\|app_time\|embed_data\|item` | `embed_data` và `item` là **chuỗi JSON** lồng trong chuỗi ký — giữ nguyên đúng chuỗi đã gửi trong body |
+| Xác thực callback | HMAC-SHA256, khoá **`Key2`**, ký trên **chính chuỗi `data` thô** | Callback chỉ có 3 trường `{data, mac, type}`; `data` là một CHUỖI JSON, không phải object |
+| Hỏi trạng thái | HMAC-SHA256, khoá `Key1`, chuỗi `app_id\|app_trans_id\|key1` | ⚠️ Xem cảnh báo dưới |
+| Merchant trả lời cổng | `{"return_code": 1, "return_message": "Success"}` | Khác MoMo (204) và VNPay (`RspCode`) |
+| `return_code` của cổng | `1` thành công · `2` thất bại · `3` đang xử lý | Bộ mã KHÁC MoMo (`resultCode = 0` là thành công) — đừng so với 0 |
+
+Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
+
+- **`app_id` là SỐ (`int32`), không phải chuỗi** — ở cả body gửi đi lẫn trong chuỗi ký. Cấu hình
+  `ZaloPay:AppId` vẫn là chuỗi (mọi nguồn cấu hình .NET đều ra chuỗi) nhưng client **kiểm ngay lúc
+  dựng** rằng nó là số nguyên không có số 0 thừa, vì `"02553"` sẽ thành `2553` trong body mà
+  `"02553"` trong chữ ký — hai giá trị khác nhau, cổng từ chối.
+- **`type` của vỏ callback là SỐ** (`1` = callback giao dịch), còn **`data` là CHUỖI** JSON. Khai
+  `type` là `string` thì `JsonSerializer` ném khi gặp `"type":1` và **mọi callback thật đều bị từ
+  chối** — hỏng cả đường tiền.
+- **Mọi trường trong `data` là snake_case** (`app_trans_id`, `zp_trans_id`, `server_time`…), phải
+  ghim `[JsonPropertyName]`: quy ước camelCase của .NET chỉ nối được `appTransId`, KHÔNG nối được
+  `app_trans_id`. Thiếu ghim thì chuỗi vẫn giải mã "thành công" nhưng mọi trường về mặc định —
+  callback đọc ra rỗng mà không có lỗi nào để lần theo.
+
+`app_trans_id` = **`{yymmdd}_{paymentCode}`** (ghép/bỏ tiền tố ở tầng adapter, xem dưới), dài **tối
+đa 40 ký tự**, tiền tố `yymmdd` tính theo **giờ Việt Nam (GMT+7)**; gửi trùng mã bị cổng trả
+`-68 DUPLICATE_APPS_TRANS_ID`.
+
+> ⚠️ **Một chỗ tài liệu ZaloPay mâu thuẫn — đã chọn và ghim lại:** trang spec hiện hành ghi chuỗi
+> MAC của `/v2/query` là `app_id|app_trans_id|key1` (phần tử thứ ba **là chính khoá `Key1`**), còn
+> bản PDF "ZaloPay APIs Integration Document" đời cũ lại đặt `app_time` ở vị trí đó. Code viết theo
+> bản hiện hành và tách hàm dựng chuỗi MAC ra riêng, nên đổi sang biến thể kia chỉ là **một dòng**.
+> Muốn chắc phải chạy thử sandbox với khoá đối tác thật — nhóm chưa có khoá. Test hiện tại là test
+> chống hồi quy theo đặc tả, **không phải** bằng chứng cổng thật đã chấp nhận.
+
+> ⚠️ **Chọn kênh thanh toán — KHÔNG có trường `method`:** `/v2/create` không có tham số nào tên
+> `method`. Kênh chọn qua `bank_code` và/hoặc `embed_data.preferred_payment_method`
+> (`["domestic_card"]`, `["international_card"]`, `["zalopay_wallet"]`, `["vietqr"]`…). Adapter
+> ZaloPay **ghim `preferred_payment_method = ["zalopay_wallet"]`** — đúng nghĩa mã phương thức
+> `ZaloPay` ở bảng enum chốt trên (khác `BankCard` ghim `vnp_BankCode` bên VNPay). Muốn để khách tự
+> chọn kênh trên trang ZaloPay thì bỏ đúng dòng gán đó trong `ZaloPayGatewayAdapter`.
+
+> 🔴 **Callback ZaloPay KHÔNG mang mã kết quả — chữ ký hợp lệ NGHĨA LÀ đã thu tiền.** Tài liệu
+> ZaloPay: *"Khi và chỉ khi Zalopay nhận tín hiệu khách hàng thành công thì mới thông báo kết quả."*
+> Vỏ `{data, mac, type}` không có `return_code`/`status`, và ruột `data` cũng không — nên
+> `ZaloPayGatewayAdapter` đặt `Succeeded = chữ ký hợp lệ && đọc được ruột`, còn
+> `ProviderResponseCode` **cố ý để trống** thay vì bịa một con số. Đây là điểm KHÁC MoMo
+> (`resultCode`) và VNPay (`vnp_ResponseCode`): đừng đi tìm trường trạng thái trong `data`. Cần mã
+> kết quả thì job đối soát gọi `QueryOrderAsync` (`return_code` 1/2/3).
