@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, List, Segmented, Space, Tag, Typography, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import ticketApi from '../api/ticketApi';
 import type { Ticket } from '../api/ticketApi';
 import type { AppError } from '../api/axiosClient';
@@ -38,10 +39,38 @@ const FILTER_OPTIONS: { value: Filter; label: string }[] = [
   })),
 ];
 
-// Màn hình "Vé của tôi" — task "Xử lý vé hết hạn / vé đã sử dụng trên UI" (story 4, Sprint 3,
-// Dương Thị Hạnh). Liệt kê vé điện tử của hành khách và vẽ đúng trạng thái hiển thị: vé còn
-// hiệu lực giữ mã QR rõ, vé đã sử dụng / hết hạn / đã huỷ thì mã QR bôi xám + tag trạng thái.
-// Trạng thái "hết hạn" suy từ giờ khởi hành (xem ticketStatus.ts) chứ không phải cột lưu sẵn.
+/**
+ * Thứ tự hiển thị của danh sách vé. Backend trả mảng trần không hứa thứ tự
+ * (docs/api-contract.md — GET /tickets/me), nên sắp ngay trong màn hình: vé CHƯA khởi hành
+ * lên trước (chuyến gần nhất trước — vé sắp dùng phải thấy ngay, không phải lội qua vé cũ),
+ * rồi mới tới vé đã đi / đã huỷ (quá khứ gần nhất trước). Trả bản mới, không sửa mảng gốc.
+ */
+function sortByDeparture(rows: TicketRow[]): TicketRow[] {
+  const now = dayjs();
+
+  return [...rows].sort((a, b) => {
+    const aTime = dayjs(a.ticket.departureTime);
+    const bTime = dayjs(b.ticket.departureTime);
+    const aUpcoming = !aTime.isBefore(now);
+    const bUpcoming = !bTime.isBefore(now);
+
+    // Chưa khởi hành luôn đứng trước đã khởi hành, không phụ thuộc giá trị thời gian cụ thể.
+    if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+
+    // Cùng nhóm thì sắp theo thời gian: chưa đi → gần nhất trước; đã đi → mới nhất trước.
+    return aUpcoming
+      ? aTime.valueOf() - bTime.valueOf()
+      : bTime.valueOf() - aTime.valueOf();
+  });
+}
+
+// Màn hình "Vé của tôi" — gộp hai task của Dương Thị Hạnh trong story 4 (Sprint 3):
+//   • "Màn hình Vé của tôi: danh sách vé + lọc theo trạng thái" — liệt kê vé điện tử của hành
+//     khách, lọc theo trạng thái hiển thị (Tất cả / Còn hiệu lực / Đã sử dụng / Hết hạn / Đã huỷ)
+//     và sắp thứ tự hiển thị (vé chưa đi trước, đã đi sau — xem sortByDeparture).
+//   • "Xử lý vé hết hạn / vé đã sử dụng trên UI" — vẽ đúng trạng thái hiển thị: vé còn hiệu lực
+//     giữ mã QR rõ, vé đã sử dụng / hết hạn / đã huỷ thì mã QR bôi xám + tag trạng thái. Trạng
+//     thái "hết hạn" suy từ giờ khởi hành (xem ticketStatus.ts) chứ không phải cột lưu sẵn.
 export default function MyTicketsPage() {
   const navigate = useNavigate();
   const { token } = theme.useToken();
@@ -80,7 +109,9 @@ export default function MyTicketsPage() {
 
   const rows: TicketRow[] =
     state.status === 'done'
-      ? state.tickets.map((ticket) => ({ ticket, status: getTicketStatus(ticket) }))
+      ? sortByDeparture(
+          state.tickets.map((ticket) => ({ ticket, status: getTicketStatus(ticket) })),
+        )
       : [];
 
   const filtered = rows.filter(({ status }) => filter === 'all' || status === filter);
