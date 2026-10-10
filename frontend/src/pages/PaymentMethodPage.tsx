@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
+import { Button, Col, Input, Row, Space, Tag, Typography, message, theme } from 'antd';
 import paymentApi from '../api/paymentApi';
 import type { PaymentMethodCode, PaymentMethodOption } from '../api/paymentApi';
 import type { AppError } from '../api/axiosClient';
-import { formatTime, formatVnd } from '../components/ui/format';
+import voucherApi from '../api/voucherApi';
+import type { VoucherValidationResponse } from '../api/voucherApi';
+import { formatTime } from '../components/ui/format';
 import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
+import VoucherDiscountSummary from '../components/VoucherDiscountSummary';
 
 const { Text } = Typography;
 
@@ -53,6 +56,13 @@ export default function PaymentMethodPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [selectedCode, setSelectedCode] = useState<PaymentMethodCode | null>(null);
   const [paying, setPaying] = useState(false);
+
+  // Phần áp dụng voucher (dòng 58 — hiển thị số tiền được giảm và giá sau giảm). Ô nhập bên dưới
+  // là LỐI TẮT TẠM để demo phần hiển thị; khi Thịnh xong "Component nhập mã giảm giá ở trang
+  // thanh toán" thì thay ô này bằng component của Thịnh. `validation` chỉ là XEM TRƯỚC.
+  const [voucherInput, setVoucherInput] = useState('');
+  const [validation, setValidation] = useState<VoucherValidationResponse | null>(null);
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +111,34 @@ export default function PaymentMethodPage() {
     } finally {
       setPaying(false);
     }
+  };
+
+  // Kiểm tra mã giảm giá để HIỂN THỊ số tiền được giảm + giá sau giảm. Kết quả chỉ để xem trước,
+  // không gửi kèm khi thanh toán — việc chốt voucher vào giao dịch là phần của luồng thanh toán
+  // (POST /payments), ngoài phạm vi task hiển thị này.
+  const handleApplyVoucher = async () => {
+    const code = voucherInput.trim();
+    if (!code) return;
+    if (!hasTotal) {
+      message.warning('Chưa có tổng tiền để kiểm tra mã giảm giá.');
+      return;
+    }
+
+    setValidating(true);
+    try {
+      const result = await voucherApi.validate({ code, tripId, orderAmount: totalPrice });
+      setValidation(result);
+    } catch (err) {
+      const appError = err as AppError;
+      message.error(appError.customMessage || 'Không kiểm tra được mã giảm giá.');
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handleClearVoucher = () => {
+    setVoucherInput('');
+    setValidation(null);
   };
 
   // Chưa có tripId → không có chuyến nào để thanh toán. Mời quay lại luồng tra cứu.
@@ -185,11 +223,38 @@ export default function PaymentMethodPage() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <Text type="secondary">Tổng tiền tạm tính</Text>
-                <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}>
-                  {hasTotal ? formatVnd(totalPrice) : '—'}
+              <div style={{ margin: '12px 0' }}>
+                <Text type="secondary">Mã giảm giá</Text>
+                <div style={{ marginTop: 4 }}>
+                  {validation?.valid ? (
+                    <Space>
+                      <Tag color="green">{validation.code}</Tag>
+                      <Button type="link" size="small" onClick={handleClearVoucher}>
+                        Xoá
+                      </Button>
+                    </Space>
+                  ) : (
+                    <Space.Compact style={{ display: 'flex', width: '100%' }}>
+                      <Input
+                        placeholder="Nhập mã (VD: SUMMER10)"
+                        value={voucherInput}
+                        onChange={(e) => setVoucherInput(e.target.value)}
+                        onPressEnter={handleApplyVoucher}
+                        allowClear
+                      />
+                      <Button loading={validating} onClick={handleApplyVoucher}>
+                        Áp dụng
+                      </Button>
+                    </Space.Compact>
+                  )}
                 </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <VoucherDiscountSummary
+                  orderAmount={hasTotal ? totalPrice : null}
+                  validation={validation}
+                />
               </div>
 
               <Button
