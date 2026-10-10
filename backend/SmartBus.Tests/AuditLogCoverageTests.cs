@@ -29,6 +29,8 @@ namespace SmartBus.Tests;
 ///     không suy ra được từ HTTP verb.
 ///   • <c>/api/auth/refresh-token</c>, <c>/api/auth/register</c> — KHÔNG ghi. Đánh đổi đã biết,
 ///     ghi ở doc-comment <c>AuditLogMiddleware.IgnoredPaths</c>.
+///   • <c>/api/vouchers/validate</c> — KHÔNG ghi, nhưng vì lý do KHÁC HẲN: nó không đổi dữ liệu
+///     (phép đọc thuần dùng POST chỉ vì có body). Xem dòng cuối bảng phủ sóng.
 ///
 /// ⚠️ Provider InMemory KHÔNG dựng unique index, khoá ngoại hay HasData — không seed 4 vai trò
 /// thì mọi request đều 403 dù token hợp lệ.
@@ -153,6 +155,17 @@ public class AuditLogCoverageTests
         ("POST",   "/api/stops",                                 CachGhi.Middleware),
         ("PUT",    "/api/stops/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/stops/{id:guid}",                       CachGhi.Middleware),
+
+        // Kiểm tra voucher — story 18, Nguyễn Duy Kiên. POST nhưng KHÔNG đổi dữ liệu: đây là phép
+        // đọc thuần (tra voucher + tính tiền giảm), dùng POST chỉ vì có body. Màn thanh toán gọi
+        // endpoint này mỗi lần khách gõ thêm một ký tự, nên để middleware ghi theo verb sẽ sinh một
+        // dòng Create giả cho mỗi phím gõ — và Target suy ra là "Validate", một bảng không tồn tại.
+        // Vì vậy đường dẫn này nằm trong AuditLogMiddleware.IgnoredPaths.
+        //
+        // ⚠️ Ca "POST chỉ đọc" đầu tiên của dự án; còn POST /api/tickets/validate (Sprint 4) và các
+        // endpoint hành động con của /seat-holds sẽ gặp đúng vấn đề này — nhóm cần chốt MỘT cách
+        // xử lý chung thay vì mỗi task thêm một dòng ngoại lệ.
+        ("POST",   "/api/vouchers/validate",                     CachGhi.KhongGhi),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>

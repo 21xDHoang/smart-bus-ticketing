@@ -385,6 +385,16 @@ builder.Services.AddScoped<IPaymentGatewayResolver, PaymentGatewayResolver>();
 // không chèn vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
 
+// Voucher (US 18): kiểm tra mã cho một đơn hàng (POST /vouchers/validate) và tiêu thụ mã khi giao
+// dịch đã thu được tiền. Task "API kiểm tra và áp dụng voucher vào đơn hàng" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Hai service dùng CHUNG một bộ luật (VoucherValidationService.ReasonFor/DiscountFor): chép luật
+// sang nhánh tiêu thụ là hai bản sẽ lệch nhau, và bản lệch sẽ là bản quyết định tiền.
+// Đặt ở CUỐI danh sách đăng ký (sau khối chốt thanh toán, trước phần hạ tầng JWT/RBAC/CORS) để
+// không chèn vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<IVoucherValidationService, VoucherValidationService>();
+builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
