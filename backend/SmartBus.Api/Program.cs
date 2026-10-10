@@ -327,6 +327,21 @@ builder.Services.AddScoped<IMoMoGatewayService>(provider => provider.GetRequired
 // vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<ISeatHoldReleaseService, SeatHoldReleaseService>();
 
+// Cổng thanh toán VNPay (US 6): cấu hình đối tác + client dựng URL ký sẵn để chuyển khách sang cổng
+// và kiểm chữ ký tham số cổng trả về (Return URL + IPN).
+// Task "Tích hợp VNPay: tạo URL thanh toán + verify chữ ký" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Khác khối MoMo ngay trên một điểm bản chất: VNPay không có API server-to-server để tạo giao dịch
+// — client này KHÔNG gọi mạng nên không cần AddHttpClient, chỉ hai dòng đăng ký thuần. TmnCode/
+// HashSecret KHÔNG có giá trị mặc định trong code (luật 2 — repo PUBLIC): đặt qua dotnet
+// user-secrets hoặc biến môi trường VnPay__HashSecret…, mục "VnPay" trong
+// appsettings.Development.json.example chỉ là khuôn để điền. Client chưa đụng CSDL — bảng Payments
+// là migration của Dăm, service nghiệp vụ thanh toán sẽ gọi vào đây khi bảng có.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SeatHold, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<VnPayOptions>(builder.Configuration.GetSection(VnPayOptions.SectionName));
+builder.Services.AddScoped<IVnPayGatewayService, VnPayGatewayService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
