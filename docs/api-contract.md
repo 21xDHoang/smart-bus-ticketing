@@ -3150,9 +3150,11 @@ phải viết trong `OnModelCreating` (file của Dăm).
 > Story 6 *"Cổng thanh toán"*. ⚠️ **Bảng `Payments` CHƯA migrate** (task *"Migrate bảng Payments,
 > Transactions, PaymentLogs"* — Vàng Thị Dăm). Phần **client cổng MoMo đã có** trên backend
 > (`MoMoGatewayService` — Trần Trung Hiếu): tạo giao dịch, kiểm chữ ký IPN, hỏi trạng thái cổng —
-> test bằng HTTP giả, chưa đụng CSDL. Endpoint dưới đây sẽ có khi migration xong; mục này chốt
-> hình dạng để FE (`frontend/src/api/paymentApi.ts` — Băng đã code màn chờ, Hạnh đang code màn
-> chọn phương thức) dựa vào.
+> test bằng HTTP giả, chưa đụng CSDL. **Client cổng VNPay cũng đã có** (`VnPayGatewayService` —
+> Nguyễn Duy Kiên, chi tiết ở mục "Cấu hình cổng VNPay" cuối mục này): dựng URL thanh toán ký
+> HMAC-SHA512 + kiểm chữ ký tham số cổng trả về — không gọi mạng nên test được ngay. Endpoint dưới
+> đây sẽ có khi migration xong; mục này chốt hình dạng để FE (`frontend/src/api/paymentApi.ts` —
+> Băng đã code màn chờ, Hạnh đang code màn chọn phương thức) dựa vào.
 
 > ⚠️ **Việc cần báo nhóm (xung đột tài liệu):** bảng phân công Sprint 3 giao migration Payments ở
 > Sprint 3, nhưng quy ước A9 xếp bảng `Payments` ở **Sprint 4**, và `Transactions`/`PaymentLogs`
@@ -3177,6 +3179,7 @@ Hai bản nháp FE đang lệch nhau, chốt như sau (FE đổi theo mục này
 | GET | `/payment-methods` | Danh sách phương thức đang mở — chưa có chủ trong bảng phân công (gợi ý: thuộc phần adapter của Hoàng, màn của Hạnh) | Chưa làm |
 | POST | `/payments` | Tạo giao dịch + gọi cổng — Trần Trung Hiếu | Chờ bảng |
 | POST | `/payments/momo/callback` | IPN MoMo — Trần Trung Hiếu | Chờ bảng |
+| GET | `/payments/vnpay/callback` | IPN VNPay (**GET + query string**, khác MoMo POST JSON) — Nguyễn Duy Kiên | Chờ bảng |
 | GET | `/payments/{paymentCode}` | *"API kiểm tra trạng thái giao dịch"* — Trần Trung Hiếu | Chờ bảng |
 | — | *job đối soát* | *"đối soát tự động"* — Trần Trung Hiếu | Chờ bảng — chốt dưới |
 
@@ -3214,6 +3217,11 @@ Luồng: backend sinh `paymentCode` (khoá chống trùng — A9), lưu `Payment
 gọi `MoMoGatewayService.CreatePaymentAsync` với `orderId = paymentCode` → trả `payUrl` cho FE.
 Cổng từ chối (`resultCode != 0`) → **502** kèm `message` của cổng (lỗi phía cổng, không phải lỗi
 dữ liệu gửi lên).
+
+Nhánh VNPay: không gọi cổng để XIN URL — gọi `VnPayGatewayService.CreatePaymentUrl` (hàm thuần,
+không gọi mạng; URL đã ký sẵn bằng HMAC-SHA512) rồi trả `payUrl` y hệt hình dạng trên, với
+`vnp_TxnRef` = `paymentCode`. "Cổng từ chối" với VNPay không xảy ra lúc tạo — khách đứng ngay
+trên trang cổng, kết quả biết được qua chữ ký ở Return URL/IPN (mục dưới).
 
 #### `POST /payments/momo/callback` — IPN của MoMo
 
@@ -3281,3 +3289,27 @@ IPN có thể lọt mất (mạng nghẽn, app restart đúng lúc callback bay 
 qua `dotnet user-secrets` hoặc biến môi trường (`MoMo__PartnerCode`…), KHÔNG commit giá trị thật;
 khuôn trống đã có trong `appsettings.Development.json.example`. Thiếu cấu hình thì lần gọi đầu
 tiên báo lỗi nêu đúng tên khoá thiếu.
+
+### Cấu hình cổng VNPay
+
+Khác MoMo một điểm bản chất: **VNPay không có API server-to-server để tạo giao dịch** — backend
+dựng URL `vpcpay.html` đã ký HMAC-SHA512 rồi chuyển khách sang cổng (task *"Tích hợp VNPay: tạo
+URL thanh toán + verify chữ ký"* — Nguyễn Duy Kiên). Cổng trả kết quả về bằng **GET kèm tham số
+`vnp_` trên query string** ở cả hai đường — Return URL (khách quay về) và IPN (cổng gọi thẳng
+backend) — nên hai đường dùng chung một phép kiểm chữ ký `IsValidSignature`. Client thuần tính
+toán: không cần `HttpClient`, chưa đụng CSDL.
+
+`VnPayOptions` đọc section `VnPay`: `TmnCode` / `HashSecret` / `PaymentUrl` (mặc định sandbox
+`https://sandbox.vnpayment.vn/paymentv2/vpcpay.html`). 🔴 **LUẬT 2 — repo PUBLIC**: hai giá trị
+đối tác đặt qua `dotnet user-secrets` hoặc biến môi trường (`VnPay__TmnCode`, `VnPay__HashSecret`),
+KHÔNG commit giá trị thật; khuôn trống đã có trong `appsettings.Development.json.example`. Thiếu
+cấu hình thì lần dựng service đầu tiên báo lỗi nêu đúng tên khoá thiếu (cùng lối `MoMoOptions`).
+
+Ba điểm dễ sai của chuẩn ký — ghim trong `VnPayGatewayService`, test ghim bằng vector tính NGOÀI
+code C# (Python, như bộ test MoMo):
+
+| Điểm | Chuẩn VNPay | Sai thì hỏng thế nào |
+|---|---|---|
+| Chuỗi ký | `key=value` xếp theo bảng chữ cái, giá trị mã hoá kiểu PHP urlencode (dấu cách → `+`, `~` → `%7E`, hex chữ HOA) | Dùng `Uri.EscapeDataString` trần thì dấu cách ra `%20` — chữ ký lệch với chuỗi cổng tính lại, cổng báo sai chữ ký |
+| `vnp_Amount` | Số tiền **× 100** (VNPay tính theo đơn vị nhỏ nhất) | Cổng ghi nhận sai số tiền |
+| `vnp_CreateDate`/`vnp_ExpireDate` | Giờ **GMT+7**, định dạng `yyyyMMddHHmmss` | Cổng từ chối giao dịch |

@@ -22,6 +22,13 @@
     "Endpoint": "https://test-payment.momo.vn"
   },
 
+  "VnPay": {
+    "//": "Cổng thanh toán VNPay (US 6). Hai giá trị đối tác do VNPay cấp — KHÔNG commit giá trị thật lên repo public (luật 2). Nên đặt qua dotnet user-secrets hoặc biến môi trường (VnPay__TmnCode, VnPay__HashSecret) thay vì để trong file này; để đây chỉ khi máy local riêng. Bộ khoá sandbox công khai in trong tài liệu VNPay (sandbox.vnpayment.vn) dùng được để thử ngay.",
+    "TmnCode": "MA_WEBSITE_VNPAY_CAP_VAO_DAY",
+    "HashSecret": "CHUOI_BI_MAT_VNPAY_CAP_VAO_DAY",
+    "PaymentUrl": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
+  },
+
   "Logging": {
     "LogLevel": {
       "Default": "Information",
