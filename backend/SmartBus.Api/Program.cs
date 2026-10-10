@@ -305,6 +305,18 @@ builder.Services.Configure<MoMoOptions>(builder.Configuration.GetSection(MoMoOpt
 builder.Services.AddHttpClient<MoMoGatewayService>();
 builder.Services.AddScoped<IMoMoGatewayService>(provider => provider.GetRequiredService<MoMoGatewayService>());
 
+// Nhả ghế khi khách huỷ thao tác giữ chỗ theo mã phiên:
+// POST /api/seat-holds/{sessionCode}/release (US 3).
+// Task "API nhả ghế khi hết hạn hoặc khách huỷ thao tác" — Phùng Duy Hoàng.
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự nhả phiên giữ chỗ của mình,
+// quyền sở hữu kiểm ngay trong truy vấn theo userId (phiên của người khác trả 404 chứ không 403).
+// KHÁC khối gia hạn ngay trên ở một điểm: endpoint này nhận CẢ phiên vừa quá hạn mà job nền
+// SeatHoldExpiryBackgroundService chưa quét (cố ý không kiểm ExpiresAt) và trả 200 khi phiên đã
+// Expired/Released từ trước — giải thích đầy đủ ở đầu SeatHoldReleaseService.
+// Đặt ở CUỐI danh sách đăng ký (sau khối MoMo, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<ISeatHoldReleaseService, SeatHoldReleaseService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
