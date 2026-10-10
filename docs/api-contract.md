@@ -1341,7 +1341,7 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 | GET | `/seat-holds/{sessionCode}` | *"API kiểm tra trạng thái giữ chỗ theo mã phiên"* — Trần Trung Hiếu | ✅ dưới đây |
 | POST | `/seat-holds` | *"API giữ ghế tạm thời (khóa ghế theo phiên)"* — Nguyễn Duy Kiên | Chưa làm |
 | POST | `/seat-holds/{sessionCode}/release` | *"API nhả ghế khi hết hạn hoặc khách huỷ thao tác"* — Phùng Duy Hoàng | Chưa làm |
-| POST | `/seat-holds/{sessionCode}/extend` | *"API gia hạn thời gian giữ chỗ (tối đa 1 lần)"* — Trần Trung Hiếu | Chưa làm |
+| POST | `/seat-holds/{sessionCode}/extend` | *"API gia hạn thời gian giữ chỗ (tối đa 1 lần)"* — Trần Trung Hiếu | ✅ dưới đây |
 
 > Nhả ghế do HẾT HẠN không phải endpoint: job nền `SeatHoldExpiryBackgroundService` (docs/26 §4)
 > tự lật `Holding` → `Expired` khi quá `ExpiresAt`. Phần khách chủ động huỷ mới là endpoint
@@ -1409,6 +1409,58 @@ Ba endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng nà
 > endpoint của bốn task thuộc bốn người (xem bảng đầu mục) — mỗi bề mặt một controller, cùng lối
 > `TripSearchController` đứng chung bề mặt `api/trips`.
 
+### `POST /seat-holds/{sessionCode}/extend` — gia hạn thời gian giữ chỗ (tối đa 1 lần)
+
+> ✅ Backend đã có (`SeatHoldExtendController` — Trần Trung Hiếu, story 3, task *"API gia hạn thời
+> gian giữ chỗ (tối đa 1 lần)"*). Đây là endpoint mà màn hình gọi khi khách bấm nút "Gia hạn" trong
+> modal đếm ngược — kéo dài hạn `ExpiresAt` của cả phiên thêm **10 phút**.
+
+- **Yêu cầu đăng nhập** (`[Authorize]` trần, không policy vai trò) — hành khách tự gia hạn phiên giữ
+  chỗ của mình. Không có token → **401**. Không có body: phiên xác định bằng `sessionCode` trên
+  đường dẫn, người gia hạn là người đăng nhập.
+- **Chỉ chủ phiên gia hạn được**: điều kiện `UserId` nằm ngay trong truy vấn — phiên của người khác
+  và phiên không tồn tại cùng một câu trả lời **404** `Không tìm thấy phiên giữ chỗ` (cùng lối mục
+  GET ở trên).
+- **Hạn mới = thời điểm gia hạn + 10 phút** (UTC), không phải hạn cũ + 10 phút: khách luôn nhận
+  trọn vẹn một cửa sổ 10 phút mới kể từ lúc bấm gia hạn — màn hình đếm ngược chỉ cần đặt lại về
+  `10:00` khi gọi thành công. Cập nhật **cả nhóm dòng cùng phiên** đang `Holding` (docs/26 §1: gia
+  hạn đổi theo nhóm) và ghi **một dòng `SeatHoldLogs`** `Action = 'Extended'` cho mỗi lượt vừa gia
+  hạn (docs/26 §6).
+- **Chỉ gia hạn tối đa 1 lần** (US 3): chốt nằm ở unique index `(SeatHoldId, Action)` của
+  `SeatHoldLogs` (docs/26 §1) — dòng `Extended` thứ hai không lọt được xuống bảng. Tầng service vẫn
+  kiểm tra trước để trả lỗi có thông báo, không để khách nhận lỗi unique thô.
+- Phiên không còn dòng nào `Holding` (đã `Confirmed` / `Released` / `Expired`) → **409**
+  `Phiên giữ chỗ đã kết thúc, không thể gia hạn.`
+- Phiên còn `Holding` nhưng đã có log `Extended` → **409**
+  `Phiên giữ chỗ đã được gia hạn rồi — mỗi phiên chỉ được gia hạn tối đa 1 lần.`
+- Trả về đúng hình dạng `SeatHoldSession` ở trên với `status = "Holding"`, `expiresAt` là hạn mới
+  và `canExtend = false` (vừa dùng hết lượt gia hạn).
+
+```json
+// 200 — ví dụ POST /seat-holds/PHIEN-8f3a2c1d/extend
+{
+  "sessionCode": "PHIEN-8f3a2c1d",
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "seatNumbers": ["A1", "A2"],
+  "status": "Holding",
+  "expiresAt": "2026-10-01T01:16:00Z",
+  "canExtend": false
+}
+```
+
+> **Vì sao gia hạn xong trả 409 mà không phải 400 khi hết lượt?** 400 là lỗi của dữ liệu gửi lên,
+> 409 là xung đột với trạng thái hiện tại của phiên — đúng quy ước D2 cho cả hai ca "phiên đã kết
+> thúc" và "đã gia hạn rồi". Hai request gia hạn đồng thời: request thua đâm vào unique index
+> `(SeatHoldId, Action)` khi ghi log, service bắt `DbUpdateException` và trả cùng câu 409 "đã được
+> gia hạn rồi".
+
+> **Vì sao hạn mới tính từ lúc gia hạn chứ không phải hạn cũ cộng thêm?** Tính từ hạn cũ thì gia
+> hạn sớm được thưởng thời gian (gia hạn ở phút thứ 1 thành giữ 19 phút) còn gia hạn muộn bị phạt
+> — cùng một nút bấm mà hai khách nhận hai lợi ích khác nhau. Tính từ lúc gia hạn thì mọi khách
+> đều nhận đúng lời hứa của US 3: "giữ chỗ trong 10 phút", gia hạn là thêm một lần 10 phút nữa.
+
+> **Vì sao đứng ở controller riêng (`SeatHoldExtendController`)?** Cùng lý do mục GET: bốn endpoint
+> của bề mặt `api/seat-holds` thuộc bốn task của bốn người, mỗi task một controller.
 ## Xe buýt — `/buses`
 
 > ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi

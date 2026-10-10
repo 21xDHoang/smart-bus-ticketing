@@ -264,6 +264,15 @@ builder.Services.AddHostedService<SeatHoldExpiryBackgroundService>();
 builder.Services.AddScoped<ISeatHoldAbuseService, SeatHoldAbuseService>();
 builder.Services.AddHostedService<SeatHoldAbuseBackgroundService>();
 
+// Gia hạn thời gian giữ chỗ theo mã phiên: POST /api/seat-holds/{sessionCode}/extend (US 3).
+// Task "API gia hạn thời gian giữ chỗ (tối đa 1 lần)" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự gia hạn phiên giữ chỗ của
+// mình, quyền sở hữu kiểm ngay trong truy vấn theo userId (phiên của người khác trả 404 chứ
+// không 403). Đặt ở CUỐI danh sách đăng ký, cạnh khối SeatHold, để không chèn vào đúng khe mà
+// các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<ISeatHoldExtendService, SeatHoldExtendService>();
+
 // Kiểm tra trạng thái giữ chỗ theo mã phiên: GET /api/seat-holds/{sessionCode} (US 3).
 // Task "API kiểm tra trạng thái giữ chỗ theo mã phiên" — Trần Trung Hiếu.
 // File này của Hoàng nên nhờ Hoàng xem qua trong PR.
