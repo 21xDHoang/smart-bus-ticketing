@@ -273,6 +273,14 @@ builder.Services.AddHostedService<SeatHoldAbuseBackgroundService>();
 // các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<ISeatHoldExtendService, SeatHoldExtendService>();
 
+// Sơ đồ ghế theo chuyến cho hành khách: GET /api/trips/{tripId}/seats (US 2 "Chọn vị trí ghế").
+// Task "API lấy sơ đồ ghế theo chuyến + trạng thái từng ghế" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Công khai có chủ đích, cùng luồng tra cứu của hành khách với ITripSearchService ở trên.
+// Đặt ở CUỐI danh sách đăng ký, cạnh khối SeatHold, để không chèn vào đúng khe mà các nhánh
+// Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<ITripSeatMapService, TripSeatMapService>();
+
 // Cổng thanh toán MoMo (US 6): cấu hình đối tác + client thuần HTTP nói chuyện với cổng.
 // Task "Tích hợp SDK MoMo: tạo giao dịch, nhận callback" — Trần Trung Hiếu.
 // File này của Hoàng nên nhờ Hoàng xem qua trong PR.
