@@ -3083,10 +3083,15 @@ trả về.
 
 ## Vé điện tử — `/tickets`
 
-> Story 4 *"Vé điện tử QR"*. ⚠️ **Bảng `Tickets` + `TicketQRCodes` CHƯA migrate** (task
-> *"Migrate bảng Tickets, TicketQRCodes"* — Vàng Thị Dăm, Sprint 3). Mục này chốt hình dạng để
-> Dăm và frontend (`frontend/src/api/ticketApi.ts` — Băng/Hạnh đã viết bản nháp mock) cùng dựa
-> vào; endpoint sẽ có khi migration xong.
+> Story 4 *"Vé điện tử QR"*. 🟡 **Bảng `Tickets` — cấu hình ĐÃ XONG, MIGRATION CHƯA SINH** (task
+> *"Migrate bảng Tickets, TicketQRCodes"* — Vàng Thị Dăm, Sprint 3). Bảng ra đời trong migration
+> `Sprint3_Payments_Vouchers_Tickets`, gộp cả nợ của dòng 27 (`Payments`) và dòng 50 (`Vouchers`,
+> `VoucherUsages`) vì EF diff toàn bộ model trong một lệnh — xem `docs/27`. Chạy bằng đúng một lệnh
+> `dotnet ef migrations add`; tới lúc đó entity đã sẵn để người khác code và test trên InMemory.
+> ⚠️ Chỉ **một** bảng: mã QR là cột `Code` của `Tickets`, KHÔNG có bảng `TicketQRCodes` riêng —
+> A6 đặt khoá duy nhất `QrCode` trên chính bảng vé, và A9 không có bảng đó. Lý do đầy đủ:
+> `docs/28-csdl-ve-dien-tu.md` §2. Mục này chốt hình dạng để Hiếu dựng endpoint và frontend
+> (`frontend/src/api/ticketApi.ts` — Băng/Hạnh đã viết bản nháp mock) cùng dựa vào.
 
 ### Hình dạng `Ticket` — chốt theo bản nháp FE
 
@@ -3109,8 +3114,8 @@ trả về.
 
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
-| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | Chưa làm — chờ bảng |
-| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | Chưa làm — chờ bảng |
+| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | Chưa làm — entity đã có, chờ lệnh sinh migration |
+| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | Chưa làm — entity đã có, chờ lệnh sinh migration |
 | — | *phát hành vé* | *"API phát hành vé điện tử sau khi thanh toán thành công"* — Trần Trung Hiếu | ⚠️ xem luồng dưới |
 
 ### Phát hành vé sau khi thanh toán — KHÔNG phải endpoint riêng
@@ -3145,13 +3150,21 @@ CREATE UNIQUE INDEX "IX_Tickets_TripId_SeatId_Active"
 Vé đã huỷ (`Cancelled`) không chặn ghế. EF Core không sinh được partial index bằng attribute —
 phải viết trong `OnModelCreating` (file của Dăm).
 
+⚠️ Nhánh `'Held'` trong điều kiện trên là **dự phòng**: enum `TicketStatus` chỉ có
+`Paid`/`Used`/`Cancelled` (đúng bảng trường ở trên), vé sinh thẳng ở `Paid` nên không dòng nào mang
+`'Held'`. Giữ nguyên chữ của A6 — ai truy vấn ghế đã bán chỉ cần hỏi `'Paid'`.
+
 ## Thanh toán — `/payments`
 
-> Story 6 *"Cổng thanh toán"*. ⚠️ **Bảng `Payments` CHƯA migrate** — nhưng phần CSDL đã dựng:
-> entity `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent
-> (`PaymentSettlementService`) — task *"Xử lý idempotency: chống trừ tiền 2 lần khi callback
-> trùng"* (Phùng Duy Hoàng, dựng bảng theo uỷ quyền của Dăm 10/10/2026); còn lại sinh migration
-> `Sprint3_Payments` (task *"Migrate bảng Payments, Transactions, PaymentLogs"* — Vàng Thị Dăm).
+> Story 6 *"Cổng thanh toán"*. 🟡 **Bảng `Payments` — cấu hình ĐÃ XONG, MIGRATION CHƯA SINH** — entity
+> `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent (`PaymentSettlementService`)
+> — task *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"* (Phùng Duy Hoàng, dựng bảng
+> theo uỷ quyền của Dăm 10/10/2026). Bảng ra đời trong migration `Sprint3_Payments_Vouchers_Tickets`
+> (Vàng Thị Dăm), **cùng lệnh** với `Tickets` và `Vouchers`; FK `TicketId` → `Tickets` cũng nối trong
+> chính migration đó. Chờ đúng một lệnh `dotnet ef migrations add` — xem `docs/27`.
+> ⚠️ **`Transactions` và `PaymentLogs` KHÔNG được dựng** — cả hai không nằm trong danh sách bảng
+> đóng băng A9 và không có entity/cấu hình nào trong repo; muốn có thì nhóm phải bổ sung A9 trước.
+> Xem `docs/28-csdl-ve-dien-tu.md` §7.
 > Phần **client cổng MoMo đã có** trên backend
 > (`MoMoGatewayService` — Trần Trung Hiếu): tạo giao dịch, kiểm chữ ký IPN, hỏi trạng thái cổng —
 > test bằng HTTP giả, chưa đụng CSDL. **Client cổng VNPay cũng đã có** (`VnPayGatewayService` —
@@ -3501,7 +3514,7 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 >
 > | Dòng | Việc | Người | Trạng thái |
 > |---|---|---|---|
-> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | Chờ Dăm sinh migration |
+> | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | 🟡 Cấu hình đã soát xong 10/10/2026 — chờ sinh migration |
 > | 51 | API CRUD voucher | Trần Trung Hiếu | Chưa làm — dùng chung bề mặt `api/vouchers` |
 > | **52** | **API kiểm tra và áp dụng voucher vào đơn hàng** | **Nguyễn Duy Kiên** | ✅ mục này |
 > | 53 | Validate điều kiện voucher: thời gian, tuyến, giá trị đơn tối thiểu | Phùng Duy Hoàng | ⚠️ **gộp vào dòng 52** — xem dưới |
@@ -3514,8 +3527,10 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > (Cùng dạng trùng lặp đã gặp ở các dòng 14/16, 15 với 4/18/20, 29/30.)
 
 > ⚠️ **Bảng `Vouchers` / `VoucherUsages` CHƯA migrate.** Entity + cấu hình EF đã có (task dòng 52 —
-> Nguyễn Duy Kiên, Dăm đã cho phép dựng bảng), còn lại là sinh migration — việc của **Vàng Thị
-> Dăm**: xem `docs/27-huong-dan-migrate-vouchers.md`. Endpoint dưới đây chạy được trên CSDL thật
+> Nguyễn Duy Kiên, Dăm đã cho phép dựng bảng); **Dăm đã soát lại toàn bộ 10/10/2026: không thiếu mục
+> nào** (bảng, cột, kiểu, 3 FK `Restrict`, 6 index, `xmin`, `UpdatedAt`). Còn lại đúng MỘT lệnh sinh
+> migration — việc của **Vàng Thị Dăm**:
+> xem `docs/27-huong-dan-migrate-vouchers.md`. Endpoint dưới đây chạy được trên CSDL thật
 > ngay khi migration xong; test tích hợp của dự án chạy trên EF InMemory nên **không chờ migration**.
 
 ### Entity `Voucher`
@@ -3556,12 +3571,18 @@ GHI THÊM: **không** `updatedAt` (A4), **không** `isDeleted`.
 | `discountAmount` | numeric(12,2) | Số tiền đã giảm |
 | `createdAt` | timestamptz | |
 
-> 📌 **Vì sao `paymentCode` là cột trần, KHÔNG phải FK sang `Payments`.** Bảng `Payments` cũng **chưa
-> migrate** (xem mục "Thanh toán" trên: Dăm còn nợ `Sprint3_Payments`). Đặt FK bây giờ là buộc
-> migration `Vouchers` phải chạy **sau** migration `Payments` — một ràng buộc thứ tự giữa hai việc
-> của hai người, đổi lấy đúng một cột. Repo đã có sẵn lối này: `Payment.TicketId` cũng là cột trần
-> chờ bảng `Tickets`. Khi `Payments` migrate xong thì nối FK bằng một migration sau, dễ hơn nhiều so
-> với việc gỡ một FK sai thứ tự.
+> 📌 **Vì sao `paymentCode` là cột trần, KHÔNG phải FK sang `Payments`.** Lý do ban đầu là ràng buộc
+> thứ tự: `Payments` khi đó **chưa migrate** (Dăm còn nợ `Sprint3_Payments`), nên đặt FK sẽ buộc
+> migration `Vouchers` phải chạy **sau** migration `Payments` — một ràng buộc thứ tự giữa hai việc của
+> hai người, đổi lấy đúng một cột.
+>
+> 🟡 **Cập nhật 10/10/2026 — ràng buộc đó nay không còn, nhưng quyết định giữ nguyên.** Cả `Payments`,
+> `Vouchers`/`VoucherUsages` lẫn `Tickets` ra đời trong **cùng một** migration
+> (`Sprint3_Payments_Vouchers_Tickets`), nên nối FK không còn vướng thứ tự. Chọn giữ `paymentCode` là
+> **cột trần** vì `Payment.TicketId` — lối so sánh cũ — nay **đã nối FK** (`Restrict`), còn việc nối
+> `VoucherUsages.PaymentCode` → `Payments.PaymentCode` là **bàn riêng giữa Dăm và Kiên**, không tự
+> đổi trong lúc soát migration (`docs/27` mục "Nhắc nhóm" số 2). Muốn nối thì sửa mục này trước rồi
+> mới code — luật 5.
 
 ### Endpoints
 

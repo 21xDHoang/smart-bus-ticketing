@@ -37,8 +37,7 @@ public partial class AppDbContext
             // Đường quét của job đối soát (mỗi phút): Status = 'Pending' và CreatedAt cũ hơn 5 phút.
             e.HasIndex(p => new { p.Status, p.CreatedAt });
 
-            // A6 chốt index này cho Payments. Cột TicketId chưa nối FK sang Tickets (bảng chưa
-            // migrate) — nối khi bảng vé có.
+            // A6 chốt index này cho Payments — đường tra ngược "giao dịch này đã sinh vé nào".
             e.HasIndex(p => p.TicketId);
 
             e.HasOne(p => p.User).WithMany()
@@ -46,6 +45,13 @@ public partial class AppDbContext
 
             e.HasOne(p => p.Trip).WithMany()
                 .HasForeignKey(p => p.TripId).OnDelete(DeleteBehavior.Restrict);
+
+            // Nối FK sang vé — đúng ghi chú để lại lúc dựng bảng ("nối khi bảng vé có"), nay bảng
+            // Tickets đã migrate. Restrict tường minh (A5): mặc định của EF là Cascade, và xoá một vé
+            // mà kéo theo dòng tiền đã thu là mất dữ liệu doanh thu — đúng lỗi tốn kém nhất mà A5
+            // được viết ra để chặn. Cột nullable nên quan hệ là tuỳ chọn: giao dịch Pending chưa có vé.
+            e.HasOne(p => p.Ticket).WithMany()
+                .HasForeignKey(p => p.TicketId).OnDelete(DeleteBehavior.Restrict);
 
             // Khoá phiên bản dòng cho nhánh đua "callback trùng": hai luồng cùng lật MỘT dòng
             // (IPN gửi lại, hoặc callback + job đối soát chạy trùng) — EF thêm "WHERE xmin = ..."

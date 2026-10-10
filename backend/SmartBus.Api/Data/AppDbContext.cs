@@ -24,6 +24,7 @@ public partial class AppDbContext : DbContext
         ConfigureMonthlyPass(modelBuilder);
         ConfigureFeedback(modelBuilder);
         ConfigureSeat(modelBuilder);
+        ConfigureTicket(modelBuilder);
         ConfigurePayment(modelBuilder);
         ConfigureVoucher(modelBuilder);
     }
@@ -49,6 +50,12 @@ public partial class AppDbContext : DbContext
     // US 2 + US 3 (SeatLayouts + Seats + SeatHolds): nhóm nghiệp vụ sơ đồ ghế & giữ chỗ — Sprint 3.
     // Cấu hình Seat chuyển từ AppDbContext.Trip.cs về AppDbContext.Seat.cs, mô hình EF không đổi.
     partial void ConfigureSeat(ModelBuilder modelBuilder);
+
+    // US 4 (Tickets — A9 #14, Vàng Thị Dăm): task "Migrate bảng Tickets, TicketQRCodes" của bảng
+    // phân công Sprint 3. Dựng MỘT bảng: mã QR là cột Code của Tickets, không có bảng TicketQRCodes
+    // riêng (A9 không có bảng đó, A6 đặt khoá duy nhất QrCode trên Tickets) — xem docs/28 §2.
+    // Xem AppDbContext.Ticket.cs.
+    partial void ConfigureTicket(ModelBuilder modelBuilder);
 
     // US 6 (Payments — dòng 27, Vàng Thị Dăm): dựng theo uỷ quyền 10/10/2026 cho task dòng 33
     // *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"* (Phùng Duy Hoàng).

@@ -5,6 +5,15 @@
 > Task **dòng 50 — "Migrate bảng `Vouchers`, `VoucherUsages`"** (Vàng Thị Dăm) là việc còn lại duy
 > nhất để nhánh này chạy được trên CSDL thật.
 >
+> 🟡 **CẤU HÌNH ĐÃ XONG 10/10/2026 — MIGRATION CHƯA SINH.** Vàng Thị Dăm đã soát lại toàn bộ entity +
+> cấu hình EF của Kiên theo checklist dưới: **không thiếu mục nào** (bảng, cột, kiểu, 3 FK `Restrict`,
+> 6 index, `xmin`, `UpdatedAt`). Việc còn lại đúng **MỘT lệnh** `dotnet ef migrations add`.
+>
+> Lệnh đó sinh **một** migration gộp cả ba thứ còn nợ của Sprint 3 (`Payments`, `Vouchers`,
+> `VoucherUsages`) cùng bảng `Tickets` mới, vì EF diff TOÀN BỘ model trong một lệnh và không tách
+> được. Tên migration vì thế khác tên dự kiến ghi dưới đây; phần còn lại của ghi chú này vẫn dùng
+> được nguyên vẹn làm checklist soát.
+>
 > Vàng Thị Dăm đã cho phép Kiên dựng entity + cấu hình EF cho hai bảng này (trao đổi trực tiếp trong
 > nhóm), nên phần dưới đã xong. **Migration vẫn là việc của Dăm** — luật 3.
 
@@ -26,17 +35,58 @@ Hình dạng bảng khớp hợp đồng **"Voucher — /vouchers"** trong `docs
 file). **Đừng sửa entity/DbContext cho khớp ý mình** — muốn đổi hình dạng thì sửa `api-contract.md`
 trước rồi báo Kiên (luật 5). Việc ở đây chỉ là **sinh migration**.
 
+## Dăm đã soát phần Kiên dựng — 10/10/2026
+
+Task dòng 50 có kèm yêu cầu *"kiểm tra lại Kiên đã tạo bảng, nếu được hãy bổ sung cho đầy đủ"*. Kết
+quả soát 5 file trên, đối chiếu **checklist của chính ghi chú này** và **bảng trường của hợp đồng**:
+
+| Hạng mục | Kết quả |
+|---|---|
+| Tên 2 bảng (`Vouchers`, `VoucherUsages`) | ✅ lấy từ tên DbSet, PascalCase số nhiều |
+| `Code` varchar(20) NOT NULL + unique · `Name` varchar(200) NOT NULL | ✅ |
+| `DiscountType` / `Status` varchar(20) chuỗi; `Status` default `Active`; `DiscountType` không default | ✅ đúng cả hai vế |
+| 5 cột tiền `numeric(12,2)` | ✅ `DiscountValue`, `MinOrderValue`, `MaxDiscount`, `OrderAmount`, `DiscountAmount` |
+| `UsedCount` default `0` · `RouteId` nullable | ✅ |
+| `PaymentCode` varchar(64) NOT NULL | ✅ |
+| 3 FK đều `Restrict`; `VoucherUsages→Vouchers` **không** Cascade (`VoucherUsages.cs` chép nguyên văn nỗi lo này) | ✅ |
+| Đủ 6 index | ✅ `Code`(unique), `(Status,ValidFrom,ValidUntil)`, `RouteId`, `PaymentCode`(unique), `(VoucherId,CreatedAt)`, `UserId` |
+| `UpdatedAt` có ở `Vouchers`, không ở `VoucherUsages`; không `IsDeleted` | ✅ |
+| `xmin` khai bằng `IsRowVersion()` trên cột hệ thống, không sinh cột mới | ✅ (còn soi lại trong file migration) |
+| Nối dây `ConfigureVoucher` + `partial void` | ✅ `AppDbContext.cs:29` và `:68` |
+
+→ **Không thiếu mục nào**, nên không có gì phải "bổ sung". Việc thật của dòng 50 đúng là **sinh
+migration**.
+
+**Một thứ trông như thiếu nhưng không phải:** `VoucherUsages.PaymentCode` là **cột trần**, chưa nối FK
+sang `Payments`. Về kỹ thuật nay nối được — `Payments.PaymentCode` đã có unique index
+(`AppDbContext.Payment.cs:22`), và hai bảng cùng nằm trong một migration nên ràng buộc thứ tự ngày
+trước không còn. Nhưng mục "Nhắc nhóm" số 2 dưới đây ghi rõ việc đó **bàn riêng với Kiên**, và hợp
+đồng có cả khối 📌 giải thích thiết kế cột trần → đổi là phải sửa `api-contract.md` trước (luật 5).
+**Không đổi trong lúc soát migration.**
+
 ## Việc cần làm — đúng MỘT lệnh
 
 ```bash
 cd backend/SmartBus.Api
-dotnet ef migrations add Sprint3_Vouchers_VoucherUsages
+dotnet ef migrations add Sprint3_Payments_Vouchers_Tickets
 ```
 
 (`dotnet ef` chưa cài thì chạy `dotnet tool restore` trước.)
 
+⚠️ Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì lệnh trên **vẫn
+cần** hai biến môi trường, nếu không host design-time chết trước khi EF kịp đọc model — `Program.cs`
+kiểm chuỗi kết nối, còn `JwtMiddleware` kiểm khoá ký. Giá trị chỉ dùng lúc dựng model, `migrations
+add` không mở kết nối nào:
+
+```bash
+ConnectionStrings__Default="<chuoi-ket-noi-gia — chi can dung dinh dang>" \
+Jwt__Key="<chuoi-bat-ky-dai-it-nhat-32-byte>" \
+dotnet ef migrations add Sprint3_Payments_Vouchers_Tickets
+```
+
 Rồi soát file migration vừa sinh theo checklist dưới, commit trên nhánh riêng + PR như các migration
-trước. **Không cần** sửa entity, không cần viết API, không cần đụng `api-contract.md`.
+trước. **Không cần** sửa entity, không cần viết API. `api-contract.md` chỉ đổi dòng trạng thái
+*"CHƯA migrate"*, không đụng hình dạng endpoint.
 
 ## Checklist soát migration
 
@@ -99,7 +149,7 @@ trong chú thích của `AppDbContext.Voucher.cs`):
 | | Cách | Chọn? |
 |---|---|---|
 | 1 | Chuẩn hoá `trim().ToUpperInvariant()` ở tầng service + unique index thường | ✅ **đang dùng** |
-| 2 | Unique index trên `upper("Code")` | ⬜ cân nhắc khi sinh migration |
+| 2 | Unique index trên `upper("Code")` | ❌ **đã quyết KHÔNG dùng** — xem dưới |
 | 3 | Kiểu `citext` | ❌ cần extension PostgreSQL mà dự án chưa dùng ở đâu |
 
 Đường (1) được chọn vì bản nháp FE (`frontend/src/api/voucherApi.ts`) **cũng** đã chuẩn hoá chữ HOA ở
@@ -107,18 +157,31 @@ cả create lẫn update, nên toàn hệ thống giữ được một hình d�
 nằm ở **tầng ứng dụng**, nên một script SQL ghi thẳng vào bảng có thể tạo ra `summer10` song song với
 `SUMMER10` mà index không chặn.
 
-**Nếu Dăm muốn đóng hẳn khe đó**: viết thêm trong migration một dòng `CREATE UNIQUE INDEX` trên
-`upper("Code")`, và thêm một mục vào checklist trên. Đây là **đối tượng schema không có test nào
-phủ** (InMemory không dựng index) nên nếu chọn thì nhớ ghi lại trong PR để nhóm biết. Chọn đường nào
-cũng được — nhưng phải là quyết định có ý thức, không phải mặc định.
+✅ **ĐÃ QUYẾT 10/10/2026 — Vàng Thị Dăm: giữ đường (1), KHÔNG thêm index trên `upper("Code")`.**
+
+Lý do: cả ba tầng đều đã chuẩn hoá chữ HOA (DTO chặn khuôn ký tự → service
+`Trim().ToUpperInvariant()` → bản nháp FE `voucherApi.ts` ở cả create lẫn update), nên unique index
+thường là **chốt cuối đủ cho mọi đường đi qua API**. Cái mất đã cân nhắc và **chấp nhận**: một script
+SQL ghi thẳng xuống bảng vẫn tạo được `summer10` song song `SUMMER10`. Đổi lại, migration không phải
+mang một đối tượng schema **không test nào phủ** (InMemory không dựng index) và Dăm không phải sửa tay
+file migration do EF sinh — giữ được lối "migration là bản EF sinh ra" của cả repo.
+
+→ Nếu sau này nhóm đổi ý, đóng khe bằng **một migration riêng**: thêm index không phải sửa cột nào,
+nên không tốn gì ngoài một lệnh. Đây là quyết định có ý thức, không phải mặc định — đúng như mục này
+yêu cầu.
 
 ## Nhắc nhóm (không phải việc code)
 
 1. `VoucherUsages` là bảng **thứ 22** (và `Vouchers` là bảng 21, sau `FeedbackReplies`) — mục A9 của
    `docs/03-quy-uoc.md` đang liệt kê 20 bảng. Bảng tính Sprint 3 dòng 50 đã ghi rõ "Migrate bảng
    `Vouchers`, `VoucherUsages`" nên hai bảng là chủ trương có sẵn; nhóm chỉ cần chốt bổ sung vào A9.
-2. **`Payments` vẫn chưa migrate** (Dăm còn nợ `Sprint3_Payments`). Vì vậy `VoucherUsages.PaymentCode`
-   cố ý là **cột trần, không phải FK** sang `Payments` — đặt FK bây giờ là buộc migration `Vouchers`
-   phải chạy SAU migration `Payments`, một ràng buộc thứ tự giữa hai việc của hai người, đổi lấy đúng
-   một cột. Repo đã có sẵn lối này: `Payment.TicketId` cũng là cột trần chờ bảng `Tickets`. Nối FK
-   bằng một migration sau, khi `Payments` đã có bảng.
+2. **`Payments` và `Vouchers` nay cùng MỘT migration** — `Sprint3_Payments_Vouchers_Tickets`, sinh
+   bằng đúng một lệnh ở trên — nên ràng buộc thứ tự mà ghi chú cũ lo (`Vouchers` phải chạy sau
+   `Payments`) không còn: hai bảng ra đời trong cùng một lệnh. Vì vậy quyết định cũ — để
+   `VoucherUsages.PaymentCode` là **cột trần, không phải FK** — vẫn giữ nguyên nhưng giờ là **lựa
+   chọn**, không còn là ràng buộc kỹ thuật. Nối FK hay không là việc của Dăm + Kiên, bàn riêng; đừng
+   tự đổi trong lúc soát migration.
+
+   Ghi chú cũ viện dẫn `Payment.TicketId` như một "cột trần chờ bảng" — **nay cấu hình FK đó đã nối
+   sẵn** (`Restrict`, trong `AppDbContext.Payment.cs`), cùng migration này sinh luôn bảng `Tickets`.
+   Xem `docs/28-csdl-ve-dien-tu.md` §5.
