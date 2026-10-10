@@ -1461,7 +1461,6 @@ Ba endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng nà
 
 > **Vì sao đứng ở controller riêng (`SeatHoldExtendController`)?** Cùng lý do mục GET: bốn endpoint
 > của bề mặt `api/seat-holds` thuộc bốn task của bốn người, mỗi task một controller.
-
 ## Xe buýt — `/buses`
 
 > ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi

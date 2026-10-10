@@ -273,6 +273,15 @@ builder.Services.AddHostedService<SeatHoldAbuseBackgroundService>();
 // các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<ISeatHoldExtendService, SeatHoldExtendService>();
 
+// Kiểm tra trạng thái giữ chỗ theo mã phiên: GET /api/seat-holds/{sessionCode} (US 3).
+// Task "API kiểm tra trạng thái giữ chỗ theo mã phiên" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự xem phiên giữ chỗ của mình,
+// quyền sở hữu kiểm ngay trong truy vấn theo userId (phiên của người khác trả 404 chứ không 403).
+// Đặt ở CUỐI danh sách đăng ký, cạnh khối SeatHold, để không chèn vào đúng khe mà các nhánh
+// Sprint 3 khác đang thêm dòng.
+builder.Services.AddScoped<ISeatHoldLookupService, SeatHoldLookupService>();
+
 // Sơ đồ ghế theo chuyến cho hành khách: GET /api/trips/{tripId}/seats (US 2 "Chọn vị trí ghế").
 // Task "API lấy sơ đồ ghế theo chuyến + trạng thái từng ghế" — Trần Trung Hiếu.
 // File này của Hoàng nên nhờ Hoàng xem qua trong PR.
