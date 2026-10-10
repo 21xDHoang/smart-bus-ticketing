@@ -120,6 +120,14 @@ public class AuditLogCoverageTests
         // endpoint hành động con của bề mặt /seat-holds.
         ("POST",   "/api/seat-holds/{sessionCode}/extend",       CachGhi.Middleware),
 
+        // Nhả giữ chỗ — story 3, Phùng Duy Hoàng. Middleware tự ghi (POST → Create) và DÍNH CÙNG
+        // giới hạn như ca extend ngay trên: route dùng {sessionCode} nên Target chỉ là "Release",
+        // không phải "SeatHolds:<mã phiên>" (giới hạn suy tên bảng ở AuditLogMiddleware.
+        // ResourceSegmentIndex — giải thích đầy đủ ở comment khối trên). Test Phần 2 ghim sự thật
+        // này; khi nhóm chốt cách xử lý chung cho các endpoint hành động con của /seat-holds thì
+        // đổi hai ca này và middleware cùng một lúc.
+        ("POST",   "/api/seat-holds/{sessionCode}/release",      CachGhi.Middleware),
+
         // Xử lý phản ánh — story 24, Phùng Duy Hoàng. Middleware tự ghi (PATCH → Update,
         // POST → Create); tên bảng suy từ đoạn tĩnh ngay trước {id} là "Feedbacks" — kể cả POST
         // .../{id}/replies (KHÔNG phải "FeedbackReplies": đây là endpoint con của phản ánh, nhật
@@ -718,6 +726,37 @@ public class AuditLogCoverageTests
         // thật lại để khi nhóm chốt cách xử lý cho các endpoint hành động con của /seat-holds
         // (release của Hoàng cũng dính) thì đổi ở đây và ở AuditLogMiddleware cùng một lúc.
         await AssertMotBanGhiAsync(factory, AuditAction.Create, "Extend", chuPhien);
+    }
+
+    // ----------------------------------------------------------- Giữ chỗ — nhả (story 3)
+
+    // Story 3, Phùng Duy Hoàng: nhả ghế khi khách huỷ thao tác. Cùng ràng buộc chủ phiên như ca
+    // gia hạn ngay trên — service lọc theo UserId trong truy vấn nên ca này đăng nhập bằng tài
+    // khoản hành khách, không dùng SignInAsAdminAsync.
+    [Fact]
+    public async Task Post_seat_holds_release_ghi_Create_voi_Target_Release()
+    {
+        using var factory = new TestAppFactory();
+        await EnsureAllRolesAsync(factory);
+        var chuPhien = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var client = ClientWith(factory, factory.CreateTokenFor(chuPhien));
+
+        var trip = await SeedTripAsync(factory);
+        var seat = await SeedSeatAsync(factory);
+        await SeedHoldAsync(factory, chuPhien.Id, trip.Id, seat.Id, "PHIEN-AUDIT");
+
+        var response = await client.PostAsync("/api/seat-holds/PHIEN-AUDIT/release", null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target chỉ là "Release", KHÔNG phải "SeatHolds:<mã phiên>": cùng giới hạn
+        // của ca extend ngay trên (route dùng {sessionCode} nên middleware không tìm thấy {id} để
+        // suy tên bảng — rơi về đoạn tĩnh đầu tiên sau tham số cuối, đúng vào tên hành động; hợp
+        // đồng SeatHoldSession cũng không có trường "id" để ghép vào Target). Hành động Create do
+        // POST suy ra, dù nghiệp vụ thật là kết thúc lượt giữ. Khi nhóm chốt cách xử lý chung cho
+        // các endpoint hành động con của /seat-holds thì đổi ở đây, ở ca extend và ở
+        // AuditLogMiddleware cùng một lúc; test này ghim sự thật lại để lúc đó có chỗ mà sửa.
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, "Release", chuPhien);
     }
 
     // ------------------------------------------------- Phản ánh — Admin phản hồi (story 24)

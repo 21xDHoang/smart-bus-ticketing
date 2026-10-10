@@ -1334,13 +1334,13 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 > Hai bảng `SeatHolds` + `SeatHoldLogs` đã migrate (Vàng Thị Dăm — docs/26-csdl-so-do-ghe.md).
 > Bề mặt này của US 3 *"tự động giữ chỗ trong 10 phút khi khách đang thao tác thanh toán"* gồm
 > bốn endpoint, mỗi endpoint một task của bảng phân công Sprint 3 — mục này chốt endpoint ĐÃ có,
-> ba endpoint còn lại bổ sung vào đây khi task của chúng hoàn thành:
+> hai endpoint còn lại bổ sung vào đây khi task của chúng hoàn thành:
 
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
 | GET | `/seat-holds/{sessionCode}` | *"API kiểm tra trạng thái giữ chỗ theo mã phiên"* — Trần Trung Hiếu | ✅ dưới đây |
 | POST | `/seat-holds` | *"API giữ ghế tạm thời (khóa ghế theo phiên)"* — Nguyễn Duy Kiên | Chưa làm |
-| POST | `/seat-holds/{sessionCode}/release` | *"API nhả ghế khi hết hạn hoặc khách huỷ thao tác"* — Phùng Duy Hoàng | Chưa làm |
+| POST | `/seat-holds/{sessionCode}/release` | *"API nhả ghế khi hết hạn hoặc khách huỷ thao tác"* — Phùng Duy Hoàng | ✅ dưới đây |
 | POST | `/seat-holds/{sessionCode}/extend` | *"API gia hạn thời gian giữ chỗ (tối đa 1 lần)"* — Trần Trung Hiếu | ✅ dưới đây |
 
 > Nhả ghế do HẾT HẠN không phải endpoint: job nền `SeatHoldExpiryBackgroundService` (docs/26 §4)
@@ -1352,7 +1352,7 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 Một phiên giữ NHIỀU ghế = nhiều dòng `SeatHolds` cùng `SessionCode` (cột KHÔNG unique —
 docs/26 §1), nên đối tượng trả về gom các ghế lại thành một PHIÊN chứ không phải một dòng:
 mọi thao tác (tra trạng thái, gia hạn, đếm ngược, nhả cả phiên) đều hỏi theo `SessionCode`.
-Ba endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng này.
+Hai endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng này.
 
 ```json
 // SeatHoldSessionResponse — ví dụ GET /seat-holds/PHIEN-8f3a2c1d
@@ -1461,6 +1461,70 @@ Ba endpoint chưa làm ở bảng trên cũng trả về đúng hình dạng nà
 
 > **Vì sao đứng ở controller riêng (`SeatHoldExtendController`)?** Cùng lý do mục GET: bốn endpoint
 > của bề mặt `api/seat-holds` thuộc bốn task của bốn người, mỗi task một controller.
+
+### `POST /seat-holds/{sessionCode}/release` — nhả ghế khi khách huỷ thao tác
+
+> ✅ Backend đã có (`SeatHoldReleaseController` — Phùng Duy Hoàng, story 3, task *"API nhả ghế khi
+> hết hạn hoặc khách huỷ thao tác"*). Đây là endpoint màn hình gọi khi khách bấm "Huỷ" trong modal
+> đếm ngược, hoặc khi đồng hồ về 0 mà modal còn mở — trả ghế về sơ đồ ngay, không đợi job nền.
+
+- **Yêu cầu đăng nhập** (`[Authorize]` trần, không policy vai trò) — hành khách tự nhả phiên giữ
+  chỗ của mình. Không có token → **401**. Không có body: phiên xác định bằng `sessionCode` trên
+  đường dẫn, người nhả là người đang đăng nhập.
+- **Chỉ chủ phiên nhả được**: điều kiện `UserId` nằm ngay trong truy vấn — phiên của người khác và
+  phiên không tồn tại cùng một câu trả lời **404** `Không tìm thấy phiên giữ chỗ` (cùng lối mục GET
+  và extend ở trên).
+- **Phiên còn `Holding`** (kể cả vừa quá `ExpiresAt` mà job nền chưa quét — xem "Vì sao" dưới) →
+  lật **cả nhóm dòng cùng phiên** sang `Released` (docs/26 §1: tạo / gia hạn / nhả / hết hạn đều
+  đổi theo nhóm) và ghi **một dòng `SeatHoldLogs`** `Action = 'Released'` cho mỗi lượt giữ vừa nhả
+  (docs/26 §6) → **200** với `status = "Released"`, `expiresAt` giữ nguyên hạn cũ.
+- **Phiên đã `Expired` / `Released` từ trước** → **200** với đúng trạng thái hiện tại của phiên,
+  không ghi gì thêm. Nhả là thao tác kết thúc nên gọi lại nhiều lần vẫn 200 — xem "Vì sao" dưới.
+- **Phiên đã `Confirmed`** (đã chốt thành vé) → **409** `Phiên giữ chỗ đã chốt thành vé, không thể
+  nhả.` — không lật trạng thái, không ghi log.
+- Trả về đúng hình dạng `SeatHoldSession` ở trên, `canExtend = false` (phiên đã kết thúc thì không
+  còn gì để gia hạn).
+
+```json
+// 200 — ví dụ POST /seat-holds/PHIEN-8f3a2c1d/release
+{
+  "sessionCode": "PHIEN-8f3a2c1d",
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "seatNumbers": ["A1", "A2"],
+  "status": "Released",
+  "expiresAt": "2026-10-01T01:10:00Z",
+  "canExtend": false
+}
+```
+
+> **Vì sao phiên đã `Expired` / `Released` vẫn trả 200 chứ không 409 như API gia hạn?** Nhả là thao
+> tác KẾT THÚC, không phải thao tác đòi phiên còn sống: đích đến của người gọi — "ghế tự do" — đã
+> đạt từ trước, nên câu trả lời đúng là "xong rồi". Ba ca dùng thật đòi hỏi điều này: đồng hồ đếm
+> ngược về 0 và modal tự gọi release trong khi job nền có thể đã quét trước đó vài giây; khách bấm
+> "Huỷ" hai lần; mạng chập chờn phải gọi lại. Trả 409 ở những ca đó là báo cho khách rằng thao tác
+> huỷ của họ thất bại trong khi ghế đã thực sự được trả — sai sự thật. Endpoint nhả vì vậy hành xử
+> như một lệnh xoá: gọi lại bao nhiêu lần kết quả vẫn là 200.
+
+> **Vì sao `Confirmed` là 409 mà không nhả?** Dòng `Confirmed` là ghế đã bán — có vé, có tiền. Lật
+> nó sang `Released` là viết sai lịch sử giao dịch. Và nhả riêng các dòng `Holding` còn sót của một
+> phiên đã chốt cũng là viết vào một phiên đã xong: lần theo vé thì khách đã trả tiền cho CẢ phiên,
+> nên dòng `Holding` còn lại là dữ liệu lệch cần con người xem, không phải thứ tự đoán ý. Kiểm
+> `Confirmed` TRƯỚC cả dòng `Holding` nên ca lệch bị chặn nguyên phiên, không nhả nửa vời.
+
+> **Vì sao không kiểm tra `ExpiresAt` trước khi nhả?** Job nền `SeatHoldExpiryBackgroundService`
+> (docs/26 §4) quét mỗi phút, nên phiên vừa quá hạn có thể còn `Holding` trong CSDL tới gần một
+> phút. Trong khe hở đó khách bấm "Huỷ" (hoặc màn hình tự gọi release khi đồng hồ về 0) mà endpoint
+> từ chối vì "đã hết hạn" thì ghế bị giữ thêm tới lượt quét kế tiếp — mất đúng thứ mà thao tác nhả
+> sinh ra để trả lại. Nhả sớm một phiên đã quá hạn là vô hại: đích đến giống hệt lượt quét của job,
+> chỉ khác người ghi log (`Released` thay vì `Expired` — đúng ý nghĩa "khách chủ động huỷ").
+
+> **Vì sao không có 409 "đã nhả rồi" cho hai request đồng thời?** Request thua đâm vào unique index
+> `(SeatHoldId, Action)` khi ghi dòng `Released` thứ hai, service bắt `DbUpdateException` — nhưng
+> KHÁC API gia hạn (cũng bắt `DbUpdateException` nhưng trả 409 "đã gia hạn rồi"): ở đây đâm unique
+> nghĩa là request kia ĐÃ nhả xong, đích đến đã đạt nên trả 200 như ca thành công.
+
+> **Vì sao đứng ở controller riêng (`SeatHoldReleaseController`)?** Cùng lý do mục GET và extend:
+> bốn endpoint của bề mặt `api/seat-holds` thuộc bốn task của bốn người, mỗi task một controller.
 ## Xe buýt — `/buses`
 
 > ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi
