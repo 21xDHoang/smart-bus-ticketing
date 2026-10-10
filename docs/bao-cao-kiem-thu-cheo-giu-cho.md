@@ -73,7 +73,8 @@ cáo trước — là **kiểm thử chéo có bằng chứng chạy lại đư�
 
 | Hạng mục | Lệnh | Kết quả |
 |---|---|---|
-| Test backend (trước khi thêm ca mới) | `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1121/1121 pass**, 0 fail, 0 skip, 1 m 54 s |
+| Test backend (mốc `main`, trước khi thêm ca mới) | `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1121/1121 pass**, 0 fail, 0 skip, 1 m 54 s |
+| Test backend **sau khi thêm 12 ca của báo cáo này** | `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj -c Release` | ✅ **1133/1133 pass**, 0 fail, 0 skip, 1 m 43 s |
 | Build backend | `dotnet build backend/SmartBus.sln -c Release` | ✅ **0 warning, 0 error** |
 | Build frontend | `npm --prefix frontend run build` | ✅ exit 0 — chỉ còn cảnh báo chunk > 500 kB (sau khi `npm install` bù `qrcode.react`, xem mục 1) |
 | Lint frontend | `npm --prefix frontend run lint` | ⚠️ **1 cảnh báo** — `StopManagePage.tsx:33` `react(set-state-in-effect)`, đúng cảnh báo cũ, **ngoài** luồng giữ chỗ |
@@ -152,7 +153,7 @@ hoặc rủi ro · **Thấp** = tài liệu, vệ sinh mã.
 | # | Lỗi | Mức | Người xử lý |
 |---|---|---|---|
 | G1 | Ghế **đã bán** (bảng `Tickets`) vẫn trả `Available` và **vẫn giữ được** — `TripSeatMapService` không hỏi `Tickets` | 🔴 Cao | Trần Trung Hiếu |
-| G2 | Nửa frontend của story 3 **chưa nối**: không có hàm tạo phiên, màn chọn ghế nhảy thẳng sang thanh toán demo, ba module đếm ngược/modal/nhắc nhở là **code chết** | 🔴 Cao | Nguyễn Đình Băng · Dương Thị Hạnh · Hoàng Văn Thịnh |
+| G2 | Nửa frontend của story 3 **chưa nối**: không có hàm tạo phiên, màn chọn ghế nhảy thẳng sang thanh toán demo, ba module đếm ngược/modal/nhắc nhở là **cụm khép kín không cửa vào** | 🔴 Cao | Nguyễn Đình Băng · Dương Thị Hạnh · Hoàng Văn Thịnh |
 | G3 | **Ba comment nói sai** tình trạng backend, và một trong số đó đang là công tắc chặn cả tính năng | 🟠 TB | Nguyễn Đình Băng · Hoàng Văn Thịnh |
 | G4 | **Không dòng code nào ghi `Tickets`** và **không gì đặt `SeatHoldStatus.Confirmed`** — trạng thái `Paid` và nhánh 409 "đã chốt thành vé" không có nguồn sinh | 🟠 TB | Trần Trung Hiếu |
 | G5 | **Kiểu nullable lệch hai tầng**: backend trả `null`, `seatMapApi.ts` khai `number` | 🟠 TB | Nguyễn Đình Băng |
@@ -192,22 +193,31 @@ khi hết hạn giữ chỗ, cả hai cùng tin mình có ghế.
 
 **Đường đi của lỗi:**
 
-1. `Services/TripSeatMapService.cs:83-91` — trạng thái ghế chỉ suy từ **một** nguồn:
+1. `Services/TripSeatMapService.cs:75-79` — trạng thái ghế chỉ suy từ **một** nguồn:
    ```csharp
    var heldSeatIds = await _db.SeatHolds.AsNoTracking()
        .Where(h => h.TripId == tripId && h.Status == SeatHoldStatus.Holding)
-       …
+       .Select(h => h.SeatId)
+       .Distinct()
+       .ToListAsync(cancellationToken);
+   ```
+   rồi dòng `:104` chỉ có hai nhánh:
+   ```csharp
    Status = heldSet.Contains(seat.Id) ? StatusHeld : StatusAvailable,
    ```
-   **Không có truy vấn `Tickets` nào** trong cả file.
-2. `Dtos/Trips/TripSeatMapResponse.cs` — lời giải thích cho việc thiếu nguồn đó:
-   > *"Trạng thái "Paid" chưa xuất hiện vì bảng Tickets chưa migrate (US 4, Vàng Thị Dăm)."*
+   **Không có truy vấn `Tickets` nào** trong cả file (grep `Tickets` trong file chỉ ra ba dòng **chú
+   thích** ở `:14`, `:83`, `:85` — không dòng code nào).
+2. `Services/TripSeatMapService.cs:83-86` — lời giải thích cho việc thiếu nguồn đó:
+   > *"Trạng thái "Paid" hôm nay không có nguồn: bảng Tickets (US 4 — Vàng Thị Dăm) chưa được
+   > migrate nên không có gì để hỏi ghế đã bán."*
+   Cùng câu đó ở `Dtos/Trips/TripSeatMapResponse.cs:13` — *"Trạng thái "Paid" chưa xuất hiện vì bảng
+   Tickets chưa migrate (US 4, Vàng Thị Dăm)."*
 3. **Nhưng bảng `Tickets` ĐÃ được migrate** — `backend/SmartBus.Api/Migrations/20261010105248_Sprint3_Payments_Vouchers_Tickets.cs`,
    commit `6da838c` ngày **10/10/2026** của Vàng Thị Dăm (backlog r38 *"Migrate bảng Tickets,
-   TicketQRCodes"*). Tiền đề của cả `TripSeatMapResponse.cs` và `docs/api-contract.md` (mục
-   `GET /trips/{id}/seats`: *"⚠️ Bảng `Tickets` chưa được migrate … nên hôm nay chưa có ghế nào trả
-   về `Paid`"*) **đã sai từ hôm qua**.
-4. `docs/api-contract.md:1447-1450` tự nhận đây là khe hở có thật: *"⚠️ Ghế đã `Confirmed` **không**
+   TicketQRCodes"*). Tiền đề của cả hai docstring trên và của `docs/api-contract.md` (`:1209-1213`,
+   mục `GET /trips/{id}/seats`: *"⚠️ **Bảng `Tickets` chưa được migrate** … nên hôm nay chưa có ghế
+   nào trả về `Paid`"*) **đã sai từ hôm qua**.
+4. `docs/api-contract.md:1475-1477` tự nhận đây là khe hở có thật: *"⚠️ Ghế đã `Confirmed` **không**
    chặn lượt giữ mới … và bảng `Tickets` chưa migrate — khe hở có thật của luồng đặt vé"*.
 
 **Vì sao là lỗi chứ không phải "chờ API":** sơ đồ ghế là **thứ duy nhất** khách nhìn để biết ghế nào
@@ -227,25 +237,46 @@ ghế bán trùng là tiền thật.
 
 ---
 
-### G2 — Nửa frontend của story 3 chưa nối, và ba module là code chết 🔴 Cao
+### G2 — Nửa frontend của story 3 chưa nối, và ba module giữ chỗ không có cửa vào 🔴 Cao
 
 Backend của US 3 đã đủ bốn endpoint (đo ở mục 2.1). Phía frontend thì **không có đường nào chạm tới
 chúng**:
 
 | Việc | File | Tình trạng đo được |
 |---|---|---|
-| Tạo phiên giữ chỗ | `frontend/src/api/seatHoldApi.ts:66-72` | ❗ **`SeatHoldApi` KHÔNG có hàm `create`** — chỉ có `getSession` và `extend`. Không có cách nào tạo phiên từ giao diện |
+| Tạo phiên giữ chỗ | `frontend/src/api/seatHoldApi.ts:58-64` | ❗ **`SeatHoldApi` KHÔNG có hàm `create`** — cả interface chỉ có hai hàm, `getSession` và `extend` (grep `create` toàn file: 0 kết quả). Không có cách nào tạo phiên từ giao diện |
 | Màn chọn ghế → giữ chỗ | `frontend/src/pages/SeatMapPage.tsx:106-120` | `handleContinue` **không gọi** `seatHoldApi`. Nó dựng URL `/payment-waiting` bằng `paymentCode: \`demo-${tripId}\`` và chỉ gửi **nhãn** ghế (`seats: labels`), **mất hẳn seat id** mà `POST /seat-holds` cần |
 | Component đếm ngược | `frontend/src/components/seatHoldReminder.ts` | **0 importer** |
 | Modal hết hạn + nút gia hạn | `frontend/src/components/SeatHoldExpiryModal.tsx` | **0 importer** |
 | Tự động nhả ghế | `frontend/src/components/useSeatHoldAutoRelease.ts` | **0 importer** (hook này gọi `seatHoldReleaseApi.release`) |
 
-Lệnh kiểm chứng (`grep -rn` trên toàn `frontend/src`, trừ chính năm file đó) trả về **đúng một** dòng
-— và đó là một *comment*, không phải `import`:
+Lệnh kiểm chứng — đếm **người import từ NGOÀI cụm ba file đó** (loại chính ba file ra khỏi kết quả):
+
+```bash
+grep -rn "seatHoldReminder\|SeatHoldExpiryModal\|useSeatHoldAutoRelease" frontend/src \
+     --include=*.ts --include=*.tsx \
+  | grep -v "^frontend/src/components/seatHoldReminder.ts\|^frontend/src/components/SeatHoldExpiryModal.tsx\|^frontend/src/components/useSeatHoldAutoRelease.ts"
+```
+
+Kết quả: **đúng một dòng** — và đó là một *comment*, không phải `import`:
 
 ```
 frontend/src/components/paymentWaiting.ts:6:// seatHoldReminder.ts / monthlyPassReminder.ts.
 ```
+
+Ba file **có** import lẫn nhau (`SeatHoldExpiryModal.tsx:6-9` kéo `seatHoldApi` + `seatHoldReminder`;
+`useSeatHoldAutoRelease.ts:2-4` kéo `seatHoldReleaseApi` + `seatHoldReminder`) — chúng tạo thành một
+**cụm khép kín**, đủ để build xanh, nhưng **không cửa nào từ `pages/` vào**. Kiểm tra bước cuối:
+
+```bash
+grep -rn "seatHold\|SeatHold" frontend/src/pages/ --include=*.tsx --include=*.ts   # 0 kết quả
+grep -n  "seatHold\|SeatHold\|SeatMap" frontend/src/App.tsx frontend/src/main.tsx
+#   App.tsx:24  import SeatMapPage from './pages/SeatMapPage';
+#   App.tsx:215 <Route path="/seat-map" element={<SeatMapPage />} />
+```
+
+`App.tsx` chỉ trỏ `/seat-map` vào `SeatMapPage`, mà `SeatMapPage` (bảng trên) không gọi API giữ chỗ.
+Đó là toàn bộ đường vào — và nó cụt.
 
 **Vì sao mục này quan trọng hơn vẻ ngoài của nó:** nó khiến chính task này **không thể hoàn thành
 kể cả khi có môi trường online**. Một buổi kiểm thử chéo trên môi trường thật sẽ dừng ở bước thứ hai
@@ -268,7 +299,7 @@ với `V4` của báo cáo vé tháng ("hai component của story 16 là code ch
 | # | Chỗ | Comment nói | Thực tế đo được |
 |---|---|---|---|
 | 1 | `frontend/src/api/seatMapApi.ts:6-9` | *"Backend CHƯA có endpoint 'lấy sơ đồ ghế theo chuyến + trạng thái từng ghế'"* | Endpoint **có**, công khai, trả 200 (mục 2.1) |
-| 2 | `frontend/src/api/seatHoldApi.ts:6-9` | *"Backend CHƯA có endpoint giữ chỗ … hợp đồng chưa vào docs/api-contract.md"* | **Bốn** endpoint đã có và **đã có hợp đồng** (`api-contract.md`, mục "Giữ chỗ — `/seat-holds`") |
+| 2 | `frontend/src/api/seatHoldApi.ts:6-8` | *"Backend CHƯA có endpoint giữ chỗ … hợp đồng chưa vào docs/api-contract.md"* | **Bốn** endpoint đã có và **đã có hợp đồng** (`api-contract.md`, mục "Giữ chỗ — `/seat-holds`") |
 | 3 | `frontend/src/pages/SeatMapPage.tsx:21-22` | *"endpoint đó chưa có nên đang chạy dữ liệu giả (xem seatMapApi.ts)"* | Như trên |
 
 Không chỉ là chữ nghĩa: comment #1 và #2 là **lý do được viết ra** cho `const USE_MOCK_DATA = true`
@@ -346,7 +377,7 @@ backend.
 
 ### G6 — `api-contract.md` trỏ sai chỗ, và tiền đề của cảnh báo nay đã sai 🟡 Thấp
 
-`docs/api-contract.md:1447-1450` viết:
+`docs/api-contract.md:1475-1477` viết:
 
 > *"⚠️ Ghế đã `Confirmed` **không** chặn lượt giữ mới (partial index chỉ lọc `Status = 'Holding'`,
 > đúng đặc tả docs/26 §1) và bảng `Tickets` chưa migrate — khe hở có thật của luồng đặt vé, **đã ghi
@@ -474,7 +505,7 @@ npm --prefix frontend run lint                                     # 1 cảnh b�
 dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj \
   --filter "FullyQualifiedName~SeatHoldCrossFlowApiTests"
 
-# G1 — sơ đồ ghế có hỏi bảng Tickets không? (0 = không hỏi)
+# G1 — sơ đồ ghế có hỏi bảng Tickets không? (3 dòng, ĐỀU là chú thích — không dòng code nào)
 grep -n "Tickets" backend/SmartBus.Api/Services/TripSeatMapService.cs
 
 # G1 — bảng Tickets đã migrate chưa, và từ bao giờ
@@ -487,9 +518,14 @@ grep -n "chưa migrate\|chưa được migrate" docs/api-contract.md \
   backend/SmartBus.Api/Dtos/Trips/TripSeatMapResponse.cs \
   backend/SmartBus.Api/Services/TripSeatMapService.cs
 
-# G2 — ba module giữ chỗ có ai import không (chỉ ra 1 dòng COMMENT, không dòng nào là import)
-grep -rn "seatHoldApi\|seatHoldReleaseApi\|SeatHoldExpiryModal\|useSeatHoldAutoRelease\|seatHoldReminder" \
-  frontend/src --include=*.ts --include=*.tsx
+# G2 — người import cụm giữ chỗ TỪ NGOÀI cụm (chỉ ra 1 dòng COMMENT, không dòng nào là import)
+grep -rn "seatHoldReminder\|SeatHoldExpiryModal\|useSeatHoldAutoRelease" frontend/src \
+     --include=*.ts --include=*.tsx \
+  | grep -v "^frontend/src/components/seatHoldReminder.ts\|^frontend/src/components/SeatHoldExpiryModal.tsx\|^frontend/src/components/useSeatHoldAutoRelease.ts"
+
+# G2 — trang nào có nhắm tới nhóm giữ chỗ không (0 = không trang nào)
+grep -rn "seatHold\|SeatHold" frontend/src/pages/ --include=*.tsx --include=*.ts
+grep -n  "seatHold\|SeatHold\|SeatMap" frontend/src/App.tsx frontend/src/main.tsx
 
 # G2 — SeatHoldApi có hàm create không (0 = không có, nên không cách nào tạo phiên từ UI)
 grep -n "create" frontend/src/api/seatHoldApi.ts
@@ -515,7 +551,8 @@ grep -n "decimal? PricePerSeat\|decimal? VipSurcharge\|decimal? Price" \
   backend/SmartBus.Api/Dtos/Trips/TripSeatMapSeatResponse.cs
 
 # G6 — hợp đồng trỏ tới docs/26 §7, mà §7 nói chuyện khác
-sed -n '1447,1450p' docs/api-contract.md
+sed -n '1475,1477p' docs/api-contract.md   # câu "khe hở có thật … đã ghi ở docs/26 §7"
+sed -n '1209,1213p' docs/api-contract.md   # câu "Bảng Tickets chưa được migrate"
 grep -n "Tickets" docs/26-csdl-so-do-ghe.md      # đúng 1 dòng, ở §3, không liên quan
 
 # G7 — package-lock.json lạc ở gốc repo
