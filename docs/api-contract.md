@@ -3313,3 +3313,27 @@ code C# (Python, như bộ test MoMo):
 | Chuỗi ký | `key=value` xếp theo bảng chữ cái, giá trị mã hoá kiểu PHP urlencode (dấu cách → `+`, `~` → `%7E`, hex chữ HOA) | Dùng `Uri.EscapeDataString` trần thì dấu cách ra `%20` — chữ ký lệch với chuỗi cổng tính lại, cổng báo sai chữ ký |
 | `vnp_Amount` | Số tiền **× 100** (VNPay tính theo đơn vị nhỏ nhất) | Cổng ghi nhận sai số tiền |
 | `vnp_CreateDate`/`vnp_ExpireDate` | Giờ **GMT+7**, định dạng `yyyyMMddHHmmss` | Cổng từ chối giao dịch |
+
+### Lớp adapter thống nhất — thêm cổng mới
+
+Task *"Adapter pattern thống nhất cổng thanh toán (dễ thêm cổng mới)"* — Phùng Duy Hoàng. Endpoint
+`POST /payments` và hai endpoint callback **không gọi thẳng client từng cổng**: chúng tra
+`IPaymentGatewayResolver` theo `methodCode` rồi nói chuyện qua `IPaymentGateway` bằng DTO trung
+tính (`Dtos/Payments`: `PaymentInitiationRequest`/`Result`, `PaymentCallbackInput`/`Result`). Mỗi
+cổng một adapter mỏng bọc client sẵn có — `MoMoGatewayAdapter` bọc `MoMoGatewayService` (Hiếu),
+`VnPayGatewayAdapter` bọc `VnPayGatewayService` (Kiên); hai client cổng **không đổi**.
+
+- Mã cổng khớp **KHÔNG phân biệt hoa thường** (`vnpay` = `VNPay`). Mã chưa có adapter (hiện
+  `ZaloPay`, `BankCard`) là **chưa mở** — endpoint trả **400** kèm danh sách `SupportedProviders`.
+  Cổng có adapter nhưng **thiếu cấu hình** thì ném ngay khi dựng adapter, nêu đúng tên khoá thiếu
+  (luật 2) — cố ý khác hẳn "chưa mở", vì đó là lỗi triển khai chứ không phải cổng không tồn tại.
+- Adapter chuẩn hoá **kết luận**, không chỉ hình dạng: `PaymentCallbackResult.Succeeded` **luôn
+  false khi chữ ký chưa hợp lệ** — kể cả cổng báo mã thành công (không xác nhận tiền trên dữ liệu
+  chưa kiểm chữ ký). Hai endpoint callback vẫn phải **đối chiếu `PaymentCode`/`Amount` với bản ghi
+  Payments** trước khi lật trạng thái — adapter không thay bước đó (bước này cần CSDL).
+- Thêm cổng mới (ví dụ ZaloPay) = **3 việc, không đụng endpoint**: (1) viết client cổng + adapter
+  cài `IPaymentGateway`, (2) thêm hằng mã vào `PaymentProviderCodes`, (3) thêm một dòng vào bảng
+  đăng ký trong `PaymentGatewayResolver` + một dòng `AddScoped` adapter trong `Program.cs`.
+  Cố ý **KHÔNG** đưa "hỏi trạng thái cổng" (`QueryTransactionAsync`) vào interface chung ở bước
+  này: mới MoMo có API đó, VNPay v2.1.0 không có — job đối soát (bảng trên) gọi thẳng client MoMo;
+  khi có cổng thứ hai hỗ trợ hỏi trạng thái thì mở rộng interface sau.
