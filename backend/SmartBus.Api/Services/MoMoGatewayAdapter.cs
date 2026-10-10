@@ -88,6 +88,11 @@ public class MoMoGatewayAdapter : IPaymentGateway
             PaymentCode = callback.OrderId ?? string.Empty,
             Amount = callback.Amount,
             GatewayTransactionId = callback.TransId.ToString(CultureInfo.InvariantCulture),
+            // responseTime là mili-giây epoch; 0 nghĩa là cổng không kèm (JSON người ngoài có thể
+            // gửi 0) — trả null thay vì rơi về 01/01/1970.
+            PaidAt = callback.ResponseTime > 0
+                ? DateTimeOffset.FromUnixTimeMilliseconds(callback.ResponseTime).UtcDateTime
+                : null,
             ProviderResponseCode = callback.ResultCode.ToString(CultureInfo.InvariantCulture),
             Message = callback.Message ?? string.Empty,
         };

@@ -24,6 +24,7 @@ public partial class AppDbContext : DbContext
         ConfigureMonthlyPass(modelBuilder);
         ConfigureFeedback(modelBuilder);
         ConfigureSeat(modelBuilder);
+        ConfigurePayment(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -47,4 +48,9 @@ public partial class AppDbContext : DbContext
     // US 2 + US 3 (SeatLayouts + Seats + SeatHolds): nhóm nghiệp vụ sơ đồ ghế & giữ chỗ — Sprint 3.
     // Cấu hình Seat chuyển từ AppDbContext.Trip.cs về AppDbContext.Seat.cs, mô hình EF không đổi.
     partial void ConfigureSeat(ModelBuilder modelBuilder);
+
+    // US 6 (Payments — dòng 27, Vàng Thị Dăm): dựng theo uỷ quyền 10/10/2026 cho task dòng 33
+    // *"Xử lý idempotency: chống trừ tiền 2 lần khi callback trùng"* (Phùng Duy Hoàng).
+    // Xem AppDbContext.Payment.cs.
+    partial void ConfigurePayment(ModelBuilder modelBuilder);
 }

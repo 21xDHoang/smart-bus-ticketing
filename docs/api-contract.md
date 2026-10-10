@@ -3147,8 +3147,12 @@ phải viết trong `OnModelCreating` (file của Dăm).
 
 ## Thanh toán — `/payments`
 
-> Story 6 *"Cổng thanh toán"*. ⚠️ **Bảng `Payments` CHƯA migrate** (task *"Migrate bảng Payments,
-> Transactions, PaymentLogs"* — Vàng Thị Dăm). Phần **client cổng MoMo đã có** trên backend
+> Story 6 *"Cổng thanh toán"*. ⚠️ **Bảng `Payments` CHƯA migrate** — nhưng phần CSDL đã dựng:
+> entity `Payment` + cấu hình `AppDbContext.Payment.cs` + service chốt idempotent
+> (`PaymentSettlementService`) — task *"Xử lý idempotency: chống trừ tiền 2 lần khi callback
+> trùng"* (Phùng Duy Hoàng, dựng bảng theo uỷ quyền của Dăm 10/10/2026); còn lại sinh migration
+> `Sprint3_Payments` (task *"Migrate bảng Payments, Transactions, PaymentLogs"* — Vàng Thị Dăm).
+> Phần **client cổng MoMo đã có** trên backend
 > (`MoMoGatewayService` — Trần Trung Hiếu): tạo giao dịch, kiểm chữ ký IPN, hỏi trạng thái cổng —
 > test bằng HTTP giả, chưa đụng CSDL. **Client cổng VNPay cũng đã có** (`VnPayGatewayService` —
 > Nguyễn Duy Kiên, chi tiết ở mục "Cấu hình cổng VNPay" cuối mục này): dựng URL thanh toán ký
@@ -3265,6 +3269,10 @@ trên trang cổng, kết quả biết được qua chữ ký ở Return URL/IPN
 - Idempotency (task của Hoàng): callback trùng / gửi lại → kiểm tra `Payment` đã `Success` hay
   `Failed` rồi thì **bỏ qua, vẫn trả 204** — không trừ tiền 2 lần, không phát hành vé 2 lần.
   Chốt CSDL: `paymentCode` unique trên `Payments` + kiểm trạng thái trước khi đổi.
+  Đã cài đặt ở `PaymentSettlementService.SettleAsync` — một cửa chung cho cả callback lẫn job đối
+  soát: chữ ký sai → 400 trước khi chạm CSDL; lệch mã đơn/cổng/số tiền → 404; chỉ lật khi còn
+  `Pending`, bản gửi lại trả `SettledNow = false`; lượt đua song song chặn ở tầng CSDL bằng
+  concurrency token (`xmin` PostgreSQL).
 
 #### `GET /payments/{paymentCode}` — kiểm tra trạng thái giao dịch (task "API kiểm tra trạng thái giao dịch")
 

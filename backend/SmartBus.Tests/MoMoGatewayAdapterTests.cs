@@ -87,6 +87,25 @@ public class MoMoGatewayAdapterTests
         Assert.Equal("3456789", result.GatewayTransactionId);
         Assert.Equal("0", result.ProviderResponseCode);
         Assert.Equal("Thành công", result.Message);
+
+        // responseTime 1750000000000 ms = 2025-06-15T15:06:40Z — mốc cổng ghi nhận thu tiền, để
+        // nguyên dạng UTC (Kind) vì cột PaidAt là timestamptz: Npgsql ném lỗi nếu Kind khác Utc.
+        Assert.Equal(new DateTime(2025, 6, 15, 15, 6, 40, DateTimeKind.Utc), result.PaidAt);
+        Assert.Equal(DateTimeKind.Utc, result.PaidAt!.Value.Kind);
+    }
+
+    [Fact]
+    public void Verify_cong_khong_kem_thoi_diem_thi_PaidAt_null()
+    {
+        var fake = new FakeMoMoGatewayService { ValidCallback = true };
+
+        var result = AdapterWith(fake).VerifyCallback(
+            new PaymentCallbackInput { Body = CallbackJson(0, responseTime: 0) });
+
+        Assert.True(result.IsValid);
+        Assert.True(result.Succeeded);
+        // Cổng không kèm mốc thu tiền — adapter không được tự bịa; tầng chốt sẽ lấy giờ hệ thống.
+        Assert.Null(result.PaidAt);
     }
 
     [Fact]
@@ -144,7 +163,9 @@ public class MoMoGatewayAdapterTests
     }
 
     /// <summary>IPN đúng hình dạng MoMo gửi (tên trường camelCase như cổng).</summary>
-    private static string CallbackJson(int resultCode, long transId = 3456789, string message = "Thành công") => $$"""
+    private static string CallbackJson(
+        int resultCode, long transId = 3456789, string message = "Thành công",
+        long responseTime = 1750000000000) => $$"""
         {
           "partnerCode": "MOMO_TEST",
           "orderId": "PM-8f3a2c1d",
@@ -156,7 +177,7 @@ public class MoMoGatewayAdapterTests
           "resultCode": {{resultCode}},
           "message": "{{message}}",
           "payType": "qr",
-          "responseTime": 1750000000000,
+          "responseTime": {{responseTime}},
           "extraData": "",
           "signature": "chu-ky-gia"
         }
