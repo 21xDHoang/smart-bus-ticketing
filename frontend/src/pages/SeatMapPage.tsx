@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Col, Row, Space, Tag, Typography, theme } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
@@ -8,6 +7,9 @@ import type { SeatMapSeat, TripSeatMap } from '../api/seatMapApi';
 import type { AppError } from '../api/axiosClient';
 import { formatVnd, formatTime } from '../components/ui/format';
 import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
+import { isSeatSelectable } from '../components/seatStatus';
+import SeatStatusCell from '../components/SeatStatusCell';
+import SeatStatusLegend from '../components/SeatStatusLegend';
 
 const { Text } = Typography;
 
@@ -19,8 +21,8 @@ type Outcome =
 
 // Màn hình sơ đồ ghế (User Story 2, Sprint 3 — task của Nguyễn Đình Băng): vẽ dàn ghế của một
 // chuyến dưới dạng lưới trực quan (có lối đi, tầng xe, ghế VIP) và cho hành khách chọn NHIỀU
-// ghế trống cùng lúc. Trạng thái ghế (trống / đang giữ / đã bán) lấy từ endpoint sơ đồ ghế —
-// endpoint đó chưa có nên đang chạy dữ liệu giả (xem seatMapApi.ts).
+// ghế trống cùng lúc. Trạng thái ghế (trống / đang giữ / đã bán) lấy từ endpoint sơ đồ ghế
+// (GET /trips/{id}/seats — đã nối API thật, xem seatMapApi.ts).
 //
 // Nhận `tripId` qua query string; `routeName`, `departureTime`, `busType` là ngữ cảnh do màn
 // "Kết quả tìm kiếm chuyến" truyền sang để hiển thị đầu trang, không gọi thêm endpoint nào.
@@ -93,7 +95,7 @@ export default function SeatMapPage() {
 
   // Bật / tắt chọn một ghế. Chỉ ghế còn trống mới chọn được; ghế đang giữ / đã bán bỏ qua.
   const toggleSeat = (seat: SeatMapSeat) => {
-    if (seat.status !== 'Available') return;
+    if (!isSeatSelectable(seat.status)) return;
 
     setSelectedSeatIds((prev) => {
       const next = new Set(prev);
@@ -151,6 +153,22 @@ export default function SeatMapPage() {
     return <LoadingState description="Đang tải sơ đồ ghế…" />;
   }
 
+  // Chuyến có thật nhưng xe chưa được cấu hình sơ đồ ghế — hợp đồng chốt đây là 200 với
+  // floors: 0 và seats: [] (trạng thái dữ liệu bình thường, xem docs/api-contract.md). Không
+  // để lưới trống vì trông như màn hình hỏng, cũng không dùng ErrorState vì không phải lỗi tải.
+  if (seatMap.seats.length === 0) {
+    return (
+      <EmptyState
+        description="Chuyến này chưa có sơ đồ ghế nên chưa chọn được chỗ ngồi. Hãy chọn chuyến khác hoặc quay lại sau."
+        action={
+          <Button type="primary" onClick={() => navigate(-1)}>
+            Quay lại
+          </Button>
+        }
+      />
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -170,7 +188,7 @@ export default function SeatMapPage() {
         <Col xs={24} lg={17}>
           <PageCard
             title="Sơ đồ ghế"
-            extra={<SeatLegend token={token} />}
+            extra={<SeatStatusLegend />}
           >
             <div
               style={{
@@ -190,7 +208,6 @@ export default function SeatMapPage() {
                   floor={floor}
                   floors={seatMap.floors}
                   seats={seatMap.seats}
-                  token={token}
                   selectedSeatIds={selectedSeatIds}
                   hoveredSeatId={hoveredSeatId}
                   onHover={setHoveredSeatId}
@@ -280,62 +297,11 @@ function floorsOf(seatMap: TripSeatMap): number[] {
   return [...new Set(seatMap.seats.map((seat) => seat.floor))].sort((a, b) => a - b);
 }
 
-/** Chú giải màu cho trạng thái ghế — đặt ở góc phải thẻ sơ đồ ghế. */
-function SeatLegend({
-  token,
-}: {
-  token: ReturnType<typeof theme.useToken>['token'];
-}) {
-  const items = [
-    { label: 'Trống', style: { background: token.colorBgContainer, border: `1px solid ${token.colorBorder}` } },
-    { label: 'Đang chọn', style: { background: token.colorPrimary } },
-    { label: 'Đang giữ', style: { background: token.colorWarningBg, border: `1px dashed ${token.colorWarning}` } },
-    { label: 'Đã bán', style: { background: token.colorFillQuaternary, border: `1px solid ${token.colorBorderSecondary}` } },
-    { label: 'VIP', style: { background: token.colorBgContainer, border: `1px solid ${token.colorBorder}`, position: 'relative' as const } },
-  ];
-
-  return (
-    <Space size={12} wrap>
-      {items.map((item) => (
-        <Space key={item.label} size={6}>
-          <span
-            style={{
-              display: 'inline-block',
-              width: 18,
-              height: 16,
-              borderRadius: 4,
-              ...item.style,
-            }}
-          >
-            {item.label === 'VIP' && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 2,
-                  right: 2,
-                  width: 5,
-                  height: 5,
-                  borderRadius: '50%',
-                  background: token.colorWarning,
-                }}
-              />
-            )}
-          </span>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {item.label}
-          </Text>
-        </Space>
-      ))}
-    </Space>
-  );
-}
-
 /** Lưới ghế của MỘT tầng — các hàng xếp từ đầu xe, lối đi nằm giữa. */
 function FloorGrid({
   floor,
   floors,
   seats,
-  token,
   selectedSeatIds,
   hoveredSeatId,
   onHover,
@@ -344,7 +310,6 @@ function FloorGrid({
   floor: number;
   floors: number;
   seats: SeatMapSeat[];
-  token: ReturnType<typeof theme.useToken>['token'];
   selectedSeatIds: ReadonlySet<string>;
   hoveredSeatId: string | null;
   onHover: (seatId: string | null) => void;
@@ -383,10 +348,9 @@ function FloorGrid({
             style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 8 }}
           >
             {left.map((seat) => (
-              <SeatCell
+              <SeatStatusCell
                 key={seat.id}
                 seat={seat}
-                token={token}
                 selected={selectedSeatIds.has(seat.id)}
                 hovered={hoveredSeatId === seat.id}
                 onHover={onHover}
@@ -398,10 +362,9 @@ function FloorGrid({
             <div style={{ width: 20 }} />
 
             {right.map((seat) => (
-              <SeatCell
+              <SeatStatusCell
                 key={seat.id}
                 seat={seat}
-                token={token}
                 selected={selectedSeatIds.has(seat.id)}
                 hovered={hoveredSeatId === seat.id}
                 onHover={onHover}
@@ -413,94 +376,4 @@ function FloorGrid({
       })}
     </div>
   );
-}
-
-/** Một ô ghế — trạng thái quyết định màu; bấm để chọn/bỏ chọn, ghế không trống thì khoá. */
-function SeatCell({
-  seat,
-  token,
-  selected,
-  hovered,
-  onHover,
-  onToggle,
-}: {
-  seat: SeatMapSeat;
-  token: ReturnType<typeof theme.useToken>['token'];
-  selected: boolean;
-  hovered: boolean;
-  onHover: (seatId: string | null) => void;
-  onToggle: (seat: SeatMapSeat) => void;
-}) {
-  const disabled = seat.status !== 'Available';
-
-  const style: CSSProperties = {
-    position: 'relative',
-    width: 44,
-    height: 40,
-    borderRadius: 8,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 13,
-    fontWeight: 600,
-    padding: 0,
-    transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
-    border: `1px solid ${token.colorBorder}`,
-    background: token.colorBgContainer,
-    color: token.colorText,
-    cursor: 'pointer',
-  };
-
-  if (seat.status === 'Paid') {
-    style.background = token.colorFillQuaternary;
-    style.border = `1px solid ${token.colorBorderSecondary}`;
-    style.color = token.colorTextDisabled;
-    style.cursor = 'not-allowed';
-  } else if (seat.status === 'Held') {
-    style.background = token.colorWarningBg;
-    style.border = `1px dashed ${token.colorWarning}`;
-    style.color = token.colorWarning;
-    style.cursor = 'not-allowed';
-  } else if (selected) {
-    style.background = token.colorPrimary;
-    style.border = `1px solid ${token.colorPrimary}`;
-    style.color = token.colorTextLightSolid;
-  } else if (hovered) {
-    style.background = token.colorBgTextHover;
-  }
-
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onToggle(seat)}
-      onMouseEnter={() => onHover(seat.id)}
-      onMouseLeave={() => onHover(null)}
-      aria-pressed={selected}
-      aria-label={`Ghế ${seat.seatNumber}${seat.seatType === 'Vip' ? ' (VIP)' : ''} — ${seatLabel(seat.status)}`}
-      style={style}
-    >
-      {seat.seatNumber}
-      {seat.seatType === 'Vip' && (
-        <span
-          style={{
-            position: 'absolute',
-            top: 3,
-            right: 3,
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: token.colorWarning,
-          }}
-        />
-      )}
-    </button>
-  );
-}
-
-/** Nhãn tiếng Việt cho trạng thái ghế — chỉ dùng cho aria-label. */
-function seatLabel(status: SeatMapSeat['status']): string {
-  if (status === 'Paid') return 'đã bán';
-  if (status === 'Held') return 'đang giữ';
-  return 'trống';
 }
