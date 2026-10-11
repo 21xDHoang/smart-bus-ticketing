@@ -1629,6 +1629,74 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 
 > **Vì sao đứng ở controller riêng (`SeatHoldReleaseController`)?** Cùng lý do mục GET và extend:
 > bốn endpoint của bề mặt `api/seat-holds` thuộc bốn task của bốn người, mỗi task một controller.
+
+## Đồng bộ ghế realtime — `/hubs/seat-map`
+
+> ✅ Backend đã có (`SeatMapHub` — task *"Đồng bộ trạng thái ghế realtime giữa các phiên
+> (SignalR)"*, dòng 11 Sprint 3, phân công bảng tính: Hoàng Văn Thịnh). Hub KHÔNG thay thế
+> `GET /trips/{id}/seats`: nó chỉ là kênh báo "sơ đồ ghế của chuyến này vừa đổi — gọi lại đi",
+> còn dữ liệu vẫn đến từ đúng một endpoint đó (xem "Vì sao" dưới).
+>
+> Đây là endpoint **đầu tiên không nằm dưới tiền tố `/api`**: hub gắn thẳng vào pipeline bằng
+> `MapHub` nên sống ở đường dẫn gốc `/hubs/…`, không đi qua controller.
+
+### Kết nối
+
+| Thuộc tính | Giá trị |
+|---|---|
+| URL | `/hubs/seat-map` |
+| Giao thức | SignalR JSON (mặc định) |
+| Yêu cầu đăng nhập | **Không** — hub ẩn danh, cùng mức với `GET /trips/{id}/seats` (sơ đồ ghế là thông tin khách tra cứu được trước khi có tài khoản) |
+| Nhóm (group) | Mỗi chuyến một nhóm: `trip:{tripId}` |
+| Thư viện client | `@microsoft/signalr` (frontend) |
+
+### Method client gọi (invoke)
+
+| Method | Tham số | Mô tả |
+|---|---|---|
+| `JoinTrip` | `tripId` (GUID dạng chuỗi) | Vào nhóm `trip:{tripId}` — gọi ngay sau khi kết nối và **gọi lại sau mỗi lần tự kết nối lại** (mất kết nối là mất nhóm) |
+| `LeaveTrip` | `tripId` (GUID dạng chuỗi) | Rời nhóm — gọi khi rời màn hình. Rời kết nối SignalR cũng tự xoá mọi nhóm nên đây chỉ là dọn sớm |
+
+### Sự kiện server đẩy (event)
+
+| Sự kiện | Payload | Mô tả |
+|---|---|---|
+| `SeatMapChanged` | `{ "tripId": "<GUID>" }` | Sơ đồ ghế của một chuyến vừa đổi — client gọi lại `GET /trips/{id}/seats` |
+
+```json
+// Ví dụ payload sự kiện SeatMapChanged
+{ "tripId": "a1c7f0e2-0000-0000-0000-000000000000" }
+```
+
+### Khi nào sự kiện được phát
+
+Đúng ba nguồn làm đổi trạng thái ghế, mỗi nguồn phát một lần cho chuyến bị ảnh hưởng:
+
+| Nguồn | Phát khi |
+|---|---|
+| `POST /seat-holds` (giữ ghế) | Phiên giữ chỗ tạo thành công |
+| `POST /seat-holds/{sessionCode}/release` (nhả ghế) | Phiên được nhả lần đầu (gọi lại trên phiên đã kết thúc vẫn 200 — sự kiện đã phát ở lần đầu) |
+| Job nền `SeatHoldExpiryBackgroundService` (quét mỗi phút) | Có phiên `Holding` vừa quá `ExpiresAt` — chỉ phát cho những chuyến thật sự có phiên vừa hết hạn |
+
+> **Vì sao sự kiện chỉ báo "đã đổi" mà không gửi kèm sơ đồ ghế?** Gửi kèm thì mỗi lần đổi phải
+> dựng lại toàn bộ sơ đồ ở tầng đẩy, và hai kênh (đẩy + gọi lại) có thể lệch nhau — client tin
+> kênh nào? Báo "đã đổi" rồi để client gọi lại đúng endpoint cũ giữ **một nguồn sự thật duy
+> nhất** (`GET /trips/{id}/seats`): mọi quy tắc suy trạng thái (SeatHolds + Tickets) chỉ sống ở
+> một chỗ, không có định nghĩa thứ hai để lệch. Cái giá là một request thừa mỗi lần có sự kiện —
+> rẻ hơn nhiều so với hai định nghĩa trạng thái ghế.
+
+> **Vì sao hub ẩn danh?** Cùng lý do `GET /trips/{id}/seats` không đòi đăng nhập: sơ đồ ghế là
+> thông tin khách tra cứu được trước khi có tài khoản. Bắt đăng nhập ở đây chỉ khoá đường xem
+> một thứ đang mở ở endpoint chính, mà không thêm được bảo vệ nào.
+
+> ⚠️ **Chưa có backplane — giới hạn đã biết.** SignalR không backplane chỉ chạm được client nối
+> vào CHÍNH máy chủ đã phát sự kiện. Dự án đang chạy hai bản triển khai (Render + máy thành
+> viên) chung một CSDL Supabase: một phiên giữ ghế ở Render sẽ không đẩy được thông báo tới
+> trình duyệt đang nối vào bản chạy ở máy. Trong phạm vi đồ án, mỗi bản chạy vẫn tự nhất quán
+> (giữ ghế ở đâu thì các phiên nối vào đó thấy ngay), và màn hình luôn gọi lại sơ đồ ghế khi
+> tải nên dữ liệu không bao giờ cũ quá một lần tải trang. Muốn xuyên máy chủ thì thêm backplane
+> (Azure SignalR / `AddStackExchangeRedis`) — ngoài phạm vi Sprint 3.
+
 ## Xe buýt — `/buses`
 
 > ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi

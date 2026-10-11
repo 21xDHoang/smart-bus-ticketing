@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartBus.Api.Data;
+using SmartBus.Api.Hubs;
 using SmartBus.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -432,6 +433,43 @@ builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<ITicketPdfService, TicketPdfService>();
 builder.Services.AddScoped<ITicketEmailService, TicketEmailService>();
 
+// Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
+// sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).
+// Task "Đồng bộ trạng thái ghế realtime giữa các phiên (SignalR)" (dòng 11 Sprint 3) — Hoàng Văn Thịnh.
+// File này của Hoàng (Phùng Duy Hoàng) nên nhờ Hoàng xem qua trong PR.
+// Hợp đồng đầy đủ (URL, method JoinTrip/LeaveTrip, sự kiện SeatMapChanged) ở mục "Đồng bộ ghế
+// realtime — /hubs/seat-map" của docs/api-contract.md.
+// Không sửa ba service giữ/nhả/quét hết hạn (file của Kiên và của Hoàng — quy ước E1): chúng được
+// BỌC bằng ba lớp Notifying* dưới đây, cùng lối CachedTripSearchService bọc TripSearchService ở
+// trên. Ba service thật không phải biết gì về SignalR; lớp bọc chỉ thêm đúng một việc — thao tác
+// THÀNH CÔNG thì phát "sơ đồ ghế chuyến này vừa đổi" cho các phiên đang xem.
+// DI lấy bản đăng ký SAU CÙNG nên ba dòng factory phải nằm SAU ba dòng đăng ký interface ở trên
+// (ISeatHoldExpiryService, ISeatHoldCreateService, ISeatHoldReleaseService) và phải tự đăng ký lớp
+// THẬT để factory có cái mà bọc; ai đăng ký thêm các interface này ở dưới nữa thì lớp bọc bị thay
+// thế im lặng (SeatMapRealtimeWiringTests ghim đúng chỗ nối này).
+// AddSignalR để trần: giao thức JSON mặc định, hub ẩn danh (cùng mức GET /trips/{id}/seats), CHƯA
+// có backplane — sự kiện chỉ chạm client nối vào chính máy chủ này, giới hạn đã biết ghi ở hợp đồng.
+// Đặt ở CUỐI danh sách đăng ký (sau khối email vé, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.AddSignalR();
+builder.Services.AddScoped<ISeatMapNotifier, SeatMapNotifier>();
+
+builder.Services.AddScoped<SeatHoldCreateService>();
+builder.Services.AddScoped<ISeatHoldCreateService>(provider => new NotifyingSeatHoldCreateService(
+    provider.GetRequiredService<SeatHoldCreateService>(),
+    provider.GetRequiredService<ISeatMapNotifier>()));
+
+builder.Services.AddScoped<SeatHoldReleaseService>();
+builder.Services.AddScoped<ISeatHoldReleaseService>(provider => new NotifyingSeatHoldReleaseService(
+    provider.GetRequiredService<SeatHoldReleaseService>(),
+    provider.GetRequiredService<ISeatMapNotifier>()));
+
+builder.Services.AddScoped<SeatHoldExpiryService>();
+builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeatHoldExpiryService(
+    provider.GetRequiredService<SeatHoldExpiryService>(),
+    provider.GetRequiredService<AppDbContext>(),
+    provider.GetRequiredService<ISeatMapNotifier>()));
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
@@ -471,6 +509,12 @@ app.UseAuthorization();
 app.UseAuditLog();
 
 app.MapControllers();
+
+// Hub SignalR đồng bộ sơ đồ ghế realtime (US 2) — cùng khối đăng ký ở phần services.
+// Đặt sau MapControllers cho dễ đọc, nhưng điểm BẮT BUỘC là phải nằm SAU app.UseCors(AppCors) ở
+// trên: negotiate và WebSocket handshake đều là request đi qua CORS, thiếu UseCors là trình duyệt
+// chặn ngay từ bước negotiate chứ không tới được hub.
+app.MapHub<SeatMapHub>("/hubs/seat-map");
 
 app.Run();
 

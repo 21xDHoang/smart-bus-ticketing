@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Col, Row, Space, Tag, Typography, theme } from 'antd';
+import { Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 import seatMapApi from '../api/seatMapApi';
 import type { SeatMapSeat, TripSeatMap } from '../api/seatMapApi';
 import type { AppError } from '../api/axiosClient';
 import { formatVnd, formatTime } from '../components/ui/format';
 import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
-import { isSeatSelectable } from '../components/seatStatus';
+import { isSeatSelectable, seatDisplayName } from '../components/seatStatus';
 import SeatStatusCell from '../components/SeatStatusCell';
 import SeatStatusLegend from '../components/SeatStatusLegend';
+import { useSeatMapRealtime } from '../realtime/useSeatMapRealtime';
 
 const { Text } = Typography;
 
@@ -26,6 +27,11 @@ type Outcome =
 //
 // Nhận `tripId` qua query string; `routeName`, `departureTime`, `busType` là ngữ cảnh do màn
 // "Kết quả tìm kiếm chuyến" truyền sang để hiển thị đầu trang, không gọi thêm endpoint nào.
+//
+// Trạng thái ghế còn được ĐỒNG BỘ REALTIME giữa các phiên (SignalR — task dòng 11 Sprint 3,
+// Hoàng Văn Thịnh, hook ở ../realtime/useSeatMapRealtime.ts): nhận sự kiện "sơ đồ ghế vừa đổi"
+// thì gọi lại endpoint sơ đồ ghế trong nền — không bật loading, và nếu ghế khách đang chọn vừa
+// bị phiên khác giữ / mua thì bỏ khỏi lựa chọn kèm một lời báo.
 export default function SeatMapPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -72,6 +78,110 @@ export default function SeatMapPage() {
   }, [tripId, reloadToken]);
 
   const seatMap = outcome?.status === 'done' ? outcome.seatMap : null;
+
+  // ── Đồng bộ realtime giữa các phiên (SignalR) ─────────────────────────────────────────────────
+  // Callback nhận sự kiện đọc giá trị MỚI NHẤT qua ref: sự kiện từ websocket rơi vào bất kỳ thời
+  // điểm nào, không chờ render, nên closure có thể còn cầm state của lượt render trước đó. Ba ref
+  // dưới nhận giá trị hiện tại qua effect đồng bộ mỗi khi state tương ứng đổi.
+  const seatMapRef = useRef<TripSeatMap | null>(null);
+  const selectedSeatIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const tripIdRef = useRef(tripId);
+
+  // Hàng đợi một khe: một lượt gọi API đang bay thì sự kiện mới chỉ đánh dấu "còn nữa"; lượt đang
+  // bay xong sẽ chạy tiếp đúng một lượt nữa — nhiều sự kiện dồn dập không mở nhiều request song
+  // song, mà cũng không bỏ sót sự kiện cuối cùng.
+  const realtimeBusyRef = useRef(false);
+  const realtimePendingRef = useRef(false);
+
+  // Trỏ tới bản syncFromServer mới nhất để lượt chạy tiếp trong `finally` không phụ thuộc danh
+  // tính hàm.
+  const syncRef = useRef<() => void>(() => undefined);
+
+  useEffect(() => {
+    seatMapRef.current = seatMap;
+    selectedSeatIdsRef.current = selectedSeatIds;
+    tripIdRef.current = tripId;
+  }, [seatMap, selectedSeatIds, tripId]);
+
+  // Một lượt đồng bộ "im lặng": gọi lại sơ đồ ghế nhưng KHÔNG bật trạng thái loading (không nháy
+  // màn hình trong lúc khách đang xem ghế) và hỏng thì giữ nguyên dữ liệu đang hiển thị. Khác hẳn
+  // lượt tải đầu ở effect phía trên — lượt đó dựng màn hình lần đầu nên có quyền hiện loading /
+  // màn lỗi.
+  const syncFromServer = useCallback(() => {
+    const currentTripId = tripId;
+
+    if (!currentTripId) return;
+
+    if (realtimeBusyRef.current) {
+      realtimePendingRef.current = true;
+      return;
+    }
+
+    realtimeBusyRef.current = true;
+
+    seatMapApi
+      .getSeatMap(currentTripId)
+      .then((fresh) => {
+        // Chuyến đã đổi trong lúc request đang bay (điều hướng sang chuyến khác trên cùng màn
+        // hình) thì bỏ kết quả — sơ đồ của chuyến cũ không được ghi đè chuyến mới.
+        if (tripIdRef.current !== currentTripId) return;
+
+        const previous = seatMapRef.current;
+
+        // Ghế "vừa mất" = trước còn trống mà giờ không còn trống nữa (đang giữ / đã bán), hoặc
+        // biến mất khỏi sơ đồ. So theo id; ghế mới thêm không ai đang chọn nên không xét.
+        const freshById = new Map(fresh.seats.map((seat) => [seat.id, seat]));
+        const justLostSeats = previous
+          ? previous.seats.filter((seat) => {
+              if (!isSeatSelectable(seat.status)) return false;
+              const after = freshById.get(seat.id);
+              return !after || !isSeatSelectable(after.status);
+            })
+          : [];
+
+        const lostSelectedSeats = justLostSeats.filter((seat) =>
+          selectedSeatIdsRef.current.has(seat.id),
+        );
+
+        if (lostSelectedSeats.length > 0) {
+          const lostIds = new Set(lostSelectedSeats.map((seat) => seat.id));
+
+          setSelectedSeatIds((prev) => {
+            const next = new Set(prev);
+            lostIds.forEach((id) => next.delete(id));
+            return next;
+          });
+
+          // 5 giây — lâu hơn mặc định vì khách đang nhìn sơ đồ, thông báo này giải thích vì sao
+          // ghế vừa biến khỏi danh sách đã chọn.
+          message.warning(
+            `Ghế ${lostSelectedSeats.map((seat) => seatDisplayName(seat)).join(', ')} không còn trống — đã bỏ khỏi lựa chọn của bạn.`,
+            5,
+          );
+        }
+
+        setOutcome({ status: 'done', seatMap: fresh });
+      })
+      .catch(() => {
+        // Nuốt lỗi: giữ nguyên sơ đồ ghế đang hiển thị. Lời nhắc realtime không được phép biến
+        // một màn hình đang xem tốt thành màn lỗi — lượt gọi lại kế tiếp (từ sự kiện sau, hoặc
+        // nút thao tác) sẽ tự trả lời kênh còn sống hay không.
+      })
+      .finally(() => {
+        realtimeBusyRef.current = false;
+
+        if (realtimePendingRef.current) {
+          realtimePendingRef.current = false;
+          syncRef.current();
+        }
+      });
+  }, [tripId]);
+
+  useEffect(() => {
+    syncRef.current = syncFromServer;
+  }, [syncFromServer]);
+
+  useSeatMapRealtime(tripId, syncFromServer);
 
   // Các ghế đang được chọn, sắp theo tầng → hàng → cột để danh sách dễ đọc.
   const selectedSeats = useMemo(() => {

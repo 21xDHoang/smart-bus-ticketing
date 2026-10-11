@@ -42,12 +42,21 @@ public sealed class AuditLogMiddleware
     /// thì mỗi lần khách gõ thêm một ký tự trong ô mã (màn thanh toán gọi có debounce) sinh một dòng
     /// nhật ký Create giả, với Target là "Validate" — một bảng không tồn tại.
     ///
+    /// /hubs: cả họ đường dẫn của SignalR — negotiate lúc mở kênh và các POST long-poll của chính
+    /// kênh đó (task "Đồng bộ trạng thái ghế realtime giữa các phiên", Hoàng Văn Thịnh, dòng 11
+    /// Sprint 3). Đây KHÔNG phải ca "POST chỉ đọc" như trên mà là đường ống giao vận của một kênh
+    /// hai chiều: negotiate và long-poll không đổi dữ liệu nghiệp vụ nào. Thứ ĐỔI dữ liệu thật
+    /// (giữ ghế, nhả ghế, hết hạn) nằm dưới /api/seat-holds — vẫn được ghi bình thường. Loại cả
+    /// tiền tố /hubs là chủ đích vì mọi hub về sau đều là đường ống. Không loại trừ thì mỗi lượt
+    /// khách mở màn chọn ghế sinh một dòng Create giả (Target "Negotiate"), và mỗi nhịp long-poll
+    /// sinh thêm dòng Target "SeatMap" — hai bảng không tồn tại, lặp theo số khách đang xem sơ đồ.
+    ///
     /// ⚠️ Đây là cách xử lý RIÊNG LẺ, chưa phải quy ước. Cùng dạng còn có POST /api/tickets/validate
     /// ở Sprint 4 (đã ghi ở <see cref="ResolveTableName"/>) và các endpoint hành động con của
     /// /seat-holds. Nhóm cần chốt MỘT cách chung cho nhóm "POST chỉ đọc" trước khi Sprint 4 thêm
     /// endpoint thứ ba, thay vì mỗi task tự thêm một dòng vào đây.
     /// </summary>
-    private static readonly PathString[] IgnoredPaths = [new("/api/auth"), new("/api/vouchers/validate")];
+    private static readonly PathString[] IgnoredPaths = [new("/api/auth"), new("/api/vouchers/validate"), new("/hubs")];
 
     private readonly RequestDelegate _next;
 
