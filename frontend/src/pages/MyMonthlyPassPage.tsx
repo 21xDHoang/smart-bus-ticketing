@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Button, List, Popconfirm, Space, Tag, Typography, message, theme } from 'antd';
+import { Alert, Button, List, Popconfirm, Space, Typography, message, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import myMonthlyPassApi from '../api/myMonthlyPassApi';
 import { findPassType } from '../api/monthlyPassApi';
@@ -10,7 +10,7 @@ import type { AppError } from '../api/axiosClient';
 import MonthlyPassExpiryReminder from '../components/MonthlyPassExpiryReminder';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
 import { getExpiringSoonPasses } from '../components/monthlyPassReminder';
-import { EmptyState, ErrorState, FilterBar, LoadingState, PageCard, PageHeader } from '../components/ui';
+import { EmptyState, ErrorState, FilterBar, LoadingState, PageCard, PageHeader, RouteBadge } from '../components/ui';
 import { formatDate, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
@@ -73,7 +73,7 @@ function RouteLine({ pass, route }: { pass: MonthlyPass; route?: { code: string;
   if (route) {
     return (
       <Space size={8} wrap>
-        <Tag color="blue">{route.code}</Tag>
+        <RouteBadge code={route.code} />
         <Text strong>{route.name}</Text>
       </Space>
     );

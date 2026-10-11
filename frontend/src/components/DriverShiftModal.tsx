@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Descriptions, Modal, Space, Table, Tag, Typography } from 'antd';
+import { Descriptions, Modal, Space, Table, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
 import { DRIVER_TRIP_PAGE_SIZE, fetchDriverTrips } from '../api/driverApi';
@@ -7,6 +7,8 @@ import type { Driver, DriverTrip } from '../api/driverApi';
 import type { AppError } from '../api/axiosClient';
 import { TRIP_STATUS_META } from '../api/tripApi';
 import { SHIFT_STATE_META, deriveShiftSummary, describeShift, vietnamDayRange } from './driverShift';
+import RouteBadge from './ui/RouteBadge';
+import StatusTag from './ui/StatusTag';
 
 const { Text } = Typography;
 
@@ -23,7 +25,7 @@ const TRIP_COLUMNS: TableProps<DriverTrip>['columns'] = [
     dataIndex: 'routeCode',
     key: 'routeCode',
     width: 100,
-    render: (routeCode: string) => <Tag color="blue">{routeCode}</Tag>,
+    render: (routeCode: string) => <RouteBadge code={routeCode} size="sm" />,
   },
   {
     title: 'Tuyến',
@@ -60,7 +62,7 @@ const TRIP_COLUMNS: TableProps<DriverTrip>['columns'] = [
       // Backend chỉ trả bốn mã trong TRIP_STATUS_META. Lỡ có giá trị lạ thì hiện nguyên văn,
       // không để màn hình vỡ vì tra meta không thấy — cùng lối các màn hình chuyến khác.
       const meta = TRIP_STATUS_META[status];
-      return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{status}</Tag>;
+      return meta ? <StatusTag color={meta.color}>{meta.label}</StatusTag> : <StatusTag>{status}</StatusTag>;
     },
   },
 ];
@@ -126,9 +128,9 @@ export default function DriverShiftModal({ open, driver, onClose }: DriverShiftM
             </Descriptions.Item>
             <Descriptions.Item label="Tài khoản">
               {driver.isActive ? (
-                <Tag color="success">Đang làm</Tag>
+                <StatusTag color="success">Đang làm</StatusTag>
               ) : (
-                <Tag color="default">Đã khoá</Tag>
+                <StatusTag color="default">Đã khoá</StatusTag>
               )}
             </Descriptions.Item>
           </Descriptions>
@@ -136,7 +138,7 @@ export default function DriverShiftModal({ open, driver, onClose }: DriverShiftM
           <div>
             <Space align="center" wrap>
               <Text strong>{today.format('DD/MM/YYYY')}</Text>
-              <Tag color={shiftMeta.color}>{shiftMeta.label}</Tag>
+              <StatusTag color={shiftMeta.color}>{shiftMeta.label}</StatusTag>
               {!loading && !loadError && (
                 <Text type="secondary">{describeShift(summary)}</Text>
               )}

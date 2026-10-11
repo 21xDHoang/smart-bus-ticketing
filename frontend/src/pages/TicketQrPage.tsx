@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Result, Space, Tag, Typography } from 'antd';
+import { Alert, Button, Result, Typography, theme } from 'antd';
 import { CompressOutlined, ExpandOutlined } from '@ant-design/icons';
 import ticketApi from '../api/ticketApi';
 import type { Ticket } from '../api/ticketApi';
@@ -8,7 +8,7 @@ import type { AppError } from '../api/axiosClient';
 import TicketQr from '../components/TicketQr';
 import TicketStatusTag from '../components/TicketStatusTag';
 import { getTicketStatus, isTicketUsable } from '../components/ticketStatus';
-import { ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
+import { ErrorState, LoadingState, PageCard, PageHeader, RouteBadge, RouteLine } from '../components/ui';
 import { formatDateTime, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
@@ -46,9 +46,13 @@ function requestWakeLock(): Promise<WakeLockHandle | null> {
 // Web không có API chỉnh độ sáng phần cứng chuẩn — "tăng sáng" ở đây làm bằng ba thứ đáng tin
 // cậy: (1) nền trắng tuyệt đối để đầu đọc thấy mã rõ nhất, (2) toàn màn hình để bỏ mọi thành
 // phần giao diện gây tối, (3) Wake Lock giữ màn hình không tự mờ/tắt giữa lúc quét.
+// 11/10/2026 — làm lại giao diện theo hệ thống "Sơ đồ mạng lưới": vé vẽ như tấm vé giấy — ô mã
+// tuyến, đoạn tuyến ●—○, lưới thông tin 2×2 và đường xé có hai vòng khuyết hai đầu. Chế độ quét
+// giữ nguyên (nền trắng tuyệt đối cho đầu đọc).
 export default function TicketQrPage() {
   const { ticketId = '' } = useParams();
   const navigate = useNavigate();
+  const { token } = theme.useToken();
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
@@ -194,6 +198,14 @@ export default function TicketQrPage() {
   const ticket = state.ticket;
   const usable = isTicketUsable(getTicketStatus(ticket));
 
+  // Bốn ô thông tin trên mặt vé — nhãn nhỏ phía trên, giá trị đậm phía dưới.
+  const infoItems = [
+    { label: 'Khởi hành', value: formatDateTime(ticket.departureTime) },
+    { label: 'Ghế', value: ticket.seatNumber },
+    { label: 'Lên tại', value: ticket.boardingStopName },
+    { label: 'Xuống tại', value: ticket.alightingStopName },
+  ];
+
   return (
     <div>
       <PageHeader
@@ -202,58 +214,123 @@ export default function TicketQrPage() {
         onBack={() => navigate('/my-tickets')}
       />
 
-      <PageCard>
+      {/* Tấm vé nằm trần trên nền trang (không bọc thẻ) — đúng dáng một vật cầm tay. */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
         <div
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 16,
-            padding: '16px 0',
+            width: '100%',
+            maxWidth: 420,
+            background: token.colorBgContainer,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadiusLG,
+            padding: '20px 24px',
           }}
         >
-          <Space size={8} wrap>
-            <Tag color="blue">{ticket.routeCode}</Tag>
-            <Text strong>{ticket.routeName}</Text>
-            <TicketStatusTag ticket={ticket} />
-          </Space>
+          {/* Đầu vé: mã tuyến + tên tuyến + trạng thái. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <RouteBadge code={ticket.routeCode} />
+            <Text strong style={{ fontSize: 16 }}>
+              {ticket.routeName}
+            </Text>
+            <span style={{ marginLeft: 'auto' }}>
+              <TicketStatusTag ticket={ticket} />
+            </span>
+          </div>
 
-          <Text type="secondary">
-            {ticket.origin} → {ticket.destination}
-          </Text>
+          {/* Đoạn tuyến ●—○ — cùng cách vẽ với thẻ chuyến và màn chọn ghế. */}
+          <div style={{ marginTop: 12 }}>
+            <RouteLine from={ticket.origin} to={ticket.destination} />
+          </div>
 
-          <Text type="secondary">
-            Khởi hành {formatDateTime(ticket.departureTime)} · Ghế {ticket.seatNumber}
-          </Text>
+          {/* Lưới thông tin 2×2. */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '12px 16px',
+              marginTop: 16,
+            }}
+          >
+            {infoItems.map((item) => (
+              <div key={item.label}>
+                <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{item.label}</div>
+                <div className="tabular-nums" style={{ fontWeight: 600 }}>
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
 
-          <Text type="secondary">
-            Lên tại {ticket.boardingStopName} · Xuống tại {ticket.alightingStopName}
-          </Text>
-
-          <TicketQr code={ticket.code} size={280} disabled={!usable} />
-
-          <Text type="secondary">
-            Mã vé: <Text code>{ticket.code}</Text>
-          </Text>
-
-          <Text strong style={{ fontSize: 18 }}>
-            {formatVnd(ticket.price)}
-          </Text>
-
-          {usable ? (
-            <Button type="primary" size="large" icon={<ExpandOutlined />} onClick={enterScanMode}>
-              Tăng sáng & toàn màn hình để quét
-            </Button>
-          ) : (
-            <Alert
-              type="warning"
-              showIcon
-              message="Vé này không còn quét được"
-              description="Vé đã sử dụng, đã hết hạn hoặc đã bị huỷ nên không thể dùng để lên xe."
+          {/* Đường xé vé — nét đứt chạy hết bề ngang, hai vòng khuyết hai đầu như cuống vé
+              giấy. Vòng khuyết tô màu nền trang nên hai nửa ngoài tấm vé chìm vào nền. */}
+          <div style={{ position: 'relative', height: 0, margin: '20px -24px' }}>
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: 0,
+                borderTop: `1px dashed ${token.colorBorder}`,
+              }}
             />
-          )}
+            <div
+              style={{
+                position: 'absolute',
+                left: -11,
+                top: -11,
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                background: token.colorBgLayout,
+                border: `1px solid ${token.colorBorderSecondary}`,
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                right: -11,
+                top: -11,
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                background: token.colorBgLayout,
+                border: `1px solid ${token.colorBorderSecondary}`,
+              }}
+            />
+          </div>
+
+          {/* Cuống vé: mã QR + mã vé + giá + nút quét. */}
+          <div
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
+          >
+            <TicketQr code={ticket.code} size={280} disabled={!usable} />
+
+            <Text type="secondary">
+              Mã vé: <Text code>{ticket.code}</Text>
+            </Text>
+
+            <div
+              className="tabular-nums"
+              style={{ fontSize: 24, fontWeight: 700, color: token.colorPrimaryText }}
+            >
+              {formatVnd(ticket.price)}
+            </div>
+
+            {usable ? (
+              <Button type="primary" size="large" icon={<ExpandOutlined />} onClick={enterScanMode}>
+                Tăng sáng & toàn màn hình để quét
+              </Button>
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                message="Vé này không còn quét được"
+                description="Vé đã sử dụng, đã hết hạn hoặc đã bị huỷ nên không thể dùng để lên xe."
+              />
+            )}
+          </div>
         </div>
-      </PageCard>
+      </div>
 
       {scanning && (
         <div

@@ -1,7 +1,8 @@
-import { Descriptions, Modal, Tag, Typography } from 'antd';
+import { Descriptions, Modal, Typography } from 'antd';
 import dayjs from 'dayjs';
 import type { AuditLog } from '../api/auditLogApi';
 import { getAuditActionMeta } from '../api/auditLogApi';
+import StatusTag from './ui/StatusTag';
 
 const { Text } = Typography;
 
@@ -62,7 +63,7 @@ export default function AuditLogDetailModal({ open, log, onClose }: AuditLogDeta
           </Descriptions.Item>
 
           <Descriptions.Item label="Hành động">
-            {actionMeta && <Tag color={actionMeta.color}>{actionMeta.label}</Tag>}
+            {actionMeta && <StatusTag color={actionMeta.color}>{actionMeta.label}</StatusTag>}
           </Descriptions.Item>
 
           <Descriptions.Item label="Người thao tác (ID)">
@@ -72,7 +73,7 @@ export default function AuditLogDetailModal({ open, log, onClose }: AuditLogDeta
           <Descriptions.Item label="Đối tượng">
             {target ? (
               <div>
-                <Tag color="blue">{target.table}</Tag>
+                <StatusTag color="blue">{target.table}</StatusTag>
                 {target.id && (
                   <Text code style={{ marginLeft: 8 }}>
                     {target.id}

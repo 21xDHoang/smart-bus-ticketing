@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
+import { Button, Input, Popconfirm, Select, Space, Table, message } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { fetchBuses, BUS_STATUS_META } from '../api/busApi';
@@ -8,7 +8,7 @@ import busCrudApi, { BUS_STATUS_OPTIONS } from '../api/busCrudApi';
 import type { BusPayload, UpdateBusPayload } from '../api/busCrudApi';
 import type { AppError } from '../api/axiosClient';
 import BusFormModal from '../components/BusFormModal';
-import { FilterBar, PageCard, PageHeader } from '../components/ui';
+import { FilterBar, PageCard, PageHeader, StatusTag } from '../components/ui';
 import { formatDate } from '../components/ui/format';
 import { tablePagination } from '../components/ui/table';
 
@@ -21,7 +21,7 @@ const BASE_COLUMNS: TableProps<Bus>['columns'] = [
     dataIndex: 'licensePlate',
     key: 'licensePlate',
     width: 130,
-    render: (licensePlate: string) => <Tag color="blue">{licensePlate}</Tag>,
+    render: (licensePlate: string) => <StatusTag color="blue">{licensePlate}</StatusTag>,
   },
   {
     title: 'Loại xe',
@@ -45,7 +45,7 @@ const BASE_COLUMNS: TableProps<Bus>['columns'] = [
       // Backend chỉ trả 'Active' | 'Maintenance' | 'Inactive'. Lỡ có giá trị lạ thì hiện
       // nguyên văn, không để màn hình vỡ vì tra meta không thấy.
       const meta = BUS_STATUS_META[status];
-      return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{status}</Tag>;
+      return meta ? <StatusTag color={meta.color}>{meta.label}</StatusTag> : <StatusTag>{status}</StatusTag>;
     },
   },
   {

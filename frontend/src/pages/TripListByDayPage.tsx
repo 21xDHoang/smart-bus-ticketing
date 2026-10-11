@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
-  Card,
   DatePicker,
   Empty,
   Select,
   Space,
   Table,
-  Tag,
   Typography,
   message,
 } from 'antd';
@@ -22,6 +20,7 @@ import {
 } from '../api/tripApi';
 import type { Trip, TripRouteOption, TripStatus } from '../api/tripApi';
 import type { AppError } from '../api/axiosClient';
+import { PageCard, StatusTag } from '../components/ui';
 
 const { Title, Text } = Typography;
 
@@ -74,7 +73,7 @@ const COLUMNS: TableProps<Trip>['columns'] = [
     dataIndex: 'busLicensePlate',
     key: 'busLicensePlate',
     width: 150,
-    render: (plate: string) => (plate ? <Tag>{plate}</Tag> : '—'),
+    render: (plate: string) => (plate ? <StatusTag>{plate}</StatusTag> : '—'),
   },
   {
     title: 'Trạng thái',
@@ -85,7 +84,7 @@ const COLUMNS: TableProps<Trip>['columns'] = [
       // Backend chỉ trả bốn mã ở trên. Lỡ có giá trị lạ thì hiện nguyên văn,
       // không để màn hình vỡ vì tra meta không thấy.
       const meta = TRIP_STATUS_META[status];
-      return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{status}</Tag>;
+      return meta ? <StatusTag color={meta.color}>{meta.label}</StatusTag> : <StatusTag>{status}</StatusTag>;
     },
   },
 ];
@@ -176,7 +175,7 @@ export default function TripListByDayPage() {
         </Text>
       </div>
 
-      <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+      <PageCard>
         <Space wrap size="middle" style={{ marginBottom: 16 }}>
           <Select
             placeholder="Chọn tuyến"
@@ -245,7 +244,7 @@ export default function TripListByDayPage() {
             }}
           />
         )}
-      </Card>
+      </PageCard>
     </div>
   );
 }

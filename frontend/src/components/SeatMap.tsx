@@ -48,9 +48,11 @@ export default function SeatMap({
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: token.borderRadius,
-      border: `1px solid ${isVip ? token.colorWarning : token.colorBorder}`,
-      background: isVip ? token.colorWarning : '#ffffff',
-      color: isVip ? '#ffffff' : token.colorTextSecondary,
+      // Ghế VIP: chữ nâu đậm trên nền hổ phách nhạt — chữ trắng trên #F59E0B chỉ đạt 2.15:1,
+      // không qua WCAG AA. Bộ token Bg/Border/Text đạt AA ở cả hai chế độ.
+      border: `1px solid ${isVip ? token.colorWarningBorder : token.colorBorder}`,
+      background: isVip ? token.colorWarningBg : token.colorBgElevated,
+      color: isVip ? token.colorWarningText : token.colorTextSecondary,
       fontSize: 11,
       fontWeight: isVip ? 700 : 500,
       cursor: interactive ? 'pointer' : 'default',
@@ -135,14 +137,21 @@ export default function SeatMap({
               height: 12,
               borderRadius: 4,
               border: `1px solid ${token.colorBorder}`,
-              background: '#ffffff',
+              background: token.colorBgElevated,
             }}
           />
           Ghế thường
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {/* Ô chú giải vẽ y hệt mặt ghế VIP: nền nhạt + viền đậm, không phải ô đặc. */}
           <span
-            style={{ width: 12, height: 12, borderRadius: 4, background: token.colorWarning }}
+            style={{
+              width: 12,
+              height: 12,
+              borderRadius: 4,
+              border: `1px solid ${token.colorWarningBorder}`,
+              background: token.colorWarningBg,
+            }}
           />
           Ghế VIP
         </span>

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   AutoComplete,
   Button,
-  Card,
   Descriptions,
   Empty,
   Radio,
@@ -10,6 +9,7 @@ import {
   Space,
   Typography,
   message,
+  theme,
 } from 'antd';
 import { CheckCircleFilled, IdcardOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -18,13 +18,10 @@ import type { MonthlyPass, MonthlyPassRoute, PassTypeCode } from '../api/monthly
 import stopSearchApi from '../api/stopSearchApi';
 import type { AppError } from '../api/axiosClient';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
+import { PageCard } from '../components/ui';
+import { formatVnd } from '../components/ui/format';
 
 const { Title, Text } = Typography;
-
-/** Định dạng tiền VND — ví dụ 200000 → "200.000 đ". */
-function formatVnd(price: number): string {
-  return `${price.toLocaleString('vi-VN')} đ`;
-}
 
 /** Gợi ý của một ô nhập điểm đi/điểm đến — giá trị phát ra là TÊN trạm. */
 interface StopOption {
@@ -181,6 +178,8 @@ export default function MonthlyPassRegistrationPage() {
   const registeredRoute = foundRoutes.find((route) => route.id === registered?.routeId);
   const registeredType = findPassType(registered?.passTypeCode);
 
+  const { token } = theme.useToken();
+
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
@@ -193,10 +192,7 @@ export default function MonthlyPassRegistrationPage() {
         </Text>
       </div>
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
+      <PageCard>
         <Space direction="vertical" size={20} style={{ display: 'flex', width: '100%' }}>
           {/* Ô nhập cặp điểm + nút tìm tuyến. */}
           <Space size="large" wrap align="end" style={{ display: 'flex', width: '100%' }}>
@@ -289,8 +285,8 @@ export default function MonthlyPassRegistrationPage() {
           {selectedRoute && selectedPassType && validity && (
             <div
               style={{
-                background: '#eef1ff',
-                border: '1px solid #dbe1ff',
+                background: token.colorPrimaryBg,
+                border: `1px solid ${token.colorPrimaryBorder}`,
                 borderRadius: 12,
                 padding: '16px 20px',
               }}
@@ -299,7 +295,14 @@ export default function MonthlyPassRegistrationPage() {
                 <Text type="secondary" style={{ fontSize: 13 }}>
                   Giá vé tháng của bạn
                 </Text>
-                <Text style={{ fontSize: 28, fontWeight: 700, color: '#4361ee', lineHeight: 1.2 }}>
+                <Text
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 700,
+                    color: token.colorPrimaryText,
+                    lineHeight: 1.2,
+                  }}
+                >
                   {formatVnd(selectedPassType.price)}
                 </Text>
                 <Text style={{ fontSize: 13 }}>
@@ -324,69 +327,69 @@ export default function MonthlyPassRegistrationPage() {
             Đăng ký vé tháng
           </Button>
         </Space>
-      </Card>
+      </PageCard>
 
       {/* Kết quả đăng ký thành công. */}
       {registered && registeredRoute && registeredType && (
-        <Card
-          variant="borderless"
-          style={{ borderRadius: 16, marginTop: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-          title={
-            <Space>
-              <CheckCircleFilled style={{ color: '#52c41a' }} />
-              <span>Đăng ký vé tháng thành công</span>
-            </Space>
-          }
-        >
-          <Descriptions
-            column={1}
-            size="middle"
-            items={[
-              {
-                key: 'code',
-                label: 'Mã vé tháng',
-                children: (
-                  <Text code style={{ fontSize: 14 }}>
-                    {registered.code}
-                  </Text>
-                ),
-              },
-              {
-                key: 'route',
-                label: 'Tuyến áp dụng',
-                children: `${registeredRoute.code} — ${registeredRoute.name} (${registeredRoute.origin} → ${registeredRoute.destination})`,
-              },
-              {
-                key: 'passType',
-                label: 'Loại vé',
-                children: registeredType.name,
-              },
-              {
-                key: 'validity',
-                label: 'Hiệu lực',
-                children: `${dayjs(registered.validFrom).format('DD/MM/YYYY')} → ${dayjs(registered.validTo).format('DD/MM/YYYY')}`,
-              },
-              {
-                key: 'price',
-                label: 'Giá vé',
-                children: <Text strong>{formatVnd(registered.price)}</Text>,
-              },
-              {
-                key: 'status',
-                label: 'Trạng thái',
-                children: <MonthlyPassStatusTag pass={registered} />,
-              },
-            ]}
-          />
+        <div style={{ marginTop: 20 }}>
+          <PageCard
+            title={
+              <Space>
+                <CheckCircleFilled style={{ color: token.colorSuccess }} />
+                <span>Đăng ký vé tháng thành công</span>
+              </Space>
+            }
+          >
+            <Descriptions
+              column={1}
+              size="middle"
+              items={[
+                {
+                  key: 'code',
+                  label: 'Mã vé tháng',
+                  children: (
+                    <Text code style={{ fontSize: 14 }}>
+                      {registered.code}
+                    </Text>
+                  ),
+                },
+                {
+                  key: 'route',
+                  label: 'Tuyến áp dụng',
+                  children: `${registeredRoute.code} — ${registeredRoute.name} (${registeredRoute.origin} → ${registeredRoute.destination})`,
+                },
+                {
+                  key: 'passType',
+                  label: 'Loại vé',
+                  children: registeredType.name,
+                },
+                {
+                  key: 'validity',
+                  label: 'Hiệu lực',
+                  children: `${dayjs(registered.validFrom).format('DD/MM/YYYY')} → ${dayjs(registered.validTo).format('DD/MM/YYYY')}`,
+                },
+                {
+                  key: 'price',
+                  label: 'Giá vé',
+                  children: <Text strong>{formatVnd(registered.price)}</Text>,
+                },
+                {
+                  key: 'status',
+                  label: 'Trạng thái',
+                  children: <MonthlyPassStatusTag pass={registered} />,
+                },
+              ]}
+            />
 
-          <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-            Lưu lại mã vé tháng để soát vé khi lên xe. Vé tháng không đảm bảo có ghế ngồi.
-          </Text>
+            <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+              Lưu lại mã vé tháng để soát vé khi lên xe. Vé tháng không đảm bảo có ghế ngồi.
+            </Text>
 
-          <Button style={{ marginTop: 16 }} onClick={handleRegisterAnother}>
-            Đăng ký vé khác
-          </Button>
-        </Card>
+            <Button style={{ marginTop: 16 }} onClick={handleRegisterAnother}>
+              Đăng ký vé khác
+            </Button>
+          </PageCard>
+        </div>
       )}
     </div>
   );

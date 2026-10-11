@@ -13,7 +13,6 @@ import {
   Segmented,
   Select,
   Table,
-  Tag,
   TimePicker,
   Typography,
   message,
@@ -28,6 +27,7 @@ import type { BusOption } from '../api/busApi';
 import { generateTrips } from '../api/tripGenerateApi';
 import type { GenerateTripsPayload, GenerateTripsResult } from '../api/tripGenerateApi';
 import type { AppError } from '../api/axiosClient';
+import { StatusTag } from '../components/ui';
 
 // -----------------------------------------------------------------------------
 // Màn hình cấu hình tần suất chạy xe theo khung giờ trong ngày — story 13
@@ -253,7 +253,7 @@ export default function TripFrequencyPage() {
       dataIndex: 'busLicensePlate',
       key: 'busLicensePlate',
       width: 140,
-      render: (plate: string) => (plate ? <Tag>{plate}</Tag> : '—'),
+      render: (plate: string) => (plate ? <StatusTag>{plate}</StatusTag> : '—'),
     },
     {
       title: 'Trạng thái',
@@ -264,7 +264,11 @@ export default function TripFrequencyPage() {
         // Backend chỉ trả bốn mã trong TRIP_STATUS_META; giá trị lạ thì hiện nguyên văn,
         // không để màn hình vỡ vì tra meta không thấy — cùng lối TripSchedulePage.
         const meta = TRIP_STATUS_META[tripStatus];
-        return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{tripStatus}</Tag>;
+        return meta ? (
+          <StatusTag color={meta.color}>{meta.label}</StatusTag>
+        ) : (
+          <StatusTag>{tripStatus}</StatusTag>
+        );
       },
     },
   ];

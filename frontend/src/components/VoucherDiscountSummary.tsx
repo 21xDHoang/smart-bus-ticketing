@@ -1,6 +1,7 @@
-import { Tag, Typography, theme } from 'antd';
+import { Typography, theme } from 'antd';
 import type { VoucherValidationResponse } from '../api/voucherApi';
 import { VOUCHER_REASON_META } from '../api/voucherApi';
+import StatusTag from './ui/StatusTag';
 import { formatVnd } from './ui/format';
 
 const { Text } = Typography;
@@ -43,7 +44,7 @@ export default function VoucherDiscountSummary({
           }}
         >
           <Text type="secondary">Tổng tiền tạm tính</Text>
-          <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimaryText }}>
             {orderAmount === null ? '—' : formatVnd(orderAmount)}
           </div>
         </div>
@@ -74,9 +75,9 @@ export default function VoucherDiscountSummary({
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
         <Text type="secondary">
           Số tiền được giảm{' '}
-          <Tag color="green" style={{ marginInlineStart: 4 }}>
+          <StatusTag color="green" style={{ marginInlineStart: 4 }}>
             {validation.code}
-          </Tag>
+          </StatusTag>
         </Text>
         <Text type="success" strong>
           -{formatVnd(validation.discountAmount)}
@@ -93,7 +94,7 @@ export default function VoucherDiscountSummary({
         }}
       >
         <Text strong>Giá sau giảm</Text>
-        <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimaryText }}>
           {formatVnd(validation.finalAmount)}
         </div>
       </div>

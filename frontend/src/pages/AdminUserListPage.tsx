@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Avatar, Card, Input, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Avatar, Card, Input, Select, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
 import { fetchAdminUsers, getRoleMeta, ROLE_OPTIONS } from '../api/adminUserApi';
 import type { AdminUser, RoleCode } from '../api/adminUserApi';
 import type { AppError } from '../api/axiosClient';
+import { StatusTag } from '../components/ui';
 
 /** Trạng thái tài khoản dùng cho bộ lọc — ánh xạ sang AdminUser.isActive. */
 type StatusFilter = 'active' | 'locked';
@@ -48,7 +49,7 @@ const columns: TableProps<AdminUser>['columns'] = [
     width: 140,
     render: (role: RoleCode) => {
       const meta = getRoleMeta(role);
-      return <Tag color={meta.color}>{meta.label}</Tag>;
+      return <StatusTag color={meta.color}>{meta.label}</StatusTag>;
     },
   },
   {
@@ -57,7 +58,7 @@ const columns: TableProps<AdminUser>['columns'] = [
     key: 'isActive',
     width: 130,
     render: (isActive: boolean) =>
-      isActive ? <Tag color="success">Hoạt động</Tag> : <Tag color="error">Bị khóa</Tag>,
+      isActive ? <StatusTag color="success">Hoạt động</StatusTag> : <StatusTag color="error">Bị khóa</StatusTag>,
   },
   {
     title: 'Ngày tạo',

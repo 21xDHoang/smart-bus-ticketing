@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Input, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -7,7 +7,7 @@ import voucherApi, { VOUCHER_STATUS_META, VOUCHER_STATUS_OPTIONS } from '../api/
 import type { Voucher, VoucherPayload, VoucherStatus } from '../api/voucherApi';
 import type { AppError } from '../api/axiosClient';
 import VoucherFormModal from '../components/VoucherFormModal';
-import { FilterBar, PageCard, PageHeader } from '../components/ui';
+import { FilterBar, PageCard, PageHeader, StatusTag } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
 import { tablePagination } from '../components/ui/table';
 
@@ -98,7 +98,7 @@ export default function VoucherManagePage() {
       dataIndex: 'code',
       key: 'code',
       width: 130,
-      render: (code: string) => <Tag color="blue">{code}</Tag>,
+      render: (code: string) => <StatusTag color="blue">{code}</StatusTag>,
     },
     {
       title: 'Tên chương trình',
@@ -143,7 +143,11 @@ export default function VoucherManagePage() {
       width: 150,
       render: (value: VoucherStatus) => {
         const meta = VOUCHER_STATUS_META[value];
-        return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{value}</Tag>;
+        return meta ? (
+          <StatusTag color={meta.color}>{meta.label}</StatusTag>
+        ) : (
+          <StatusTag>{value}</StatusTag>
+        );
       },
     },
     {

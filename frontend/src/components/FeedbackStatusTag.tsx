@@ -1,6 +1,6 @@
-import { Tag } from 'antd';
 import { CheckCircleFilled, ClockCircleOutlined, SyncOutlined } from '@ant-design/icons';
 import type { ReactNode } from 'react';
+import StatusTag from './ui/StatusTag';
 import type { FeedbackStatus } from '../api/feedbackApi';
 import { getFeedbackStatusMeta } from '../api/feedbackApi';
 
@@ -28,8 +28,8 @@ export default function FeedbackStatusTag({ status }: FeedbackStatusTagProps) {
   const meta = getFeedbackStatusMeta(status);
 
   return (
-    <Tag icon={STATUS_ICONS[status]} color={meta.color}>
+    <StatusTag icon={STATUS_ICONS[status]} color={meta.color}>
       {meta.label}
-    </Tag>
+    </StatusTag>
   );
 }

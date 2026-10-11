@@ -1,4 +1,8 @@
-/* Reset toàn cục — tránh CSS mặc định của Vite template làm lệch layout màn hình Auth. */
+/* Reset tối thiểu + biến CSS cho hai chế độ sáng/tối.
+
+   Biến `--app-*` là cầu nối cho những chỗ KHÔNG dùng được token antd: CSS thô và thuộc
+   tính style nội tuyến cần đổi theo chế độ (ví dụ màu chữ footer trong App.tsx). Bảng màu
+   đầy đủ nằm ở src/components/ui/theme.ts — sửa màu thì sửa ở đó rồi đồng bộ các biến này. */
 
 *,
 *::before,
@@ -14,18 +18,73 @@ body,
   min-height: 100%;
 }
 
+:root {
+  color-scheme: light;
+
+  --app-bg: #f6f8fb;
+  --app-surface: #ffffff;
+  --app-text: #0f172a;
+  --app-text-muted: #475569;
+  --app-border: #e2e8f0;
+  --app-primary: #0b5fff;
+  --app-focus: #0b5fff;
+  /* Chữ thương hiệu trên header — đủ tương phản trên nền của từng chế độ. */
+  --app-brand-gradient: linear-gradient(90deg, #0b5fff, #007a6f);
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --app-bg: #0f172a;
+  --app-surface: #1e293b;
+  --app-text: #e2e8f0;
+  --app-text-muted: #94a3b8;
+  --app-border: #334155;
+  --app-primary: #7fb0ff;
+  --app-focus: #7fb0ff;
+  --app-brand-gradient: linear-gradient(90deg, #7fb0ff, #2dd4bf);
+}
+
+/* Nền đặt cả ở <html> để vùng kéo quá đà (overscroll) không lóe trắng khi ở chế độ tối. */
+html {
+  background: var(--app-bg);
+}
+
 body {
-  font-family: 'Plus Jakarta Sans', system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Be Vietnam Pro', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Nền xám nhạt của cả app — cùng màu colorBgLayout trong components/ui/theme.ts.
-     Đặt ở đây để lúc trang vừa tải chưa kịp có theme vẫn không nháy nền trắng. */
-  background: #f8fafc;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+/* Số liệu (giờ chạy, giá vé, mã ghế) luôn thẳng cột: chữ số đều nhau.
+   Dùng lớp .tabular-nums cho từng chỗ; riêng bảng thì antd đã tự lo. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Vòng focus bàn phím nhìn thấy rõ trên cả hai chế độ — chuẩn tiếp cận. */
+:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
 }
 
 /* Màn hẹp: giấu tên người dùng cạnh avatar trong header để nhường chỗ cho menu. */
 @media (max-width: 640px) {
   .app-user-name {
     display: none;
+  }
+}
+
+/* Thanh tiến trình đặt vé (BookingProgress): màn hẹp chỉ giữ nhãn của ga đang đứng,
+   các ga còn lại thu về chấm tròn cho khỏi tràn dòng. */
+@media (max-width: 560px) {
+  .booking-progress .bp-label {
+    display: none;
+  }
+
+  .booking-progress .bp-label-current {
+    display: inline;
   }
 }

@@ -1,7 +1,9 @@
+import { theme } from 'antd';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
 import { divIcon } from 'leaflet';
 import type { LatLngExpression, LeafletMouseEvent } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { palette } from './ui/theme';
 
 // Toạ độ mặc định: trung tâm Hà Nội — dùng khi thêm mới (chưa có toạ độ nào).
 const DEFAULT_CENTER: LatLngExpression = [21.0285, 105.8542];
@@ -9,13 +11,19 @@ const DEFAULT_ZOOM = 13;
 
 // Marker tự vẽ (SVG) để tránh lỗi "icon vỡ" của Leaflet khi đóng gói bằng Vite:
 // ảnh marker mặc định không được bundle nên hiển thị trống. Dùng divIcon + SVG nội tuyến.
+//
+// Màu ghim lấy từ bảng màu thương hiệu ở chế độ SÁNG: nền bản đồ OSM luôn là gạch sáng, không
+// đổi theo chế độ giao diện, nên ghim cũng giữ một sắc ở cả hai chế độ.
+const pinColor = palette('light').primary.base; // #0B5FFF — chấm trắng trên nền này đạt 5.13:1
+const pinDotColor = palette('light').primary.onBase;
+
 const pinIcon = divIcon({
   className: '', // bỏ class mặc định để không bị khung trắng/viền xung quanh
   iconSize: [36, 36],
   iconAnchor: [18, 36], // mũi kim nằm đúng toạ độ đã chọn
   html: `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24">
-    <path fill="#4361ee" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-    <circle cx="12" cy="9" r="2.5" fill="#fff"/>
+    <path fill="${pinColor}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+    <circle cx="12" cy="9" r="2.5" fill="${pinDotColor}"/>
   </svg>`,
 });
 
@@ -38,6 +46,7 @@ function ClickCapture({ onPick }: { onPick: (latitude: number, longitude: number
 }
 
 export default function StopMapPicker({ value, onChange }: StopMapPickerProps) {
+  const { token } = theme.useToken();
   const center: LatLngExpression = value ? [value.latitude, value.longitude] : DEFAULT_CENTER;
 
   return (
@@ -46,7 +55,7 @@ export default function StopMapPicker({ value, onChange }: StopMapPickerProps) {
         height: 320,
         borderRadius: 12,
         overflow: 'hidden',
-        border: '1px solid #e5e7eb',
+        border: `1px solid ${token.colorBorder}`,
       }}
     >
       <MapContainer center={center} zoom={DEFAULT_ZOOM} style={{ height: '100%', width: '100%' }}>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Form, Input, Button, Checkbox, message } from 'antd';
+import { Form, Input, Button, Checkbox, message, theme } from 'antd';
 import { PhoneOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../../contexts';
 import type { DecodedUser } from '../../api/authApi';
@@ -19,6 +19,8 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
   const [form] = Form.useForm<LoginFormValues>();
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  // Icon và link lấy màu theo token — tự đúng ở cả hai chế độ sáng/tối.
+  const { token } = theme.useToken();
 
   const onFinish = async (values: LoginFormValues) => {
     setLoading(true);
@@ -68,7 +70,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
         ]}
       >
         <Input
-          prefix={<PhoneOutlined style={{ color: '#00b4d8' }} />}
+          prefix={<PhoneOutlined style={{ color: token.colorPrimaryText }} />}
           placeholder="Số điện thoại"
           maxLength={10}
         />
@@ -82,7 +84,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
         ]}
       >
         <Input.Password
-          prefix={<LockOutlined style={{ color: '#00b4d8' }} />}
+          prefix={<LockOutlined style={{ color: token.colorPrimaryText }} />}
           placeholder="Mật khẩu"
         />
       </Form.Item>
@@ -92,7 +94,7 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
           <Form.Item name="remember" valuePropName="checked" noStyle>
             <Checkbox>Ghi nhớ đăng nhập</Checkbox>
           </Form.Item>
-          <a style={{ color: '#7209b7', fontWeight: 500 }} href="#forgot">
+          <a style={{ color: token.colorLink, fontWeight: 500 }} href="#forgot">
             Quên mật khẩu?
           </a>
         </div>
@@ -105,16 +107,14 @@ const LoginForm = ({ onSuccess }: LoginFormProps) => {
           block
           loading={loading}
           style={{
-            background: 'linear-gradient(135deg, #4cc9f0 0%, #4361ee 100%)',
-            border: 'none',
-            height: '48px',
-            borderRadius: '10px',
-            fontWeight: '600',
-            fontSize: '16px',
-            boxShadow: '0 8px 15px rgba(67, 97, 238, 0.3)',
+            // Chỉ giữ kích thước — màu nút lấy từ token primary, đúng cả hai chế độ.
+            height: 48,
+            borderRadius: 10,
+            fontWeight: 600,
+            fontSize: 16,
           }}
         >
-          ĐĂNG NHẬP
+          Đăng nhập
         </Button>
       </Form.Item>
     </Form>

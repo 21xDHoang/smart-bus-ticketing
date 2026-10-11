@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Popconfirm, Space, Table, Tag, message } from 'antd';
+import { Button, Input, Popconfirm, Space, Table, message } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import type { AppError } from '../api/axiosClient';
@@ -8,7 +8,7 @@ import type { SeatLayout, SeatLayoutPayload } from '../api/seatLayoutApi';
 import { layoutGridConfig, vipSeatCount } from '../api/seatLayoutApi';
 import SeatLayoutFormModal from '../components/SeatLayoutFormModal';
 import SeatMap from '../components/SeatMap';
-import { FilterBar, PageCard, PageHeader } from '../components/ui';
+import { FilterBar, PageCard, PageHeader, StatusTag } from '../components/ui';
 import { formatDateTime } from '../components/ui/format';
 
 // Màn hình Admin cấu hình sơ đồ ghế theo loại xe (US 2, Sprint 3, task của Dương Thị Hạnh):
@@ -43,9 +43,9 @@ const BASE_COLUMNS: TableProps<SeatLayout>['columns'] = [
     width: 160,
     render: (_, layout) =>
       vipSeatCount(layout) === 0 ? (
-        <Tag>Không có</Tag>
+        <StatusTag>Không có</StatusTag>
       ) : (
-        <Tag color="gold">{vipSeatCount(layout)} ghế VIP</Tag>
+        <StatusTag color="gold">{vipSeatCount(layout)} ghế VIP</StatusTag>
       ),
   },
   {

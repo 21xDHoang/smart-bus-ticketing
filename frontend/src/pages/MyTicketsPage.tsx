@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, List, Segmented, Space, Tag, Typography, theme } from 'antd';
+import { Button, List, Segmented, Space, Typography, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import ticketApi from '../api/ticketApi';
@@ -10,7 +10,7 @@ import TicketQr from '../components/TicketQr';
 import TicketStatusTag from '../components/TicketStatusTag';
 import { getTicketStatus, isTicketUsable, TICKET_STATUS_META } from '../components/ticketStatus';
 import type { TicketDisplayStatus } from '../components/ticketStatus';
-import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
+import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader, RouteBadge } from '../components/ui';
 import { formatDateTime, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
@@ -190,7 +190,7 @@ export default function MyTicketsPage() {
                   {/* Tuyến + trạng thái + giờ khởi hành + ghế + mã vé */}
                   <div style={{ flex: 1, minWidth: 260 }}>
                     <Space size={8} wrap>
-                      <Tag color="blue">{ticket.routeCode}</Tag>
+                      <RouteBadge code={ticket.routeCode} />
                       <Text strong>{ticket.routeName}</Text>
                       <TicketStatusTag ticket={ticket} />
                     </Space>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Input, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
 import { PlusOutlined } from '@ant-design/icons';
@@ -9,6 +9,7 @@ import routeCrudApi from '../api/routeCrudApi';
 import type { RoutePayload, UpdateRoutePayload } from '../api/routeCrudApi';
 import type { AppError } from '../api/axiosClient';
 import RouteFormModal from '../components/RouteFormModal';
+import { RouteBadge, StatusTag } from '../components/ui';
 
 // Màn hình danh sách tuyến (story 12): bảng + tìm kiếm + lọc trạng thái + phân trang.
 // Phần Thêm/Sửa tuyến + xác nhận xoá (nút, modal, popconfirm) là task "Form Thêm/Sửa
@@ -19,7 +20,8 @@ const BASE_COLUMNS: TableProps<Route>['columns'] = [
     dataIndex: 'code',
     key: 'code',
     width: 110,
-    render: (code: string) => <Tag color="blue">{code}</Tag>,
+    // Mã tuyến dùng ô vuông RouteBadge — cùng motif sơ đồ mạng lưới với các màn hành khách.
+    render: (code: string) => <RouteBadge code={code} size="sm" />,
   },
   {
     title: 'Tuyến đường',
@@ -49,7 +51,7 @@ const BASE_COLUMNS: TableProps<Route>['columns'] = [
       // Backend chỉ trả 'Active' | 'Inactive'. Lỡ có giá trị lạ thì hiện nguyên văn,
       // không để màn hình vỡ vì tra meta không thấy.
       const meta = ROUTE_STATUS_META[status];
-      return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{status}</Tag>;
+      return meta ? <StatusTag color={meta.color}>{meta.label}</StatusTag> : <StatusTag>{status}</StatusTag>;
     },
   },
   {

@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Key } from 'react';
 import {
   Button,
-  Card,
   DatePicker,
   Empty,
   Select,
   Space,
   Table,
-  Tag,
   Tooltip,
   Typography,
   message,
@@ -38,6 +36,7 @@ import {
 import type { AssignableTrip, DriverOption } from '../api/tripAssignmentApi';
 import TripBulkAssignBar from '../components/TripBulkAssignBar';
 import UnassignedTripsFilter from '../components/UnassignedTripsFilter';
+import { PageCard, StatusTag } from '../components/ui';
 
 const { Title, Text } = Typography;
 
@@ -307,7 +306,7 @@ export default function TripAssignmentPage() {
       dataIndex: 'busLicensePlate',
       key: 'busLicensePlate',
       width: 140,
-      render: (plate: string) => (plate ? <Tag>{plate}</Tag> : '—'),
+      render: (plate: string) => (plate ? <StatusTag>{plate}</StatusTag> : '—'),
     },
     {
       title: 'Cảnh báo',
@@ -331,9 +330,9 @@ export default function TripAssignmentPage() {
               </div>
             }
           >
-            <Tag color="warning" icon={<WarningOutlined />}>
+            <StatusTag color="warning" icon={<WarningOutlined />}>
               Trùng lịch
-            </Tag>
+            </StatusTag>
           </Tooltip>
         );
       },
@@ -345,9 +344,9 @@ export default function TripAssignmentPage() {
       // driverId/driverName do TripResponse trả sẵn, enrichTripsWithDriver chỉ chuẩn hoá.
       render: (_, trip) =>
         trip.driverName ? (
-          <Tag color="geekblue">{trip.driverName}</Tag>
+          <StatusTag color="geekblue">{trip.driverName}</StatusTag>
         ) : (
-          <Tag color="default">Chưa phân công</Tag>
+          <StatusTag color="default">Chưa phân công</StatusTag>
         ),
     },
     {
@@ -358,7 +357,11 @@ export default function TripAssignmentPage() {
       render: (tripStatus: TripStatus) => {
         // Backend chỉ trả bốn mã. Lỡ có giá trị lạ thì hiện nguyên văn, không để màn hình vỡ.
         const meta = TRIP_STATUS_META[tripStatus];
-        return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{tripStatus}</Tag>;
+        return meta ? (
+          <StatusTag color={meta.color}>{meta.label}</StatusTag>
+        ) : (
+          <StatusTag>{tripStatus}</StatusTag>
+        );
       },
     },
     {
@@ -405,7 +408,7 @@ export default function TripAssignmentPage() {
         </Text>
       </div>
 
-      <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+      <PageCard>
         <Space wrap size="middle" style={{ marginBottom: 16 }}>
           <Select
             placeholder="Chọn tuyến"
@@ -501,7 +504,7 @@ export default function TripAssignmentPage() {
             }}
           />
         )}
-      </Card>
+      </PageCard>
 
       <TripAssignmentModal
         open={modalOpen}

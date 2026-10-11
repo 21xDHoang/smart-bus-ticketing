@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, List, Space, Tag, Typography, theme } from 'antd';
+import { Button, List, Space, Typography, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import voucherApi from '../api/voucherApi';
 import type { Voucher } from '../api/voucherApi';
 import type { AppError } from '../api/axiosClient';
-import { EmptyState, ErrorState, FilterBar, LoadingState, PageCard, PageHeader } from '../components/ui';
+import {
+  EmptyState,
+  ErrorState,
+  FilterBar,
+  LoadingState,
+  PageCard,
+  PageHeader,
+  StatusTag,
+} from '../components/ui';
 import { formatDate, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
@@ -171,7 +179,7 @@ export default function VoucherAvailablePage() {
                   {/* Mã + tên + điều kiện + hiệu lực + số lượt còn lại */}
                   <div style={{ flex: 1, minWidth: 240 }}>
                     <Space size={8} wrap>
-                      <Tag color="blue">{voucher.code}</Tag>
+                      <StatusTag color="blue">{voucher.code}</StatusTag>
                       <Text strong>{voucher.name}</Text>
                     </Space>
 
@@ -191,7 +199,7 @@ export default function VoucherAvailablePage() {
 
                   {/* Giá trị giảm nổi bật */}
                   <div style={{ textAlign: 'right', minWidth: 140 }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: token.colorPrimary }}>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: token.colorPrimaryText }}>
                       {discountText(voucher)}
                     </div>
                   </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Segmented, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import { Segmented, Space, Spin, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -9,6 +9,7 @@ import { FEEDBACK_STATUS_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackApi
 import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
 import SatisfactionRating from '../components/SatisfactionRating';
+import { PageCard, RouteBadge, StatusTag } from '../components/ui';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -140,7 +141,7 @@ export default function MyFeedbackPage() {
       width: 130,
       render: (type: MyFeedback['type']) => {
         const meta = getFeedbackTypeMeta(type);
-        return <Tag color={meta.color}>{meta.label}</Tag>;
+        return <StatusTag color={meta.color}>{meta.label}</StatusTag>;
       },
     },
     {
@@ -162,7 +163,9 @@ export default function MyFeedbackPage() {
         return (
           <div>
             <div style={{ fontWeight: 600 }}>
-              {record.routeCode && <Tag style={{ marginRight: 6 }}>{record.routeCode}</Tag>}
+              {record.routeCode && (
+                <RouteBadge code={record.routeCode} size="sm" style={{ marginRight: 6 }} />
+              )}
               {record.routeName}
             </div>
             {record.departureTime && (
@@ -191,9 +194,9 @@ export default function MyFeedbackPage() {
         replyCount === 0 ? (
           <Text type="secondary">—</Text>
         ) : (
-          <Tag color="blue" icon={<MessageOutlined />}>
+          <StatusTag color="blue" icon={<MessageOutlined />}>
             {replyCount}
-          </Tag>
+          </StatusTag>
         ),
     },
     {
@@ -216,10 +219,7 @@ export default function MyFeedbackPage() {
         </Text>
       </div>
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
+      <PageCard>
         <Segmented
           options={STATUS_FILTER_OPTIONS}
           value={statusFilter}
@@ -254,7 +254,7 @@ export default function MyFeedbackPage() {
             ),
           }}
         />
-      </Card>
+      </PageCard>
     </div>
   );
 }

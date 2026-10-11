@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Button, Input, Space, Tag, message } from 'antd';
+import { Button, Input, Space, message } from 'antd';
 import voucherApi from '../api/voucherApi';
 import type { VoucherValidationResponse } from '../api/voucherApi';
 import type { AppError } from '../api/axiosClient';
+import StatusTag from './ui/StatusTag';
 
 // -----------------------------------------------------------------------------
 // Ô nhập mã giảm giá ở trang thanh toán (US 18 "Quản lý Voucher" — task r56 "Component
@@ -78,7 +79,7 @@ export default function VoucherCodeInput({
   if (applied) {
     return (
       <Space>
-        <Tag color="green">{validation.code}</Tag>
+        <StatusTag color="green">{validation.code}</StatusTag>
         <Button type="link" size="small" onClick={clear} disabled={disabled}>
           Xoá
         </Button>

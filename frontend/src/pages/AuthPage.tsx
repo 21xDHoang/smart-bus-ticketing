@@ -16,11 +16,8 @@ const AuthPage = ({ onLoginSuccess }: AuthPageProps) => {
 
   return (
     <div className="auth-container">
-      {/* Dynamic Background Circles */}
-      <div className="circle circle-1"></div>
-      <div className="circle circle-2"></div>
-
-      <Card className="auth-card" bordered={false}>
+      {/* Hoạ tiết đường tuyến ●—○ vẽ bằng CSS (AuthPage.css) — không cần phần tử trang trí. */}
+      <Card className="auth-card" variant="borderless">
         <div className="auth-header">
           <div className="logo-icon">🚌</div>
           <h2>Smart Bus Ticket</h2>
@@ -35,12 +32,12 @@ const AuthPage = ({ onLoginSuccess }: AuthPageProps) => {
           items={[
             {
               key: 'login',
-              label: 'Đăng Nhập',
+              label: 'Đăng nhập',
               children: <LoginForm onSuccess={onLoginSuccess} />,
             },
             {
               key: 'register',
-              label: 'Đăng Ký',
+              label: 'Đăng ký',
               children: <RegisterForm onRegisterSuccess={() => setActiveTab('login')} />,
             },
           ]}
