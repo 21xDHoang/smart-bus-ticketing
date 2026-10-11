@@ -38,6 +38,7 @@ import TicketQrPage from './pages/TicketQrPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import VoucherManagePage from './pages/VoucherManagePage';
+import VoucherAvailablePage from './pages/VoucherAvailablePage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
@@ -363,6 +364,13 @@ function App() {
                     </RouteGuard>
                   }
                 />
+                {/* /vouchers/available là màn hình danh sách voucher đang khả dụng cho hành khách
+                    (US 18, Sprint 3 — task của Nguyễn Đình Băng): giới thiệu các mã giảm giá mà
+                    khách dùng được ngay lúc này. Mọi người đã đăng nhập đều vào được — khách xem
+                    khuyến mãi không phải việc chỉ của riêng một vai trò, cùng lối /route-lookup.
+                    Backend chưa có endpoint danh sách voucher khả dụng nên màn hình chạy dữ liệu
+                    giả (voucherApi.ts). */}
+                <Route path="/vouchers/available" element={<VoucherAvailablePage />} />
                 {/* /vouchers là màn hình quản lý voucher (US 18, task của Dương Thị Hạnh) —
                     chỉ Admin và Manager vào được (cùng nhóm các màn cấu hình dữ liệu). Backend
                     Vouchers chưa có nên màn hình đang chạy dữ liệu giả (voucherApi.ts). Dòng

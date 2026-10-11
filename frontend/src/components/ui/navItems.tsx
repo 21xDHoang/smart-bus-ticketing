@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   CreditCardOutlined,
   DatabaseOutlined,
+  GiftOutlined,
   HomeOutlined,
   MessageOutlined,
   QrcodeOutlined,
@@ -63,6 +64,9 @@ const NAV: NavEntry[] = [
       { to: '/my-monthly-passes', label: 'Vé tháng của tôi', roles: PASSENGER },
     ],
   },
+  // "Khuyến mãi" là danh sách voucher đang khả dụng cho hành khách (US 18) — màn GIỚI THIỆU mã
+  // đang dùng được, không phải màn quản trị; khách vào xem trước rồi nhập mã ở bước thanh toán.
+  { to: '/vouchers/available', label: 'Khuyến mãi', roles: PASSENGER, icon: <GiftOutlined /> },
   {
     key: 'group-feedback',
     label: 'Phản ánh',

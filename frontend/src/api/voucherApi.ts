@@ -184,8 +184,10 @@ export const VOUCHER_REASON_META: Record<VoucherReasonCode, VoucherReasonMeta> =
 };
 
 export interface VoucherApi {
-  /** Danh sách voucher + tìm kiếm + lọc trạng thái + phân trang. */
+  /** Danh sách voucher + tìm kiếm + lọc trạng thái + phân trang (màn quản trị). */
   list: (params: VoucherListParams) => Promise<VoucherListResult>;
+  /** Danh sách voucher ĐANG khả dụng cho hành khách (màn "Khuyến mãi", không phân trang). */
+  listAvailable: () => Promise<Voucher[]>;
   create: (payload: VoucherPayload) => Promise<Voucher>;
   update: (id: string, payload: VoucherPayload) => Promise<Voucher>;
   /** Bật / tắt áp dụng voucher — trả về voucher đã đổi trạng thái. */
@@ -212,6 +214,9 @@ const api: VoucherApi = {
 
   async list() {
     throw new Error('Backend Vouchers chưa có — chưa thể tải danh sách voucher thật.');
+  },
+  async listAvailable() {
+    throw new Error('Backend Vouchers chưa có — chưa thể tải danh sách voucher khả dụng.');
   },
   async create() {
     throw new Error('Backend Vouchers chưa có — chưa thể thêm voucher thật.');
@@ -321,6 +326,20 @@ function computeMockDiscount(
   return { discountAmount: discount, finalAmount: orderAmount - discount };
 }
 
+/**
+ * Voucher có "đang khả dụng" không — đúng nghĩa khách CÓ THỂ dùng ngay lúc này, khớp bốn nhánh
+ * từ chối tuyệt đối của POST /vouchers/validate (Inactive, NotStarted, Expired, OutOfStock).
+ * Hai điều kiện còn lại (WrongRoute, BelowMinOrder) phụ thuộc chuyến/đơn cụ thể nên KHÔNG loại
+ * voucher khỏi danh sách — màn khả dụng chỉ hiển thị chúng như điều kiện kèm theo.
+ */
+function isAvailableNow(voucher: Voucher): boolean {
+  if (voucher.status !== 'Active') return false;
+  const now = new Date();
+  if (now < new Date(voucher.validFrom)) return false;
+  if (now > new Date(voucher.validUntil)) return false;
+  return voucher.usedCount < voucher.quantity;
+}
+
 const mock: VoucherApi = {
   async list({ search, status, page, pageSize }) {
     await delay(300);
@@ -344,6 +363,15 @@ const mock: VoucherApi = {
       page,
       pageSize,
     };
+  },
+
+  async listAvailable() {
+    await delay(300);
+
+    return MOCK_VOUCHERS.filter(isAvailableNow)
+      // Hết hạn sớm nhất trước — khách nên ưu tiên dùng mã sắp hết hạn.
+      .sort((a, b) => new Date(a.validUntil).getTime() - new Date(b.validUntil).getTime())
+      .map((voucher) => ({ ...voucher }));
   },
 
   async create(payload) {
