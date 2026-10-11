@@ -86,7 +86,10 @@ export default function HomePage() {
         subtitle={
           <Flex align="center" gap={8} wrap>
             <span>Bạn đang đăng nhập với vai trò</span>
-            <Tag color={roleMeta.color} style={{ marginInlineEnd: 0 }}>
+            {/* Nền đậm sẵn có của vai trò + chữ trắng (variant="solid") — màu preset của antd
+                (green/cyan/geekblue/purple) chỉ đạt ~3.4–4.2:1 ở một trong hai chế độ, không
+                đủ chuẩn AA; cách này đạt >=4.7:1 ở cả hai chế độ. */}
+            <Tag variant="solid" color={roleMeta.bg} style={{ marginInlineEnd: 0 }}>
               {roleMeta.label}
             </Tag>
           </Flex>
