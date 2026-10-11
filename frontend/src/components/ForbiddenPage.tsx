@@ -16,7 +16,7 @@ export default function ForbiddenPage() {
   return (
     <Result
       status="403"
-      title="403"
+      title="Không có quyền truy cập"
       subTitle="Bạn không có quyền truy cập tính năng này."
       extra={
         <Button type="primary" onClick={() => navigate('/')}>

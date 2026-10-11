@@ -54,8 +54,9 @@ export default function RouteGuard({
   // quay lại đúng chỗ, thay vì thả người dùng về trang chủ.
   //
   // Lưu ý: với App.tsx hiện tại, nhánh này chưa bao giờ chạy vì App đã chặn ở tầng ngoài
-  // (`!user` → hiện thẳng <AuthPage />, không render <Routes>). Giữ lại để khi tách `/login`
-  // thành route riêng, hoặc khi có màn hình công khai (tra cứu tuyến — US 1), guard vẫn đúng.
+  // (`!user` → hiện thẳng <AuthPage /> cho mọi đường dẫn, không render <Routes>). `/login`
+  // giờ là route thật trong nhánh đã đăng nhập (chuyển hướng về trang chủ). Giữ nhánh này
+  // để khi App có màn hình công khai (tra cứu tuyến — US 1), guard vẫn đúng.
   if (!isAuthenticated || !user) {
     return <Navigate to={redirectTo} replace state={{ from: location.pathname }} />;
   }
