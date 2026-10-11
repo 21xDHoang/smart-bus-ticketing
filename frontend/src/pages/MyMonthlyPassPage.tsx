@@ -326,7 +326,12 @@ export default function MyMonthlyPassPage() {
 
                     {/* Giá đã trả + nút gia hạn */}
                     <div style={{ textAlign: 'right', minWidth: 150 }}>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: token.colorPrimary }}>
+                      {/* colorPrimaryText (không phải colorPrimary) — màu primary làm CHỮ trên nền
+                          tối chỉ đạt ~2.85:1; token *Text là biến thể đã tính đủ tương phản hai chế độ. */}
+                      <div
+                        className="tabular-nums"
+                        style={{ fontSize: 16, fontWeight: 700, color: token.colorPrimaryText }}
+                      >
                         {formatVnd(pass.price)}
                       </div>
                       <Popconfirm

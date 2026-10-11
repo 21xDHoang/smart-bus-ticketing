@@ -9,9 +9,9 @@ import { FEEDBACK_STATUS_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackApi
 import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
 import SatisfactionRating from '../components/SatisfactionRating';
-import { PageCard, RouteBadge, StatusTag } from '../components/ui';
+import { PageCard, PageHeader, RouteBadge, StatusTag } from '../components/ui';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 /** Giá trị bộ lọc trạng thái — 'all' nghĩa là không lọc. */
 type StatusFilter = 'all' | FeedbackStatus;
@@ -210,22 +210,21 @@ export default function MyFeedbackPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Phản ánh của tôi
-        </Title>
-        <Text type="secondary">
-          Theo dõi các khiếu nại, đánh giá bạn đã gửi và trạng thái xử lý của nhà xe.
-        </Text>
-      </div>
+      <PageHeader
+        title="Phản ánh của tôi"
+        subtitle="Theo dõi các khiếu nại, đánh giá bạn đã gửi và trạng thái xử lý của nhà xe."
+      />
 
       <PageCard>
-        <Segmented
-          options={STATUS_FILTER_OPTIONS}
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value as StatusFilter)}
-          style={{ marginBottom: 16 }}
-        />
+        {/* Bốn lựa chọn lọc chiếm ~340px — tràn khổ 360px (lòng thẻ chỉ còn ~294px).
+            Bọc trong khung cuộn ngang: Segmented không tự xuống dòng. */}
+        <div style={{ maxWidth: '100%', minWidth: 0, overflowX: 'auto', marginBottom: 16 }}>
+          <Segmented
+            options={STATUS_FILTER_OPTIONS}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value as StatusFilter)}
+          />
+        </div>
 
         <Table<MyFeedback>
           rowKey="id"

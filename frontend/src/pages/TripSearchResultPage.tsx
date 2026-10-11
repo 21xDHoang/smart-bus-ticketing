@@ -23,8 +23,9 @@ const { Text } = Typography;
 /** Khoá sắp xếp — "giờ" mặc định là giờ đi sớm nhất, "giá" có cả hai chiều. */
 type SortKey = 'time' | 'priceAsc' | 'priceDesc';
 
+// Nhãn ngắn để ba mục sắp xếp vừa một hàng trên màn 360px (Segmented không tự xuống dòng).
 const SORT_OPTIONS: { label: string; value: SortKey }[] = [
-  { label: 'Giờ đi sớm nhất', value: 'time' },
+  { label: 'Sớm nhất', value: 'time' },
   { label: 'Giá thấp → cao', value: 'priceAsc' },
   { label: 'Giá cao → thấp', value: 'priceDesc' },
 ];
@@ -369,9 +370,10 @@ export default function TripSearchResultPage() {
                 </div>
               </div>
 
-              {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. */}
+              {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. KHÔNG dùng type="primary":
+                  mỗi chuyến một tấm biển, để primary là N nút xanh tranh nhau; nút primary
+                  của luồng mua nằm ở bước kế tiếp (màn chọn ghế). */}
               <Button
-                type="primary"
                 disabled={trip.seatsRemaining === 0}
                 onClick={() => openSeatMap(trip)}
               >

@@ -126,8 +126,8 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
           loading={loading}
           style={{
             // Chỉ giữ kích thước — màu nút lấy từ token primary, đúng cả hai chế độ.
+            // Bo góc để antd lấy theo token (12) — khớp ô nhập phía trên, không hardcode.
             height: 48,
-            borderRadius: 10,
             fontWeight: 600,
             fontSize: 16,
           }}

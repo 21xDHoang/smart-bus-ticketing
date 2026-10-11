@@ -18,10 +18,10 @@ import type { MonthlyPass, MonthlyPassRoute, PassTypeCode } from '../api/monthly
 import stopSearchApi from '../api/stopSearchApi';
 import type { AppError } from '../api/axiosClient';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
-import { PageCard } from '../components/ui';
+import { PageCard, PageHeader } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /** Gợi ý của một ô nhập điểm đi/điểm đến — giá trị phát ra là TÊN trạm. */
 interface StopOption {
@@ -182,15 +182,10 @@ export default function MonthlyPassRegistrationPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Đăng ký vé tháng
-        </Title>
-        <Text type="secondary">
-          Chọn điểm đi và điểm đến để tìm tuyến, chọn loại vé để xem giá, rồi đăng ký vé tháng
-          tiết kiệm chi phí đi lại.
-        </Text>
-      </div>
+      <PageHeader
+        title="Đăng ký vé tháng"
+        subtitle="Chọn điểm đi và điểm đến để tìm tuyến, chọn loại vé để xem giá, rồi đăng ký vé tháng tiết kiệm chi phí đi lại."
+      />
 
       <PageCard>
         <Space direction="vertical" size={20} style={{ display: 'flex', width: '100%' }}>
@@ -224,12 +219,9 @@ export default function MonthlyPassRegistrationPage() {
               />
             </div>
 
-            <Button
-              type="primary"
-              icon={<SearchOutlined />}
-              loading={searching}
-              onClick={handleSearchRoutes}
-            >
+            {/* Nút này KHÔNG dùng type="primary": hành động nổi bật của màn là "Đăng ký vé
+                tháng" ở cuối luồng; để primary ở đây thành hai nút xanh tranh nhau. */}
+            <Button icon={<SearchOutlined />} loading={searching} onClick={handleSearchRoutes}>
               Tìm tuyến
             </Button>
           </Space>
@@ -296,6 +288,7 @@ export default function MonthlyPassRegistrationPage() {
                   Giá vé tháng của bạn
                 </Text>
                 <Text
+                  className="tabular-nums"
                   style={{
                     fontSize: 28,
                     fontWeight: 700,
@@ -335,7 +328,9 @@ export default function MonthlyPassRegistrationPage() {
           <PageCard
             title={
               <Space>
-                <CheckCircleFilled style={{ color: token.colorSuccess }} />
+                {/* colorSuccessText — bản dành cho chữ của màu success, đủ tương phản AA ở
+                    cả hai chế độ (colorSuccess gốc chỉ đạt ~2.5–3.3:1 cho nét mảnh). */}
+                <CheckCircleFilled style={{ color: token.colorSuccessText }} />
                 <span>Đăng ký vé tháng thành công</span>
               </Space>
             }

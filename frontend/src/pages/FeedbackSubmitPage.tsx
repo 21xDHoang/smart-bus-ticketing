@@ -25,9 +25,9 @@ import type {
 import { FEEDBACK_STATUS_META, FEEDBACK_TYPE_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackSubmitApi';
 import type { AppError } from '../api/axiosClient';
 import SatisfactionRating from '../components/SatisfactionRating';
-import { PageCard, StatusTag } from '../components/ui';
+import { PageCard, PageHeader, StatusTag } from '../components/ui';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 /** Giá trị của form gửi phản ánh — `tripId`/`rating` bỏ trống nghĩa là không chọn. */
 interface FeedbackFormValues {
@@ -109,14 +109,10 @@ export default function FeedbackSubmitPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Gửi phản ánh
-        </Title>
-        <Text type="secondary">
-          Gửi khiếu nại hoặc đánh giá chất lượng chuyến đi để nhà xe cải thiện dịch vụ.
-        </Text>
-      </div>
+      <PageHeader
+        title="Gửi phản ánh"
+        subtitle="Gửi khiếu nại hoặc đánh giá chất lượng chuyến đi để nhà xe cải thiện dịch vụ."
+      />
 
       <PageCard>
         <Form<FeedbackFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
@@ -194,7 +190,9 @@ export default function FeedbackSubmitPage() {
           <PageCard
             title={
               <Space>
-                <CheckCircleFilled style={{ color: token.colorSuccess }} />
+                {/* colorSuccessText — bản dành cho chữ/nét mảnh của màu success; colorSuccess
+                    gốc chỉ đạt ~2.5–3.3:1 khi làm icon nhỏ. */}
+                <CheckCircleFilled style={{ color: token.colorSuccessText }} />
                 <span>Gửi phản ánh thành công</span>
               </Space>
             }
