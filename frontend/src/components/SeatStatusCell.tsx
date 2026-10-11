@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { theme } from 'antd';
 import type { SeatMapSeat } from '../api/seatMapApi';
 import { SEAT_STATUS_META, isSeatSelectable, seatAppearance, seatDisplayName } from './seatStatus';
+import { useColorMode } from './ui/colorMode';
 
 interface SeatStatusCellProps {
   /** Ghế cần vẽ — dùng id, seatNumber, seatType, status. */
@@ -27,6 +28,9 @@ interface SeatStatusCellProps {
  *
  * Component KHÔNG tự giữ state: trạng thái ghế nằm ở props, nên khi trạng thái đổi (ví dụ
  * qua SignalR) chỉ cần truyền prop mới xuống là ô ghế tự vẽ lại.
+ *
+ * 11/10/2026: ghế VIP không còn chấm cam ở góc nữa — chuyển sang viền đôi (seatAppearance)
+ * để cam chỉ còn mang nghĩa "đang giữ / sắp hết", không lẫn với loại ghế.
  */
 export default function SeatStatusCell({
   seat,
@@ -36,12 +40,13 @@ export default function SeatStatusCell({
   onToggle,
 }: SeatStatusCellProps) {
   const { token } = theme.useToken();
+  const { mode } = useColorMode();
   const meta = SEAT_STATUS_META[seat.status];
 
   const style: CSSProperties = {
     position: 'relative',
     width: 44,
-    height: 40,
+    height: 44,
     borderRadius: 8,
     display: 'flex',
     alignItems: 'center',
@@ -50,7 +55,7 @@ export default function SeatStatusCell({
     fontWeight: 600,
     padding: 0,
     transition: 'background-color 0.15s, border-color 0.15s, color 0.15s',
-    ...seatAppearance(seat.status, token, selected),
+    ...seatAppearance(seat.status, token, mode, { selected, vip: seat.seatType === 'Vip' }),
   };
 
   // Chỉ ghế còn trống mới có hiệu ứng rê chuột; ghế đang chọn giữ nguyên màu "đang chọn".
@@ -71,19 +76,6 @@ export default function SeatStatusCell({
       style={style}
     >
       {seat.seatNumber}
-      {seat.seatType === 'Vip' && (
-        <span
-          style={{
-            position: 'absolute',
-            top: 3,
-            right: 3,
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: token.colorWarning,
-          }}
-        />
-      )}
     </button>
   );
 }

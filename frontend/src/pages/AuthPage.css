@@ -1,60 +1,69 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+/* Màn đăng nhập — "ga đầu tiên" của sản phẩm.
 
-body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  margin: 0;
-  padding: 0;
-}
+   Nền navy thương hiệu (#0F172A → #14305C) cố ý giữ NGUYÊN ở cả hai chế độ sáng/tối:
+   đây là màn hero duy nhất của app, thẻ đăng nhập mới là phần đổi skin theo chế độ
+   (qua biến --app-* trong index.css). Hoạ tiết ●—○ dưới đây chính là motif "sơ đồ
+   mạng lưới" của sản phẩm, thay cho hai quầng sáng blur của bản cũ.
+
+   Các mã màu trong file này là hằng trang trí trên nền navy CỐ ĐỊNH (không đổi theo
+   chế độ) — không phải màu vai trò. Màu vai trò nằm ở theme.ts / biến --app-*,
+   đừng chép vào đây.
+
+   Font do index.html lo, nền toàn cục do index.css lo — file này không đặt lại.
+   Mọi rule .ant-* đều đã scope trong .auth-container/.auth-tabs (bản cũ để rò ra
+   toàn app vì file này được nạp một lần cho cả SPA). */
 
 .auth-container {
+  position: relative;
+  overflow: hidden;
   min-height: 100vh;
-  width: 100vw;
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #311042 100%);
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative;
-  overflow: hidden;
+  padding: 24px;
+  background: linear-gradient(135deg, #0f172a 0%, #14305c 100%);
 }
 
-/* Background floating glow effects */
-.circle {
+/* Đường tuyến chạy chéo qua nền: vạch mảnh + 4 ga, ga cuối là "ga hiện tại" màu teal
+   (cùng quy ước với BookingProgress). Vẽ trên MỘT phần tử rồi xoay cả cụm để các ga
+   luôn nằm đúng trên vạch; đường chui sau thẻ ở chính giữa nên không đè nội dung. */
+.auth-container::before {
+  content: '';
   position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  z-index: 1;
+  left: -10%;
+  right: -10%;
+  top: 68%;
+  height: 14px;
+  transform: rotate(-4deg);
+  pointer-events: none;
+  background:
+    radial-gradient(circle 5px at 10% 50%, rgba(255, 255, 255, 0.5) 99%, transparent 100%),
+    radial-gradient(circle 4px at 38% 50%, rgba(255, 255, 255, 0.35) 99%, transparent 100%),
+    radial-gradient(circle 4px at 66% 50%, rgba(255, 255, 255, 0.35) 99%, transparent 100%),
+    radial-gradient(circle 5px at 94% 50%, #2dd4bf 99%, transparent 100%),
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 1px),
+      rgba(255, 255, 255, 0.16) calc(50% - 1px),
+      rgba(255, 255, 255, 0.16) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    );
 }
 
-.circle-1 {
-  width: 350px;
-  height: 350px;
-  background: #4cc9f0;
-  top: 10%;
-  left: 15%;
-  opacity: 0.4;
-}
-
-.circle-2 {
-  width: 400px;
-  height: 400px;
-  background: #f72585;
-  bottom: 10%;
-  right: 15%;
-  opacity: 0.35;
-}
-
-/* Glassmorphism Card Style */
-.auth-card {
+/* Thẻ đăng nhập: nền lấy theo token antd (trắng ở chế độ sáng, #1E293B ở chế độ tối —
+   một bậc sáng hơn nền), viền + bóng đủ tách khỏi nền navy. Specificity .auth-card.ant-card
+   để thắng .ant-card mà không cần !important. */
+.auth-card.ant-card {
   position: relative;
   z-index: 2;
   width: 100%;
   max-width: 440px;
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(20px);
-  border-radius: 24px !important;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
   padding: 10px 15px;
-  margin: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -24px rgba(2, 6, 23, 0.65);
 }
 
 .auth-header {
@@ -63,31 +72,39 @@ body {
 }
 
 .logo-icon {
+  display: inline-block;
+  padding: 12px;
+  margin-bottom: 8px;
   font-size: 42px;
   line-height: 1;
-  margin-bottom: 8px;
-  display: inline-block;
-  background: rgba(67, 97, 238, 0.1);
-  padding: 12px;
-  border-radius: 20px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
 }
 
+/* Tên thương hiệu tô gradient primary→teal của từng chế độ (biến đã tính sẵn độ tương
+   phản trên nền thẻ). Bề rộng ôm khít chữ để gradient trải đúng trên chữ, không dồn
+   về nửa trái. */
 .auth-header h2 {
-  margin: 5px 0;
+  width: fit-content;
+  margin: 4px auto;
   font-size: 26px;
   font-weight: 700;
-  background: linear-gradient(90deg, #4361ee, #f72585);
+  letter-spacing: -0.01em;
+  background: var(--app-brand-gradient);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .auth-header p {
-  color: #64748b;
-  font-size: 14px;
   margin: 0;
+  font-size: 14px;
+  color: var(--app-text-muted);
 }
 
-/* Tabs Styling */
+/* Tabs: hai tab chia đều, tab đang mở dùng màu primary, gạch chân gradient thương hiệu.
+   !important chỉ để thắng style runtime của antd (cssinjs chèn sau CSS của mình) —
+   đã scope trong .auth-tabs nên không rò ra ngoài. */
 .auth-tabs .ant-tabs-nav-list {
   width: 100%;
   display: flex;
@@ -98,33 +115,22 @@ body {
   justify-content: center;
   font-size: 16px;
   font-weight: 600;
-  color: #64748b;
+}
+
+.auth-tabs .ant-tabs-tab .ant-tabs-tab-btn {
+  color: var(--app-text-muted);
+}
+
+.auth-tabs .ant-tabs-tab:hover .ant-tabs-tab-btn {
+  color: var(--app-primary);
 }
 
 .auth-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #4361ee !important;
+  color: var(--app-primary) !important;
 }
 
 .auth-tabs .ant-tabs-ink-bar {
-  background: linear-gradient(90deg, #4361ee, #f72585) !important;
   height: 3px !important;
-  border-radius: 3px;
-}
-
-/* Antd Form Inputs custom styling */
-.ant-input-affix-wrapper {
-  border-radius: 10px !important;
-  padding: 10px 14px !important;
-  border: 1.5px solid #e2e8f0 !important;
-  transition: all 0.3s ease;
-}
-
-.ant-input-affix-wrapper:hover, 
-.ant-input-affix-wrapper-focused {
-  border-color: #4361ee !important;
-  box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15) !important;
-}
-
-.ant-btn-primary:active {
-  transform: scale(0.98);
+  border-radius: 2px;
+  background: var(--app-brand-gradient) !important;
 }

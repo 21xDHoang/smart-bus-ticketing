@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Popconfirm, Select, Space, Typography } from 'antd';
+import { Button, Popconfirm, Select, Space, Typography, theme } from 'antd';
 import type { DriverOption } from '../api/tripAssignmentApi';
 
 const { Text } = Typography;
@@ -34,6 +34,7 @@ export default function TripBulkAssignBar({
   onClear,
   onAssign,
 }: TripBulkAssignBarProps) {
+  const { token } = theme.useToken();
   const [driverId, setDriverId] = useState<string>();
 
   // Hết chọn (sau khi gán thành công hoặc bỏ chọn) thì reset ô chọn tài xế.
@@ -59,7 +60,7 @@ export default function TripBulkAssignBar({
         gap: 12,
         marginBottom: 16,
         padding: '10px 16px',
-        background: '#eef1ff',
+        background: token.colorPrimaryBg,
         borderRadius: 10,
       }}
     >

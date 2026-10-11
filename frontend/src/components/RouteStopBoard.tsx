@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { DragEvent } from 'react';
-import { Button, Empty, Popconfirm, Space, Tag, Tooltip, Typography } from 'antd';
+import { Button, Empty, Popconfirm, Space, Tooltip, Typography, theme } from 'antd';
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import type { RouteStop } from '../api/routeStopApi';
 import { moveStop } from './routeStopOrder';
+import StatusTag from './ui/StatusTag';
 
 interface RouteStopBoardProps {
   /** Danh sách trạm theo thứ tự đang hiển thị — cha giữ state, board chỉ báo lên khi đổi. */
@@ -33,6 +34,9 @@ interface RouteStopBoardProps {
  * đường này gọi chung `moveStop` nên cho ra kết quả y hệt nhau.
  */
 const RouteStopBoard = ({ stops, disabled, onReorder, onRemove }: RouteStopBoardProps) => {
+  // Màu lấy từ token chung — sáng/tối tự đổi theo chế độ, không viết hex tay trong component.
+  const { token } = theme.useToken();
+
   // Dòng đang được kéo và dòng đang được rê qua — chỉ để tô sáng, không phải dữ liệu thật.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -106,19 +110,23 @@ const RouteStopBoard = ({ stops, disabled, onReorder, onRemove }: RouteStopBoard
               padding: '10px 12px',
               marginBottom: 8,
               borderRadius: 10,
-              border: `1px solid ${isOver ? '#4361ee' : '#e2e8f0'}`,
-              background: isDragging ? '#f1f5f9' : isOver ? '#eef1ff' : '#ffffff',
+              border: `1px solid ${isOver ? token.colorPrimary : token.colorBorderSecondary}`,
+              background: isDragging
+                ? token.colorFillQuaternary
+                : isOver
+                  ? token.colorPrimaryBg
+                  : token.colorBgContainer,
               opacity: isDragging ? 0.5 : 1,
               cursor: disabled ? 'default' : 'grab',
             }}
           >
             <Tooltip title={disabled ? undefined : 'Kéo để đổi thứ tự'}>
-              <HolderOutlined style={{ color: '#94a3b8', fontSize: 16 }} />
+              <HolderOutlined style={{ color: token.colorTextTertiary, fontSize: 16 }} />
             </Tooltip>
 
-            <Tag color="blue" style={{ minWidth: 32, textAlign: 'center', margin: 0 }}>
+            <StatusTag color="blue" style={{ minWidth: 32, textAlign: 'center', margin: 0 }}>
               {index + 1}
-            </Tag>
+            </StatusTag>
 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>{stop.stopName}</div>

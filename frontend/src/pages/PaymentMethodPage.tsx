@@ -300,8 +300,17 @@ export default function PaymentMethodPage() {
                     <Text type="secondary">—</Text>
                   ) : (
                     <Space size={[8, 8]} wrap>
+                      {/* Ghế đã chọn — dữ liệu trung tính, không phải trạng thái: nền teal nhạt
+                          của bảng màu, cùng sắc với ghế "đang chọn" trên sơ đồ ghế. */}
                       {seatNumbers.map((seat) => (
-                        <Tag key={seat} color="blue">
+                        <Tag
+                          key={seat}
+                          style={{
+                            background: token.colorInfoBg,
+                            borderColor: token.colorInfoBorder,
+                            color: token.colorInfoText,
+                          }}
+                        >
                           {seat}
                         </Tag>
                       ))}

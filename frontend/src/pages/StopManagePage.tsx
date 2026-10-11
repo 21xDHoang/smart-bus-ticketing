@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Input, Popconfirm, Space, Table, Tag, message } from 'antd';
+import { Button, Input, Popconfirm, Space, Table, theme, message } from 'antd';
 import { EnvironmentOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import stopApi from '../api/stopApi';
 import type { Stop, StopPayload } from '../api/stopApi';
 import StopFormModal from '../components/StopFormModal';
-import { PageCard, PageHeader } from '../components/ui';
+import { PageCard, PageHeader, StatusTag } from '../components/ui';
 
 export default function StopManagePage() {
+  const { token } = theme.useToken();
   const [stops, setStops] = useState<Stop[]>([]);
   // Bắt đầu ở trạng thái "đang tải" — lần load đầu tiên chạy ngay khi mount nên
   // không cần setLoading(true) đồng bộ trong effect (tránh render thừa).
@@ -95,7 +96,8 @@ export default function StopManagePage() {
       key: 'name',
       render: (name: string) => (
         <Space>
-          <EnvironmentOutlined style={{ color: '#4361ee' }} />
+          {/* colorPrimaryText — đủ tương phản cả hai chế độ; màu primary gốc chỉ ~2.4:1 trên nền tối. */}
+          <EnvironmentOutlined style={{ color: token.colorPrimaryText }} />
           <span style={{ fontWeight: 600 }}>{name}</span>
         </Space>
       ),
@@ -111,9 +113,10 @@ export default function StopManagePage() {
       key: 'coords',
       width: 220,
       render: (_, stop) => (
+        // lat/lng giữ hai sắc khác nhau (primary/info) để không lẫn nhau.
         <Space size={6} wrap>
-          <Tag color="blue">lat {stop.latitude.toFixed(5)}</Tag>
-          <Tag color="geekblue">lng {stop.longitude.toFixed(5)}</Tag>
+          <StatusTag color="blue">lat {stop.latitude.toFixed(5)}</StatusTag>
+          <StatusTag color="cyan">lng {stop.longitude.toFixed(5)}</StatusTag>
         </Space>
       ),
     },

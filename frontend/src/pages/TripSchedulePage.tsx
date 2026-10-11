@@ -8,7 +8,6 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Typography,
   message,
 } from 'antd';
@@ -31,6 +30,7 @@ import {
 import type { BusOption, CreateTripPayload, UpdateTripPayload } from '../api/tripScheduleApi';
 import type { AppError } from '../api/axiosClient';
 import TripScheduleFormModal from '../components/TripScheduleFormModal';
+import { StatusTag } from '../components/ui';
 
 const { Title, Text } = Typography;
 
@@ -209,7 +209,7 @@ export default function TripSchedulePage() {
       dataIndex: 'busLicensePlate',
       key: 'busLicensePlate',
       width: 140,
-      render: (plate: string) => (plate ? <Tag>{plate}</Tag> : '—'),
+      render: (plate: string) => (plate ? <StatusTag>{plate}</StatusTag> : '—'),
     },
     {
       title: 'Trạng thái',
@@ -220,7 +220,11 @@ export default function TripSchedulePage() {
         // Backend chỉ trả bốn mã trong TRIP_STATUS_META. Lỡ có giá trị lạ thì hiện
         // nguyên văn, không để màn hình vỡ vì tra meta không thấy.
         const meta = TRIP_STATUS_META[tripStatus];
-        return meta ? <Tag color={meta.color}>{meta.label}</Tag> : <Tag>{tripStatus}</Tag>;
+        return meta ? (
+          <StatusTag color={meta.color}>{meta.label}</StatusTag>
+        ) : (
+          <StatusTag>{tripStatus}</StatusTag>
+        );
       },
     },
     {

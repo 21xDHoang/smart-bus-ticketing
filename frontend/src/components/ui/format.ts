@@ -7,9 +7,9 @@ import dayjs from 'dayjs';
 /** Cỡ trang cho mọi bảng phân trang — trước đây mỗi màn tự khai một mảng giống hệt nhau. */
 export const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-/** Tiền VND — ví dụ 200000 → "200.000 đ". Thống nhất một kiểu cho cả app (không dùng "₫"). */
+/** Tiền VND — ví dụ 200000 → "200.000 ₫". Thống nhất một kiểu cho cả app (dấu ₫ theo bảng thiết kế). */
 export function formatVnd(price: number): string {
-  return `${price.toLocaleString('vi-VN')} đ`;
+  return `${price.toLocaleString('vi-VN')} ₫`;
 }
 
 /** Ngày — hợp đồng trả ISO 8601 UTC, chỉ cần phần ngày: DD/MM/YYYY. */

@@ -1,6 +1,6 @@
-import { Tag } from 'antd';
 import { CheckCircleFilled, ClockCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import type { ReactNode } from 'react';
+import StatusTag from './ui/StatusTag';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import type { MonthlyPass } from '../api/monthlyPassApi';
@@ -51,8 +51,12 @@ export default function MonthlyPassStatusTag({ pass, now }: MonthlyPassStatusTag
   const meta = MONTHLY_PASS_STATUS_META[status];
 
   return (
-    <Tag icon={STATUS_ICONS[status]} color={meta.color} title={buildTooltip(status, daysLeft, pass.validTo)}>
+    <StatusTag
+      icon={STATUS_ICONS[status]}
+      color={meta.color}
+      title={buildTooltip(status, daysLeft, pass.validTo)}
+    >
       {meta.label}
-    </Tag>
+    </StatusTag>
   );
 }

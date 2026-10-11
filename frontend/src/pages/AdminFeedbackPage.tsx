@@ -14,7 +14,7 @@ import {
   Spin,
   Statistic,
   Table,
-  Tag,
+  theme,
   Typography,
   message,
 } from 'antd';
@@ -46,6 +46,7 @@ import type { FeedbackReply, FeedbackStatus, FeedbackType } from '../api/feedbac
 import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
 import SatisfactionRating from '../components/SatisfactionRating';
+import { PageCard, RouteBadge, StatusTag } from '../components/ui';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -100,7 +101,7 @@ function TripInfo({ tripId }: { tripId: string | null }) {
   return (
     <div>
       <div style={{ fontWeight: 600 }}>
-        <Tag style={{ marginRight: 6 }}>{trip.routeCode}</Tag>
+        <RouteBadge code={trip.routeCode} size="sm" style={{ marginRight: 6 }} />
         {trip.routeName}
       </div>
       <Text type="secondary" style={{ fontSize: 12 }}>
@@ -117,6 +118,8 @@ function TripInfo({ tripId }: { tripId: string | null }) {
  * tại chỗ, phản hồi mới nối xuống dưới.
  */
 function ReplyThread({ replies }: { replies: FeedbackReply[] }) {
+  const { token } = theme.useToken();
+
   if (replies.length === 0) {
     return (
       <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
@@ -130,7 +133,12 @@ function ReplyThread({ replies }: { replies: FeedbackReply[] }) {
       {replies.map((reply) => (
         <div
           key={reply.id}
-          style={{ marginTop: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 10 }}
+          style={{
+            marginTop: 8,
+            padding: '8px 12px',
+            background: token.colorFillTertiary,
+            borderRadius: 10,
+          }}
         >
           <Space size={8}>
             <Text strong>{reply.userFullName ?? 'Không xác định'}</Text>
@@ -166,7 +174,7 @@ function StatisticsStrip({ stats }: { stats: FeedbackStatistics }) {
       key: 'route',
       render: (_, record) => (
         <Space size={6}>
-          <Tag>{record.routeCode}</Tag>
+          <RouteBadge code={record.routeCode} size="sm" />
           <span>{record.routeName}</span>
         </Space>
       ),
@@ -442,7 +450,7 @@ export default function AdminFeedbackPage() {
       width: 130,
       render: (type: FeedbackType) => {
         const meta = getFeedbackTypeMeta(type);
-        return <Tag color={meta.color}>{meta.label}</Tag>;
+        return <StatusTag color={meta.color}>{meta.label}</StatusTag>;
       },
     },
     {
@@ -464,9 +472,9 @@ export default function AdminFeedbackPage() {
       width: 150,
       render: (tripId: string | null) =>
         tripId ? (
-          <Tag color="blue" icon={<EnvironmentOutlined />}>
+          <StatusTag color="blue" icon={<EnvironmentOutlined />}>
             Có kèm chuyến
-          </Tag>
+          </StatusTag>
         ) : (
           <Text type="secondary">Không kèm chuyến</Text>
         ),
@@ -488,9 +496,9 @@ export default function AdminFeedbackPage() {
         replyCount === 0 ? (
           <Text type="secondary">—</Text>
         ) : (
-          <Tag color="blue" icon={<MessageOutlined />}>
+          <StatusTag color="blue" icon={<MessageOutlined />}>
             {replyCount}
-          </Tag>
+          </StatusTag>
         ),
     },
     {
@@ -540,7 +548,7 @@ export default function AdminFeedbackPage() {
         </Card>
       )}
 
-      <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+      <PageCard>
         <Space wrap style={{ marginBottom: 16 }}>
           <Select<FeedbackStatus>
             allowClear
@@ -598,7 +606,7 @@ export default function AdminFeedbackPage() {
             },
           }}
         />
-      </Card>
+      </PageCard>
 
       <Modal
         title="Xử lý phản ánh"
@@ -633,9 +641,9 @@ export default function AdminFeedbackPage() {
                   key: 'type',
                   label: 'Loại phản ánh',
                   children: (
-                    <Tag color={getFeedbackTypeMeta(detail.type).color}>
+                    <StatusTag color={getFeedbackTypeMeta(detail.type).color}>
                       {getFeedbackTypeMeta(detail.type).label}
-                    </Tag>
+                    </StatusTag>
                   ),
                 },
                 {

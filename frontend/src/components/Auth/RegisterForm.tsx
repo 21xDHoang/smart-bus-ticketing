@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Form, Input, Button, message } from 'antd';
+import { Form, Input, Button, message, theme } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined, PhoneOutlined } from '@ant-design/icons';
 import authApi from '../../api/authApi';
 import type { AppError } from '../../api/axiosClient';
@@ -19,6 +19,8 @@ interface RegisterFormProps {
 const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
   const [form] = Form.useForm<RegisterFormValues>();
   const [loading, setLoading] = useState(false);
+  // Icon trong form lấy màu theo token — tự đúng ở cả hai chế độ sáng/tối.
+  const { token } = theme.useToken();
 
   const onFinish = async (values: RegisterFormValues) => {
     setLoading(true);
@@ -63,7 +65,7 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
         name="fullName"
         rules={[{ required: true, message: 'Vui lòng nhập Họ và tên!' }]}
       >
-        <Input prefix={<UserOutlined style={{ color: '#00b4d8' }} />} placeholder="Họ và tên" />
+        <Input prefix={<UserOutlined style={{ color: token.colorPrimaryText }} />} placeholder="Họ và tên" />
       </Form.Item>
 
       <Form.Item
@@ -73,7 +75,7 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
           { type: 'email', message: 'Email không đúng định dạng!' },
         ]}
       >
-        <Input prefix={<MailOutlined style={{ color: '#00b4d8' }} />} placeholder="Địa chỉ Email" />
+        <Input prefix={<MailOutlined style={{ color: token.colorPrimaryText }} />} placeholder="Địa chỉ Email" />
       </Form.Item>
 
       <Form.Item
@@ -83,7 +85,7 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
           { pattern: /^0[35789][0-9]{8}$/, message: 'Số điện thoại không hợp lệ!' },
         ]}
       >
-        <Input prefix={<PhoneOutlined style={{ color: '#00b4d8' }} />} placeholder="Số điện thoại" maxLength={10} />
+        <Input prefix={<PhoneOutlined style={{ color: token.colorPrimaryText }} />} placeholder="Số điện thoại" maxLength={10} />
       </Form.Item>
 
       <Form.Item
@@ -94,7 +96,7 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
         ]}
         hasFeedback
       >
-        <Input.Password prefix={<LockOutlined style={{ color: '#00b4d8' }} />} placeholder="Mật khẩu" />
+        <Input.Password prefix={<LockOutlined style={{ color: token.colorPrimaryText }} />} placeholder="Mật khẩu" />
       </Form.Item>
 
       <Form.Item
@@ -113,7 +115,7 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
           }),
         ]}
       >
-        <Input.Password prefix={<LockOutlined style={{ color: '#00b4d8' }} />} placeholder="Nhập lại mật khẩu" />
+        <Input.Password prefix={<LockOutlined style={{ color: token.colorPrimaryText }} />} placeholder="Nhập lại mật khẩu" />
       </Form.Item>
 
       <Form.Item>
@@ -123,16 +125,14 @@ const RegisterForm = ({ onRegisterSuccess }: RegisterFormProps) => {
           block
           loading={loading}
           style={{
-            background: 'linear-gradient(135deg, #7209b7 0%, #f72585 100%)',
-            border: 'none',
-            height: '48px',
-            borderRadius: '10px',
-            fontWeight: '600',
-            fontSize: '16px',
-            boxShadow: '0 8px 15px rgba(247, 37, 133, 0.3)',
+            // Chỉ giữ kích thước — màu nút lấy từ token primary, đúng cả hai chế độ.
+            height: 48,
+            borderRadius: 10,
+            fontWeight: 600,
+            fontSize: 16,
           }}
         >
-          TẠO TÀI KHOẢN
+          Tạo tài khoản
         </Button>
       </Form.Item>
     </Form>

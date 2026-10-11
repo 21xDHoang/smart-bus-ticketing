@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Avatar, Card, Space, Table, Tag, Typography } from 'antd';
+import { Avatar, Space, Table, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
 import { PhoneOutlined, UserOutlined } from '@ant-design/icons';
@@ -7,6 +7,7 @@ import { useAuth } from '../contexts';
 import { fetchMyLoginActivity, getAuditActionMeta } from '../api/auditLogApi';
 import type { AuditLog } from '../api/auditLogApi';
 import { getRoleMeta } from '../api/adminUserApi';
+import { PageCard, StatusTag } from '../components/ui';
 
 const { Title, Text } = Typography;
 
@@ -26,7 +27,7 @@ const columns: TableProps<AuditLog>['columns'] = [
     width: 170,
     render: (action: string) => {
       const meta = getAuditActionMeta(action);
-      return <Tag color={meta.color}>{meta.label}</Tag>;
+      return <StatusTag color={meta.color}>{meta.label}</StatusTag>;
     },
   },
   {
@@ -84,10 +85,7 @@ const ProfilePage = () => {
       </div>
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card
-          variant="borderless"
-          style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-        >
+        <PageCard>
           <Space size={16} align="center">
             <Avatar size={56} style={{ backgroundColor: roleMeta.bg }}>
               {user?.fullName ? user.fullName.trim().charAt(0).toUpperCase() : <UserOutlined />}
@@ -95,7 +93,7 @@ const ProfilePage = () => {
             <div>
               <div style={{ fontSize: 18, fontWeight: 700 }}>{user?.fullName || 'Người dùng'}</div>
               <Space size={8} wrap style={{ marginTop: 4 }}>
-                <Tag color={roleMeta.color}>{roleMeta.label}</Tag>
+                <StatusTag color={roleMeta.color}>{roleMeta.label}</StatusTag>
                 {user?.phoneNumber && (
                   <Text type="secondary">
                     <PhoneOutlined /> {user.phoneNumber}
@@ -104,13 +102,9 @@ const ProfilePage = () => {
               </Space>
             </div>
           </Space>
-        </Card>
+        </PageCard>
 
-        <Card
-          variant="borderless"
-          title="Nhật ký đăng nhập gần nhất"
-          style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-        >
+        <PageCard title="Nhật ký đăng nhập gần nhất">
           <Table<AuditLog>
             rowKey="id"
             columns={columns}
@@ -119,7 +113,7 @@ const ProfilePage = () => {
             pagination={false}
             locale={{ emptyText: 'Chưa có hoạt động đăng nhập nào' }}
           />
-        </Card>
+        </PageCard>
       </Space>
     </div>
   );

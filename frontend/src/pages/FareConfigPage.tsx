@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Empty, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Empty, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
@@ -7,7 +7,7 @@ import fareApi from '../api/fareApi';
 import { PASSENGER_TYPE_META, PASSENGER_TYPE_OPTIONS } from '../api/fareApi';
 import type { Fare, FarePayload, PassengerType, RouteOption } from '../api/fareApi';
 import FareFormModal from '../components/FareFormModal';
-import { PageCard, PageHeader } from '../components/ui';
+import { PageCard, PageHeader, StatusTag } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
 
 export default function FareConfigPage() {
@@ -117,8 +117,8 @@ export default function FareConfigPage() {
         const meta = PASSENGER_TYPE_META[type];
         return (
           <Space>
-            <Tag color={meta.color}>{meta.label}</Tag>
-            {meta.isDiscount && <Tag color="gold">Ưu đãi</Tag>}
+            <StatusTag color={meta.color}>{meta.label}</StatusTag>
+            {meta.isDiscount && <StatusTag color="gold">Ưu đãi</StatusTag>}
           </Space>
         );
       },

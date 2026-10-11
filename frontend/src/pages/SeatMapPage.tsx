@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
+import { Button, Col, Row, Space, Typography, message, theme } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
 import seatHoldApi from '../api/seatHoldApi';
 import seatMapApi from '../api/seatMapApi';
 import type { SeatMapSeat, TripSeatMap } from '../api/seatMapApi';
 import type { AppError } from '../api/axiosClient';
 import { formatVnd, formatTime } from '../components/ui/format';
-import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
-import { isSeatSelectable, seatDisplayName } from '../components/seatStatus';
+import {
+  BookingProgress,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageCard,
+  PageHeader,
+  RouteBadge,
+} from '../components/ui';
+import { isSeatSelectable, seatAppearance, seatDisplayName } from '../components/seatStatus';
+import { useColorMode } from '../components/ui/colorMode';
 import SeatStatusCell from '../components/SeatStatusCell';
 import SeatStatusLegend from '../components/SeatStatusLegend';
 import { useSeatMapRealtime } from '../realtime/useSeatMapRealtime';
@@ -39,6 +48,11 @@ type Outcome =
 // từ đây phiên giữ chỗ theo khách suốt bước thanh toán (đếm ngược, gia hạn, tự nhả khi hết hạn
 // ở PaymentMethodPage). Ghế vừa bị phiên khác giữ thì backend trả 409 kèm số ghế: hiện nguyên
 // văn máy chủ rồi đồng bộ lại sơ đồ (ghế vừa mất tự rời khỏi lựa chọn).
+//
+// 11/10/2026 — làm lại giao diện theo hệ thống "Sơ đồ mạng lưới": mã tuyến thành ô màu trên
+// đầu trang, dải tiến trình đặt vé, ô ghế phân biệt bằng hình dạng (ô đặc / sọc chéo / viền
+// đứt), ghế VIP đánh dấu bằng viền đôi. Toàn bộ phần giữ chỗ, đếm ngược và đồng bộ realtime
+// giữ nguyên, chỉ đổi phần vẽ.
 export default function SeatMapPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -46,6 +60,7 @@ export default function SeatMapPage() {
 
   const tripId = searchParams.get('tripId')?.trim() ?? '';
   const routeName = searchParams.get('routeName')?.trim() ?? '';
+  const routeCode = searchParams.get('routeCode')?.trim() ?? '';
   const departureTime = searchParams.get('departureTime')?.trim() ?? '';
   const fallbackBusType = searchParams.get('busType')?.trim() ?? '';
 
@@ -213,6 +228,12 @@ export default function SeatMapPage() {
 
   const busType = seatMap?.busType ?? fallbackBusType;
 
+  // Dòng phụ đầu trang dạng chuỗi, đúng như trước; ô mã tuyến (nếu màn trước có truyền) được
+  // chèn trước chuỗi này trong JSX.
+  const subtitleMeta = [routeName, departureTime ? formatTime(departureTime) : '', busType]
+    .filter(Boolean)
+    .join(' · ');
+
   // Bật / tắt chọn một ghế. Chỉ ghế còn trống mới chọn được; ghế đang giữ / đã bán bỏ qua.
   const toggleSeat = (seat: SeatMapSeat) => {
     if (!isSeatSelectable(seat.status)) return;
@@ -317,23 +338,25 @@ export default function SeatMapPage() {
     <div>
       <PageHeader
         title="Chọn ghế ngồi"
-        subtitle={[
-          routeName,
-          departureTime ? formatTime(departureTime) : '',
-          busType,
-        ]
-          .filter(Boolean)
-          .join(' · ')}
+        subtitle={
+          <>
+            {routeCode && (
+              <>
+                <RouteBadge code={routeCode} size="sm" />{' '}
+              </>
+            )}
+            {subtitleMeta}
+          </>
+        }
         onBack={() => navigate(-1)}
       />
+
+      <BookingProgress current="seat" />
 
       <Row gutter={[16, 16]}>
         {/* Sơ đồ ghế — thân xe vẽ dạng lưới, lối đi nằm giữa cột 2 và cột 3. */}
         <Col xs={24} lg={17}>
-          <PageCard
-            title="Sơ đồ ghế"
-            extra={<SeatStatusLegend />}
-          >
+          <PageCard title="Sơ đồ ghế" extra={<SeatStatusLegend />}>
             <div
               style={{
                 background: token.colorFillQuaternary,
@@ -342,8 +365,23 @@ export default function SeatMapPage() {
                 padding: 24,
               }}
             >
-              <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                <Text type="secondary">🚌 Đầu xe · Tài xế</Text>
+              {/* Đầu xe — một vạch ngang thay cho biểu tượng; vạch nằm trên cùng nên đọc ra
+                  ngay chiều của xe. */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginBottom: 16,
+                }}
+              >
+                <div
+                  style={{ width: 72, height: 4, borderRadius: 2, background: token.colorBorder }}
+                />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Đầu xe · Tài xế
+                </Text>
               </div>
 
               {floorsOf(seatMap).map((floor) => (
@@ -365,7 +403,11 @@ export default function SeatMapPage() {
         {/* Ghế đã chọn + tổng tiền tạm tính + nút đi tiếp. */}
         <Col xs={24} lg={7}>
           <div style={{ position: 'sticky', top: 88 }}>
-            <PageCard title="Ghế đã chọn">
+            <PageCard
+              title={
+                selectedSeats.length > 0 ? `Ghế đã chọn (${selectedSeats.length})` : 'Ghế đã chọn'
+              }
+            >
               {selectedSeats.length === 0 ? (
                 <Text type="secondary">
                   Chưa chọn ghế nào. Chạm vào ghế trống trên sơ đồ để chọn.
@@ -388,17 +430,14 @@ export default function SeatMapPage() {
                               : `1px solid ${token.colorBorderSecondary}`,
                         }}
                       >
-                        <Space size={6}>
-                          <Text strong>{seat.seatNumber}</Text>
-                          {seat.seatType === 'Vip' && (
-                            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
-                              VIP
-                            </Tag>
-                          )}
-                        </Space>
+                        {/* Ô ghế vẽ bằng đúng bộ màu "đang chọn" của sơ đồ — nhìn là đối
+                            chiếu được ngay với ghế trên xe. */}
+                        <SeatChip seat={seat} />
 
                         <Space size={4}>
-                          <Text>{seat.price != null ? formatVnd(seat.price) : 'Chưa có giá'}</Text>
+                          <Text className="tabular-nums">
+                            {seat.price != null ? formatVnd(seat.price) : 'Chưa có giá'}
+                          </Text>
                           <Button
                             type="text"
                             size="small"
@@ -413,7 +452,10 @@ export default function SeatMapPage() {
 
                   <div style={{ marginBottom: 16 }}>
                     <Text type="secondary">Tổng tiền tạm tính</Text>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}>
+                    <div
+                      className="tabular-nums"
+                      style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}
+                    >
                       {totalPrice != null ? formatVnd(totalPrice) : 'Chưa có giá'}
                     </div>
                   </div>
@@ -442,6 +484,40 @@ function floorsOf(seatMap: TripSeatMap): number[] {
   return [...new Set(seatMap.seats.map((seat) => seat.floor))].sort((a, b) => a - b);
 }
 
+/** Ô ghế nhỏ trong cột "Ghế đã chọn" — cùng bộ màu "đang chọn" với ô ghế trên sơ đồ
+ * (teal, viền đôi nếu VIP) để hai chỗ không bao giờ vẽ lệch nhau. */
+function SeatChip({ seat }: { seat: SeatMapSeat }) {
+  const { token } = theme.useToken();
+  const { mode } = useColorMode();
+  const appearance = seatAppearance('Available', token, mode, {
+    selected: true,
+    vip: seat.seatType === 'Vip',
+  });
+
+  return (
+    <span
+      className="tabular-nums"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 34,
+        height: 26,
+        padding: '0 6px',
+        borderRadius: token.borderRadiusSM,
+        background: appearance.background,
+        border: appearance.border,
+        boxShadow: appearance.boxShadow,
+        color: appearance.color,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      {seat.seatNumber}
+    </span>
+  );
+}
+
 /** Lưới ghế của MỘT tầng — các hàng xếp từ đầu xe, lối đi nằm giữa. */
 function FloorGrid({
   floor,
@@ -460,6 +536,8 @@ function FloorGrid({
   onHover: (seatId: string | null) => void;
   onToggle: (seat: SeatMapSeat) => void;
 }) {
+  const { token } = theme.useToken();
+
   // Ghế của tầng này, nhóm theo hàng rồi sắp hàng tăng dần từ đầu xe.
   const rows = useMemo(() => {
     const byRow = new Map<number, SeatMapSeat[]>();
@@ -478,7 +556,21 @@ function FloorGrid({
     <div style={{ marginBottom: floors > 1 ? 20 : 0 }}>
       {floors > 1 && (
         <div style={{ textAlign: 'center', marginBottom: 10 }}>
-          <Tag color="blue">Tầng {floor}</Tag>
+          {/* Nhãn tầng dạng viền đứt — hàng rào tạm của xe hai tầng, không tranh màu với ghế. */}
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '1px 10px',
+              borderRadius: token.borderRadiusSM,
+              border: `1px dashed ${token.colorBorder}`,
+              background: token.colorBgContainer,
+              color: token.colorTextSecondary,
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            Tầng {floor}
+          </span>
         </div>
       )}
 

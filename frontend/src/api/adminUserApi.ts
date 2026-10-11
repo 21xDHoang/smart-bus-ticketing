@@ -47,11 +47,14 @@ export interface RoleMeta {
   bg: string;
 }
 
+// bg là màu nền Avatar (chữ trắng bên trên) — lấy từ bảng màu trong components/ui/theme.ts,
+// cả 5 sắc đều đạt ≥4.5:1 với chữ trắng. color vẫn là tên màu Tag preset của AntD
+// (StatusTag quy về tông tương ứng). Không đổi cấu trúc — chỉ đổi giá trị màu.
 export const ROLE_META: Record<RoleCode, RoleMeta> = {
-  Admin: { label: 'Admin', color: 'geekblue', bg: '#2f54eb' },
-  Manager: { label: 'Quản lý', color: 'purple', bg: '#722ed1' },
-  Driver: { label: 'Tài xế', color: 'cyan', bg: '#13c2c2' },
-  Passenger: { label: 'Hành khách', color: 'green', bg: '#52c41a' },
+  Admin: { label: 'Admin', color: 'geekblue', bg: '#0B5FFF' },
+  Manager: { label: 'Quản lý', color: 'purple', bg: '#6C4FA1' },
+  Driver: { label: 'Tài xế', color: 'cyan', bg: '#007A6F' },
+  Passenger: { label: 'Hành khách', color: 'green', bg: '#15803D' },
 };
 
 /** Danh sách vai trò cho bộ lọc, theo thứ tự hiển thị mong muốn. */
@@ -65,7 +68,7 @@ export const ROLE_OPTIONS: { value: RoleCode; label: string }[] = [
 /** Nhãn + màu của một vai trò; mã lạ (backend trả thêm sau này) thì trả nhãn xám an toàn. */
 export function getRoleMeta(code: string): RoleMeta {
   return (
-    ROLE_META[code as RoleCode] ?? { label: code || 'Không xác định', color: 'default', bg: '#8c8c8c' }
+    ROLE_META[code as RoleCode] ?? { label: code || 'Không xác định', color: 'default', bg: '#64748B' }
   );
 }
 

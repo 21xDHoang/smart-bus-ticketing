@@ -8,7 +8,6 @@ import {
   Input,
   List,
   Space,
-  Tag,
   Typography,
   message,
   theme,
@@ -18,7 +17,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import routeLookupApi from '../api/routeLookupApi';
 import type { RouteLookupResult } from '../api/routeLookupApi';
 import type { AppError } from '../api/axiosClient';
-import { EmptyState, PageCard, PageHeader } from '../components/ui';
+import { EmptyState, PageCard, PageHeader, RouteBadge } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
@@ -153,7 +152,7 @@ export default function RouteLookupPage() {
                   style={{ borderRadius: 16, height: '100%' }}
                   title={
                     <Space>
-                      <Tag color="blue">{route.routeCode}</Tag>
+                      <RouteBadge code={route.routeCode} />
                       <Text strong>{route.routeName}</Text>
                     </Space>
                   }
@@ -167,7 +166,9 @@ export default function RouteLookupPage() {
                       <Text style={{ fontSize: 13 }}>{route.stops.length} trạm</Text>
                     </Space>
                     {route.minPrice !== null && (
-                      <Text style={{ color: token.colorPrimary, fontWeight: 600, fontSize: 15 }}>
+                      // colorPrimaryText (không phải colorPrimary) — màu primary làm CHỮ trên nền tối
+                      // chỉ đạt ~2.85:1; token *Text là biến thể đã tính đủ tương phản hai chế độ.
+                      <Text style={{ color: token.colorPrimaryText, fontWeight: 600, fontSize: 15 }}>
                         Giá từ {formatVnd(route.minPrice)}
                       </Text>
                     )}

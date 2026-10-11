@@ -8,6 +8,7 @@ import {
   Menu,
   Space,
   Tag,
+  theme,
   message,
 } from 'antd';
 // Locale tiếng Việt cho các chuỗi dựng sẵn của antd (phân trang, Empty, DatePicker…).
@@ -43,9 +44,10 @@ import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import RouteGuard from './components/RouteGuard';
-import { PageCard, PageHeader } from './components/ui';
+import { PageCard, PageHeader, ThemeModeToggle } from './components/ui';
 import { buildNavItems, navKeyOf, navLeafLinks } from './components/ui/navItems';
-import { appTheme, BRAND, SLATE } from './components/ui/theme';
+import { buildTheme, BRAND } from './components/ui/theme';
+import { useColorMode } from './components/ui/colorMode';
 import { useAuth } from './contexts';
 import 'antd/dist/reset.css';
 
@@ -57,6 +59,7 @@ function HomeContent() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const quickLinks = navLeafLinks(user?.role ?? null);
+  const { token } = theme.useToken();
 
   return (
     <div>
@@ -65,7 +68,14 @@ function HomeContent() {
         subtitle={
           <Space size={8}>
             <span>Bạn đang đăng nhập với vai trò</span>
-            <Tag color="blue" style={{ marginInlineEnd: 0 }}>
+            <Tag
+              style={{
+                marginInlineEnd: 0,
+                background: token.colorPrimaryBg,
+                borderColor: token.colorPrimaryBorder,
+                color: token.colorPrimaryText,
+              }}
+            >
               {user?.role ?? '—'}
             </Tag>
           </Space>
@@ -90,6 +100,8 @@ function App() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // Chế độ sáng/tối — store nhỏ ở components/ui/colorMode.ts, đổi là ConfigProvider đổi theme.
+  const { mode } = useColorMode();
 
   // Xử lý Đăng xuất
   const handleLogout = async () => {
@@ -126,7 +138,7 @@ function App() {
   const selectedNavKey = navKeyOf(pathname);
 
   return (
-    <ConfigProvider theme={appTheme} locale={viVN}>
+    <ConfigProvider theme={buildTheme(mode)} locale={viVN}>
       {/* App của antd, dạng component={false} — không thêm thẻ nào vào DOM, chỉ dựng sẵn
           context message/modal cho các màn chuyển dần sang App.useApp() ở đợt sau. */}
       <AntApp component={false}>
@@ -157,7 +169,7 @@ function App() {
                     fontSize: 20,
                     fontWeight: 'bold',
                     whiteSpace: 'nowrap',
-                    background: BRAND.gradient,
+                    background: 'var(--app-brand-gradient)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
@@ -175,6 +187,8 @@ function App() {
                 onClick={({ key }) => navigate(key)}
                 style={{ flex: 1, minWidth: 0, borderBottom: 'none', background: 'transparent' }}
               />
+
+              <ThemeModeToggle />
 
               <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
                 <div
@@ -421,7 +435,7 @@ function App() {
               </Routes>
             </Content>
 
-            <Footer style={{ textAlign: 'center', color: SLATE[500] }}>
+            <Footer style={{ textAlign: 'center', color: 'var(--app-text-muted)' }}>
               Smart Bus Ticket System ©2026 Developed with React & Ant Design
             </Footer>
           </Layout>

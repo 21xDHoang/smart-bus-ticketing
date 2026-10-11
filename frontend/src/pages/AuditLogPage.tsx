@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
 import { EyeOutlined } from '@ant-design/icons';
@@ -11,6 +11,7 @@ import AuditLogFilter from '../components/AuditLogFilter';
 import { defaultAuditLogFilter } from '../components/auditLogFilterValue';
 import type { AuditLogFilterValue } from '../components/auditLogFilterValue';
 import AuditLogDetailModal from '../components/AuditLogDetailModal';
+import { StatusTag } from '../components/ui';
 
 const { Title, Text } = Typography;
 
@@ -99,7 +100,7 @@ const AuditLogPage = () => {
       width: 150,
       render: (action: string) => {
         const meta = getAuditActionMeta(action);
-        return <Tag color={meta.color}>{meta.label}</Tag>;
+        return <StatusTag color={meta.color}>{meta.label}</StatusTag>;
       },
     },
     {
@@ -111,7 +112,7 @@ const AuditLogPage = () => {
         if (!split) return <Text type="secondary">—</Text>;
         return (
           <Space size={4}>
-            <Tag color="blue">{split.table}</Tag>
+            <StatusTag color="blue">{split.table}</StatusTag>
             {split.id && <Text code>{split.id}</Text>}
           </Space>
         );

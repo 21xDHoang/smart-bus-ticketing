@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
-  Card,
   Descriptions,
   Form,
   Input,
   Segmented,
   Select,
   Space,
-  Tag,
   Typography,
   Upload,
   message,
+  theme,
 } from 'antd';
 import type { UploadFile } from 'antd';
 import { CheckCircleFilled, EnvironmentOutlined, UploadOutlined } from '@ant-design/icons';
@@ -26,6 +25,7 @@ import type {
 import { FEEDBACK_STATUS_META, FEEDBACK_TYPE_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackSubmitApi';
 import type { AppError } from '../api/axiosClient';
 import SatisfactionRating from '../components/SatisfactionRating';
+import { PageCard, StatusTag } from '../components/ui';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -105,6 +105,8 @@ export default function FeedbackSubmitPage() {
 
   const submittedTrip = trips.find((trip) => trip.id === submitted?.tripId);
 
+  const { token } = theme.useToken();
+
   return (
     <div>
       <div style={{ marginBottom: 16 }}>
@@ -116,10 +118,7 @@ export default function FeedbackSubmitPage() {
         </Text>
       </div>
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
+      <PageCard>
         <Form<FeedbackFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
             name="type"
@@ -187,70 +186,72 @@ export default function FeedbackSubmitPage() {
             Gửi phản ánh
           </Button>
         </Form>
-      </Card>
+      </PageCard>
 
       {/* Kết quả gửi thành công. */}
       {submitted && (
-        <Card
-          variant="borderless"
-          style={{ borderRadius: 16, marginTop: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-          title={
-            <Space>
-              <CheckCircleFilled style={{ color: '#52c41a' }} />
-              <span>Gửi phản ánh thành công</span>
-            </Space>
-          }
-        >
-          <Descriptions
-            column={1}
-            size="middle"
-            items={[
-              {
-                key: 'type',
-                label: 'Loại phản ánh',
-                children: (
-                  <Tag color={getFeedbackTypeMeta(submitted.type).color}>
-                    {getFeedbackTypeMeta(submitted.type).label}
-                  </Tag>
-                ),
-              },
-              {
-                key: 'trip',
-                label: 'Chuyến xe',
-                children: submittedTrip
-                  ? `${submittedTrip.routeCode} — ${submittedTrip.routeName} · ${dayjs(
-                      submittedTrip.departureTime,
-                    ).format('HH:mm DD/MM/YYYY')}`
-                  : 'Không kèm chuyến',
-              },
-              {
-                key: 'rating',
-                label: 'Mức độ hài lòng',
-                children: <SatisfactionRating readOnly value={submitted.rating} />,
-              },
-              {
-                key: 'status',
-                label: 'Trạng thái',
-                children: (
-                  <Tag color={FEEDBACK_STATUS_META[submitted.status].color}>
-                    {FEEDBACK_STATUS_META[submitted.status].label}
-                  </Tag>
-                ),
-              },
-            ]}
-          />
+        <div style={{ marginTop: 20 }}>
+          <PageCard
+            title={
+              <Space>
+                <CheckCircleFilled style={{ color: token.colorSuccess }} />
+                <span>Gửi phản ánh thành công</span>
+              </Space>
+            }
+          >
+            <Descriptions
+              column={1}
+              size="middle"
+              items={[
+                {
+                  key: 'type',
+                  label: 'Loại phản ánh',
+                  children: (
+                    <StatusTag color={getFeedbackTypeMeta(submitted.type).color}>
+                      {getFeedbackTypeMeta(submitted.type).label}
+                    </StatusTag>
+                  ),
+                },
+                {
+                  key: 'trip',
+                  label: 'Chuyến xe',
+                  children: submittedTrip
+                    ? `${submittedTrip.routeCode} — ${submittedTrip.routeName} · ${dayjs(
+                        submittedTrip.departureTime,
+                      ).format('HH:mm DD/MM/YYYY')}`
+                    : 'Không kèm chuyến',
+                },
+                {
+                  key: 'rating',
+                  label: 'Mức độ hài lòng',
+                  children: <SatisfactionRating readOnly value={submitted.rating} />,
+                },
+                {
+                  key: 'status',
+                  label: 'Trạng thái',
+                  children: (
+                    <StatusTag color={FEEDBACK_STATUS_META[submitted.status].color}>
+                      {FEEDBACK_STATUS_META[submitted.status].label}
+                    </StatusTag>
+                  ),
+                },
+              ]}
+            />
 
-          <Paragraph style={{ marginTop: 12, whiteSpace: 'pre-wrap' }}>{submitted.content}</Paragraph>
+            <Paragraph style={{ marginTop: 12, whiteSpace: 'pre-wrap' }}>
+              {submitted.content}
+            </Paragraph>
 
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Gửi lúc {dayjs(submitted.createdAt).format('HH:mm DD/MM/YYYY')}. Nhà xe sẽ phản hồi
-            trong thời gian sớm nhất.
-          </Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Gửi lúc {dayjs(submitted.createdAt).format('HH:mm DD/MM/YYYY')}. Nhà xe sẽ phản hồi
+              trong thời gian sớm nhất.
+            </Text>
 
-          <Button style={{ marginTop: 16 }} onClick={handleSubmitAnother}>
-            Gửi phản ánh khác
-          </Button>
-        </Card>
+            <Button style={{ marginTop: 16 }} onClick={handleSubmitAnother}>
+              Gửi phản ánh khác
+            </Button>
+          </PageCard>
+        </div>
       )}
     </div>
   );

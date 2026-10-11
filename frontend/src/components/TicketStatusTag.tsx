@@ -1,6 +1,6 @@
-import { Tag } from 'antd';
 import { CheckCircleFilled, ClockCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import type { ReactNode } from 'react';
+import StatusTag from './ui/StatusTag';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import type { Ticket } from '../api/ticketApi';
@@ -57,12 +57,12 @@ export default function TicketStatusTag({ ticket, now }: TicketStatusTagProps) {
   const meta = TICKET_STATUS_META[status];
 
   return (
-    <Tag
+    <StatusTag
       icon={STATUS_ICONS[status]}
       color={meta.color}
       title={buildTooltip(status, ticket.departureTime, ticket.usedAt)}
     >
       {meta.label}
-    </Tag>
+    </StatusTag>
   );
 }

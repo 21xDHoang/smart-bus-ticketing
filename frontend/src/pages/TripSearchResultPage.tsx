@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Card, Empty, List, Result, Segmented, Space, Spin, Tag, Typography } from 'antd';
-import {
-  ArrowLeftOutlined,
-  CarOutlined,
-  EnvironmentOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
+import { Button, Segmented, Space, Typography, theme } from 'antd';
+import { ArrowLeftOutlined, CarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import tripSearchApi from '../api/tripSearchApi';
 import type { TripSearchResult } from '../api/tripSearchApi';
 import type { AppError } from '../api/axiosClient';
+import {
+  BookingProgress,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageCard,
+  PageHeader,
+  RouteBadge,
+  RouteLine,
+} from '../components/ui';
+import { formatVnd } from '../components/ui/format';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /** Khoá sắp xếp — "giờ" mặc định là giờ đi sớm nhất, "giá" có cả hai chiều. */
 type SortKey = 'time' | 'priceAsc' | 'priceDesc';
@@ -23,16 +29,11 @@ const SORT_OPTIONS: { label: string; value: SortKey }[] = [
   { label: 'Giá cao → thấp', value: 'priceDesc' },
 ];
 
-/** Định dạng tiền VND — ví dụ 8000 → "8.000 đ". */
-function formatVnd(price: number): string {
-  return `${price.toLocaleString('vi-VN')} đ`;
-}
-
-/** Nhãn + màu cho số ghế còn trống — càng ít ghế màu càng gắt. */
-function seatsMeta(seatsRemaining: number): { label: string; color: string } {
-  if (seatsRemaining === 0) return { label: 'Hết chỗ', color: 'red' };
-  if (seatsRemaining <= 5) return { label: `Còn ${seatsRemaining} ghế`, color: 'orange' };
-  return { label: `Còn ${seatsRemaining} ghế`, color: 'green' };
+/** Ba mức ghế còn trống — càng ít ghế càng gắt; màu cụ thể do SeatsChip ánh xạ từ token. */
+function seatsMeta(seatsRemaining: number): { label: string; tone: 'soldout' | 'few' | 'many' } {
+  if (seatsRemaining === 0) return { label: 'Hết chỗ', tone: 'soldout' };
+  if (seatsRemaining <= 5) return { label: `Còn ${seatsRemaining} ghế`, tone: 'few' };
+  return { label: `Còn ${seatsRemaining} ghế`, tone: 'many' };
 }
 
 /**
@@ -97,6 +98,41 @@ function viewOf(outcome: SearchOutcome | null): ResultView {
     : { kind: 'results', trips: outcome.results };
 }
 
+/** Nhãn số ghế còn lại — màu lấy từ token trạng thái để đổi bảng màu là đổi theo. */
+function SeatsChip({ seatsRemaining }: { seatsRemaining: number }) {
+  const { token } = theme.useToken();
+  const { label, tone } = seatsMeta(seatsRemaining);
+  const palette =
+    tone === 'soldout'
+      ? { bg: token.colorErrorBg, text: token.colorErrorText, border: token.colorErrorBorder }
+      : tone === 'few'
+        ? { bg: token.colorWarningBg, text: token.colorWarningText, border: token.colorWarningBorder }
+        : {
+            bg: token.colorSuccessBg,
+            text: token.colorSuccessText,
+            border: token.colorSuccessBorder,
+          };
+
+  return (
+    <span
+      className="tabular-nums"
+      style={{
+        display: 'inline-flex',
+        padding: '2px 8px',
+        borderRadius: token.borderRadiusSM,
+        border: `1px solid ${palette.border}`,
+        background: palette.bg,
+        color: palette.text,
+        fontSize: 12,
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 // Màn hình kết quả tìm kiếm chuyến (User Story 1, Sprint 2 — task của Nguyễn Đình Băng):
 // danh sách chuyến cho một cặp điểm đi/điểm đến + ngày, kèm bộ sắp xếp theo giờ/giá.
 //
@@ -109,9 +145,14 @@ function viewOf(outcome: SearchOutcome | null): ResultView {
 // Thịnh (một dòng backlog riêng, tách khỏi dòng 34 dựng màn hình của Băng). Phần dưới đây là
 // chỗ duy nhất trong repo mà Hoàng Văn Thịnh sửa vào file của người khác; đã báo Băng xem
 // trong PR.
+//
+// 11/10/2026 — làm lại giao diện theo hệ thống "Sơ đồ mạng lưới": mỗi chuyến là một tấm
+// biển riêng (thay vì cắt khúc trong một thẻ lớn), mã tuyến thành ô màu, tiến trình đặt vé
+// hiện trên đầu màn. Toàn bộ phần gọi API, sắp xếp, chuyển trạng thái giữ nguyên.
 export default function TripSearchResultPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { token } = theme.useToken();
 
   const origin = searchParams.get('origin')?.trim() ?? '';
   const destination = searchParams.get('destination')?.trim() ?? '';
@@ -173,6 +214,7 @@ export default function TripSearchResultPage() {
   const openSeatMap = (trip: TripSearchResult) => {
     const params = new URLSearchParams({ tripId: trip.id });
     params.set('routeName', trip.routeName);
+    params.set('routeCode', trip.routeCode);
     params.set('departureTime', trip.departureTime);
     params.set('busType', trip.busType);
 
@@ -182,160 +224,163 @@ export default function TripSearchResultPage() {
   // Chưa có tiêu chí tìm kiếm → mời quay lại màn hình tra cứu tuyến, không hiển thị kết quả.
   if (!hasCriteria) {
     return (
-      <Empty
-        style={{ marginTop: 40 }}
-        description="Chưa có thông tin tìm kiếm. Hãy nhập điểm đi, điểm đến và ngày đi để xem các chuyến phù hợp."
-      >
-        <Button type="primary" icon={<ArrowLeftOutlined />} onClick={() => navigate('/route-lookup')}>
-          Quay lại tra cứu tuyến
-        </Button>
-      </Empty>
+      <PageCard>
+        <EmptyState
+          description="Chưa có thông tin tìm kiếm. Hãy nhập điểm đi, điểm đến và ngày đi để xem các chuyến phù hợp."
+          action={
+            <Button
+              type="primary"
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate('/route-lookup')}
+            >
+              Quay lại tra cứu tuyến
+            </Button>
+          }
+        />
+      </PageCard>
     );
   }
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Space align="start" size={8}>
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/route-lookup')}
-            aria-label="Quay lại tra cứu tuyến"
-            style={{ marginTop: 2 }}
-          />
-          <div>
-            <Title level={4} style={{ margin: 0 }}>
-              Kết quả tìm kiếm chuyến
-            </Title>
-            <Text type="secondary">
-              <EnvironmentOutlined /> {origin} → {destination}
-              {date && ` · ${dayjs(date).format('DD/MM/YYYY')}`}
-            </Text>
-          </div>
-        </Space>
+      <PageHeader
+        title="Kết quả tìm kiếm chuyến"
+        subtitle={
+          <>
+            <RouteLine from={origin} to={destination} size="sm" />
+            {date && ` · ${dayjs(date).format('DD/MM/YYYY')}`}
+          </>
+        }
+        onBack={() => navigate('/route-lookup')}
+      />
+
+      <BookingProgress current="trip" />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 12,
+        }}
+      >
+        <Text type="secondary">
+          {view.kind === 'results' && (
+            <>
+              Tìm thấy <Text strong>{view.trips.length}</Text> chuyến
+            </>
+          )}
+        </Text>
+        <Segmented
+          value={sortKey}
+          onChange={(value) => setSortKey(value as SortKey)}
+          options={SORT_OPTIONS}
+          disabled={view.kind !== 'results'}
+        />
       </div>
 
-      <Card variant="borderless" style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-        <Space
-          style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}
-          wrap
-        >
-          <Text type="secondary">
-            {view.kind === 'results' && (
-              <>
-                Tìm thấy <Text strong>{view.trips.length}</Text> chuyến
-              </>
-            )}
-          </Text>
-          <Segmented
-            value={sortKey}
-            onChange={(value) => setSortKey(value as SortKey)}
-            options={SORT_OPTIONS}
-            disabled={view.kind !== 'results'}
-          />
-        </Space>
+      {/* Đang tải — spinner riêng, không mượn danh sách của lượt trước và không hiện số đếm. */}
+      {view.kind === 'loading' && (
+        <PageCard>
+          <LoadingState description="Đang tải danh sách chuyến…" />
+        </PageCard>
+      )}
 
-        {/* Đang tải — spinner riêng, không mượn danh sách của lượt trước và không hiện số đếm. */}
-        {view.kind === 'loading' && (
-          <div style={{ padding: '56px 0', textAlign: 'center' }}>
-            <Spin size="large" />
-            <div style={{ marginTop: 12 }}>
-              <Text type="secondary">Đang tải danh sách chuyến…</Text>
-            </div>
-          </div>
-        )}
-
-        {/* Gọi API hỏng — trạng thái riêng, có lối thoát, KHÔNG mạo nhận là "không có chuyến". */}
-        {view.kind === 'error' && (
-          <Result
-            status="warning"
+      {/* Gọi API hỏng — trạng thái riêng, có lối thoát, KHÔNG mạo nhận là "không có chuyến". */}
+      {view.kind === 'error' && (
+        <PageCard>
+          <ErrorState
             title="Không tải được kết quả tìm kiếm"
-            subTitle={view.message}
-            extra={
-              <Button icon={<ReloadOutlined />} onClick={() => setReloadToken((n) => n + 1)}>
-                Thử lại
-              </Button>
-            }
+            description={view.message}
+            onRetry={() => setReloadToken((n) => n + 1)}
           />
-        )}
+        </PageCard>
+      )}
 
-        {/* Đã tìm xong nhưng không có chuyến nào khớp. */}
-        {view.kind === 'no-match' && (
-          <Empty description="Không tìm thấy chuyến phù hợp. Vui lòng thử điểm đi/điểm đến hoặc ngày khác." />
-        )}
+      {/* Đã tìm xong nhưng không có chuyến nào khớp. */}
+      {view.kind === 'no-match' && (
+        <PageCard>
+          <EmptyState description="Không tìm thấy chuyến phù hợp. Vui lòng thử điểm đi/điểm đến hoặc ngày khác." />
+        </PageCard>
+      )}
 
-        {view.kind === 'results' && (
-          <List<TripSearchResult>
-            dataSource={sorted}
-            renderItem={(trip) => {
-              const seats = seatsMeta(trip.seatsRemaining);
+      {view.kind === 'results' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {sorted.map((trip) => (
+            <div
+              key={trip.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                flexWrap: 'wrap',
+                padding: '14px 16px',
+                background: token.colorBgContainer,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                borderRadius: token.borderRadiusLG,
+                // Chuyến hết chỗ vẫn hiện (người dùng cần thấy nó tồn tại) nhưng lùi về sau.
+                opacity: trip.seatsRemaining === 0 ? 0.7 : 1,
+              }}
+            >
+              {/* Giờ khởi hành → giờ đến */}
+              <div style={{ minWidth: 96 }}>
+                <div
+                  className="tabular-nums"
+                  style={{ fontSize: 18, fontWeight: 700, color: token.colorTextHeading }}
+                >
+                  {dayjs(trip.departureTime).format('HH:mm')}
+                </div>
+                <Text className="tabular-nums" type="secondary" style={{ fontSize: 13 }}>
+                  {trip.arrivalTime ? `đến ${dayjs(trip.arrivalTime).format('HH:mm')}` : '—'}
+                </Text>
+              </div>
 
-              return (
-                <List.Item style={{ padding: '14px 0', borderBlockEnd: '1px solid #f1f5f9' }}>
+              {/* Tuyến + loại xe */}
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <Space size={8} wrap>
+                  <RouteBadge code={trip.routeCode} />
+                  <Text strong>{trip.routeName}</Text>
+                </Space>
+                <div style={{ marginTop: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    <CarOutlined /> {trip.busType}
+                  </Text>
+                </div>
+              </div>
+
+              {/* Giá + số ghế còn trống — tuyến chưa cấu hình giá thì ghi rõ thay vì hiện 0 đ */}
+              <div style={{ textAlign: 'right', minWidth: 132 }}>
+                {trip.price === null ? (
+                  <Text type="secondary" style={{ fontWeight: 600 }}>
+                    Chưa có giá
+                  </Text>
+                ) : (
                   <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 16,
-                      width: '100%',
-                      flexWrap: 'wrap',
-                    }}
+                    className="tabular-nums"
+                    style={{ fontSize: 16, fontWeight: 700, color: token.colorTextHeading }}
                   >
-                    {/* Giờ khởi hành → giờ đến */}
-                    <div style={{ minWidth: 96 }}>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
-                        {dayjs(trip.departureTime).format('HH:mm')}
-                      </div>
-                      <Text type="secondary" style={{ fontSize: 13 }}>
-                        {trip.arrivalTime ? dayjs(trip.arrivalTime).format('HH:mm') : '—'}
-                      </Text>
-                    </div>
-
-                    {/* Tuyến + loại xe */}
-                    <div style={{ flex: 1, minWidth: 220 }}>
-                      <Space size={8} wrap>
-                        <Tag color="blue">{trip.routeCode}</Tag>
-                        <Text strong>{trip.routeName}</Text>
-                      </Space>
-                      <div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          <CarOutlined /> {trip.busType}
-                        </Text>
-                      </div>
-                    </div>
-
-                    {/* Giá + số ghế còn trống — tuyến chưa cấu hình giá thì ghi rõ thay vì hiện 0 đ */}
-                    <div style={{ textAlign: 'right', minWidth: 128 }}>
-                      {trip.price === null ? (
-                        <Text type="secondary" style={{ fontWeight: 600 }}>
-                          Chưa có giá
-                        </Text>
-                      ) : (
-                        <div style={{ fontSize: 16, fontWeight: 700, color: '#4361ee' }}>
-                          {formatVnd(trip.price)}
-                        </div>
-                      )}
-                      <Tag color={seats.color} style={{ marginTop: 4, marginInlineEnd: 0 }}>
-                        {seats.label}
-                      </Tag>
-                    </div>
-
-                    {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. */}
-                    <Button
-                      type="primary"
-                      disabled={trip.seatsRemaining === 0}
-                      onClick={() => openSeatMap(trip)}
-                    >
-                      Chọn ghế
-                    </Button>
+                    {formatVnd(trip.price)}
                   </div>
-                </List.Item>
-              );
-            }}
-          />
-        )}
-      </Card>
+                )}
+                <div style={{ marginTop: 6 }}>
+                  <SeatsChip seatsRemaining={trip.seatsRemaining} />
+                </div>
+              </div>
+
+              {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. */}
+              <Button
+                type="primary"
+                disabled={trip.seatsRemaining === 0}
+                onClick={() => openSeatMap(trip)}
+              >
+                Chọn ghế
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
