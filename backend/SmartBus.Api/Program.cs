@@ -402,6 +402,15 @@ builder.Services.AddScoped<IVoucherRedemptionService, VoucherRedemptionService>(
 // Controller tự được AddControllers quét ra, không cần dòng đăng ký riêng.
 builder.Services.AddScoped<IVoucherStatisticsService, VoucherStatisticsService>();
 
+// Voucher (US 18), phần ghi: CRUD voucher cho màn quản trị (GET/POST /vouchers,
+// GET/PUT /vouchers/{id}, PATCH /vouchers/{id}/status). Task "API CRUD voucher: mã, loại giảm
+// giá, điều kiện áp dụng, số lượng" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Đặt ngay sau IVoucherStatisticsService vì cùng story 18 và cùng bảng Vouchers: thống kê đọc
+// (Kiên), CRUD ghi (Hiếu) — hai việc khác nhau trên cùng một bảng, đừng gộp. KHÁC hẳn cặp
+// IVoucherValidationService/IVoucherRedemptionService ở trên (luồng khách dùng mã ở thanh toán).
+builder.Services.AddScoped<IVoucherAdminService, VoucherAdminService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.

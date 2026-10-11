@@ -166,6 +166,14 @@ public class AuditLogCoverageTests
         // endpoint hành động con của /seat-holds sẽ gặp đúng vấn đề này — nhóm cần chốt MỘT cách
         // xử lý chung thay vì mỗi task thêm một dòng ngoại lệ.
         ("POST",   "/api/vouchers/validate",                     CachGhi.KhongGhi),
+
+        // CRUD voucher — story 18, Trần Trung Hiếu. Ba endpoint đều do AuditLogMiddleware tự ghi
+        // (POST → Create, PUT/PATCH → Update); tên bảng suy ra là "Vouchers" — POST không có tham số
+        // nào nên lấy đoạn tĩnh cuối, PUT/PATCH lấy đoạn trước {id}. Target của POST là id voucher
+        // mới đọc từ body trả về — cùng lối POST /api/monthly-passes.
+        ("POST",   "/api/vouchers",                               CachGhi.Middleware),
+        ("PUT",    "/api/vouchers/{id:guid}",                     CachGhi.Middleware),
+        ("PATCH",  "/api/vouchers/{id:guid}/status",              CachGhi.Middleware),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>
