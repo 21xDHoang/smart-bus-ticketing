@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Input, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
+import { Button, Input, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import { PlusOutlined } from '@ant-design/icons';
 import { fetchRoutes, ROUTE_STATUS_META, ROUTE_STATUS_OPTIONS } from '../api/routeApi';
 import type { Route, RouteStatus } from '../api/routeApi';
@@ -9,7 +8,9 @@ import routeCrudApi from '../api/routeCrudApi';
 import type { RoutePayload, UpdateRoutePayload } from '../api/routeCrudApi';
 import type { AppError } from '../api/axiosClient';
 import RouteFormModal from '../components/RouteFormModal';
-import { RouteBadge, StatusTag } from '../components/ui';
+import { FilterBar, PageCard, PageHeader, RouteBadge, StatusTag } from '../components/ui';
+import { formatDate } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
 // Màn hình danh sách tuyến (story 12): bảng + tìm kiếm + lọc trạng thái + phân trang.
 // Phần Thêm/Sửa tuyến + xác nhận xoá (nút, modal, popconfirm) là task "Form Thêm/Sửa
@@ -59,7 +60,7 @@ const BASE_COLUMNS: TableProps<Route>['columns'] = [
     dataIndex: 'createdAt',
     key: 'createdAt',
     width: 130,
-    render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY'),
+    render: (createdAt: string) => formatDate(createdAt),
   },
 ];
 
@@ -186,53 +187,50 @@ const RouteListPage = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Danh sách tuyến đường
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          Tra cứu tuyến theo mã, tên, điểm đi — điểm đến và trạng thái khai thác.
-        </Typography.Text>
-      </div>
+      <PageHeader
+        title="Danh sách tuyến đường"
+        subtitle="Tra cứu tuyến theo mã, tên, điểm đi — điểm đến và trạng thái khai thác."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Input.Search
-            allowClear
-            placeholder="Tìm theo mã, tên hoặc điểm đi — điểm đến"
-            style={{ width: 320 }}
-            onSearch={(value) => {
-              setSearch(value.trim());
-              setPage(1);
-            }}
-            onChange={(e) => {
-              // Bấm nút X (allowClear) thì cập nhật ngay, không cần chờ Enter.
-              if (!e.target.value) {
-                setSearch('');
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                Thêm tuyến
+              </Button>
+            }
+          >
+            <Input.Search
+              allowClear
+              placeholder="Tìm theo mã, tên hoặc điểm đi — điểm đến"
+              style={{ width: 320 }}
+              onSearch={(value) => {
+                setSearch(value.trim());
                 setPage(1);
-              }
-            }}
-          />
+              }}
+              onChange={(e) => {
+                // Bấm nút X (allowClear) thì cập nhật ngay, không cần chờ Enter.
+                if (!e.target.value) {
+                  setSearch('');
+                  setPage(1);
+                }
+              }}
+            />
 
-          <Select<RouteStatus>
-            allowClear
-            placeholder="Trạng thái"
-            style={{ width: 200 }}
-            options={ROUTE_STATUS_OPTIONS}
-            onChange={(value) => {
-              setStatus(value ?? undefined);
-              setPage(1);
-            }}
-          />
-
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            Thêm tuyến
-          </Button>
-        </Space>
-
+            <Select<RouteStatus>
+              allowClear
+              placeholder="Trạng thái"
+              style={{ width: 200 }}
+              options={ROUTE_STATUS_OPTIONS}
+              onChange={(value) => {
+                setStatus(value ?? undefined);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
+      >
         <Table<Route>
           rowKey="id"
           columns={columns}
@@ -240,22 +238,19 @@ const RouteListPage = () => {
           loading={loading}
           scroll={{ x: 720 }}
           locale={{ emptyText: 'Không tìm thấy tuyến đường nào' }}
-          pagination={{
-            current: page,
+          pagination={tablePagination({
+            page,
             pageSize,
             total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: [10, 20, 50],
-            showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} tuyến`,
+            unitLabel: 'tuyến',
             onChange: (nextPage, nextPageSize) => {
               // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
               setPage(nextPageSize !== pageSize ? 1 : nextPage);
               setPageSize(nextPageSize);
             },
-          }}
+          })}
         />
-      </Card>
+      </PageCard>
 
       <RouteFormModal
         open={modalOpen}

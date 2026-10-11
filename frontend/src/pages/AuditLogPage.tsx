@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Space, Table, Typography, message } from 'antd';
+import { Button, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import { EyeOutlined } from '@ant-design/icons';
 import { fetchAuditLogs } from '../api/auditLogListApi';
 import type { AuditLogListItem } from '../api/auditLogListApi';
@@ -11,9 +10,11 @@ import AuditLogFilter from '../components/AuditLogFilter';
 import { defaultAuditLogFilter } from '../components/auditLogFilterValue';
 import type { AuditLogFilterValue } from '../components/auditLogFilterValue';
 import AuditLogDetailModal from '../components/AuditLogDetailModal';
-import { StatusTag } from '../components/ui';
+import { FilterBar, PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDateTimeSeconds } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // Tách chuỗi target dạng "<Tên bảng>:<Id>" để hiển thị tách bạch tên bảng và id.
 // Login/Logout không có target → trả null.
@@ -73,7 +74,7 @@ const AuditLogPage = () => {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 180,
-      render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY HH:mm:ss'),
+      render: (createdAt: string) => formatDateTimeSeconds(createdAt),
     },
     {
       title: 'Người thao tác',
@@ -145,29 +146,26 @@ const AuditLogPage = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Nhật ký hoạt động
-        </Title>
-        <Text type="secondary">
-          Theo dõi truy cập và thao tác hệ thống để phục vụ công tác kiểm toán và an ninh.
-        </Text>
-      </div>
+      <PageHeader
+        title="Nhật ký hoạt động"
+        subtitle="Theo dõi truy cập và thao tác hệ thống để phục vụ công tác kiểm toán và an ninh."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
+      <PageCard
+        toolbar={
+          <FilterBar>
+            <AuditLogFilter
+              value={filter}
+              disabled={loading}
+              onChange={(next) => {
+                // Đổi bộ lọc luôn quay về trang 1 để không đứng ở trang không còn tồn tại.
+                setFilter(next);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
       >
-        <AuditLogFilter
-          value={filter}
-          disabled={loading}
-          onChange={(next) => {
-            // Đổi bộ lọc luôn quay về trang 1 để không đứng ở trang không còn tồn tại.
-            setFilter(next);
-            setPage(1);
-          }}
-        />
-
         <Table<AuditLogListItem>
           rowKey="id"
           columns={columns}
@@ -175,22 +173,19 @@ const AuditLogPage = () => {
           loading={loading}
           scroll={{ x: 980 }}
           locale={{ emptyText: 'Không tìm thấy bản ghi nhật ký nào' }}
-          pagination={{
-            current: page,
+          pagination={tablePagination({
+            page,
             pageSize,
             total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: [10, 20, 50],
-            showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} bản ghi`,
+            unitLabel: 'bản ghi',
             onChange: (nextPage, nextPageSize) => {
               // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
               setPage(nextPageSize !== pageSize ? 1 : nextPage);
               setPageSize(nextPageSize);
             },
-          }}
+          })}
         />
-      </Card>
+      </PageCard>
 
       <AuditLogDetailModal
         open={selectedLog !== null}

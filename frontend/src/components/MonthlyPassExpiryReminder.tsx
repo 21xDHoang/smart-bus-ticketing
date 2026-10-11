@@ -1,6 +1,6 @@
 import { Alert, Space, Typography } from 'antd';
-import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
+import { formatDate } from './ui/format';
 import type { MonthlyPass } from '../api/monthlyPassApi';
 import { findPassType } from '../api/monthlyPassApi';
 import { getExpiringSoonPasses } from './monthlyPassReminder';
@@ -45,7 +45,7 @@ export default function MonthlyPassExpiryReminder({ passes, now }: MonthlyPassEx
       description={
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           {expiring.map(({ pass, daysLeft }) => {
-            const date = dayjs(pass.validTo).format('DD/MM/YYYY');
+            const date = formatDate(pass.validTo);
             const remaining =
               daysLeft > 0 ? `còn ${daysLeft} ngày, hết hạn ngày ${date}` : `hết hạn hôm nay (${date})`;
 

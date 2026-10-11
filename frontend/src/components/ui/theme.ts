@@ -257,15 +257,19 @@ function buildComponents(mode: ColorMode, p: ModeTokens): ThemeConfig['component
       footerPadding: '12px 24px',
     },
     Menu: {
-      itemBorderRadius: 6,
+      // Mục menu cao 44px — đủ lớn để bấm trên điện thoại, vẫn gọn trên desktop.
+      itemHeight: 44,
+      itemBorderRadius: 10,
+      itemMarginInline: 8,
       itemColor: p.neutral.textMuted,
       itemSelectedColor: p.primary.onSoft,
       itemSelectedBg: p.primary.soft,
       itemHoverBg: dark ? p.neutral.elevated : p.neutral.borderSecondary,
-      // Menu ngang: mục đang chọn thành "viên thuốc" nền xanh nhạt, bỏ gạch chân.
+      // Menu dọc (Sider/Drawer) lẫn ngang (header): mục đang chọn là "viên thuốc" nền xanh
+      // nhạt, không gạch chân.
       horizontalItemSelectedColor: p.primary.onSoft,
       horizontalItemSelectedBg: p.primary.soft,
-      horizontalItemBorderRadius: 6,
+      horizontalItemBorderRadius: 10,
       activeBarBorderWidth: 0,
     },
     Card: {
@@ -323,9 +327,14 @@ export function buildTheme(mode: ColorMode): ThemeConfig {
       // thay vì đen mặc định của antd.
       ...(dark ? { colorBgBase: p.neutral.bg } : {}),
 
-      borderRadius: 6,
-      borderRadiusLG: 10,
-      borderRadiusSM: 4,
+      // Bo góc theo thang mới: thẻ/nút 12, khối lớn (modal, panel) 16, control nhỏ 8.
+      borderRadius: 12,
+      borderRadiusLG: 16,
+      borderRadiusSM: 8,
+      // Nhịp chuyển động 150–250ms — đủ thấy mạch thay đổi, không đủ để phải chờ.
+      motionDurationFast: '0.15s',
+      motionDurationMid: '0.2s',
+      motionDurationSlow: '0.25s',
       fontFamily: BRAND.font,
 
       colorText: p.neutral.text,

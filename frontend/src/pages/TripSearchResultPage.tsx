@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Segmented, Space, Typography, theme } from 'antd';
 import { ArrowLeftOutlined, CarOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import tripSearchApi from '../api/tripSearchApi';
 import type { TripSearchResult } from '../api/tripSearchApi';
 import type { AppError } from '../api/axiosClient';
@@ -16,15 +15,16 @@ import {
   RouteBadge,
   RouteLine,
 } from '../components/ui';
-import { formatVnd } from '../components/ui/format';
+import { formatDate, formatTime, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
 
 /** Khoá sắp xếp — "giờ" mặc định là giờ đi sớm nhất, "giá" có cả hai chiều. */
 type SortKey = 'time' | 'priceAsc' | 'priceDesc';
 
+// Nhãn ngắn để ba mục sắp xếp vừa một hàng trên màn 360px (Segmented không tự xuống dòng).
 const SORT_OPTIONS: { label: string; value: SortKey }[] = [
-  { label: 'Giờ đi sớm nhất', value: 'time' },
+  { label: 'Sớm nhất', value: 'time' },
   { label: 'Giá thấp → cao', value: 'priceAsc' },
   { label: 'Giá cao → thấp', value: 'priceDesc' },
 ];
@@ -248,7 +248,7 @@ export default function TripSearchResultPage() {
         subtitle={
           <>
             <RouteLine from={origin} to={destination} size="sm" />
-            {date && ` · ${dayjs(date).format('DD/MM/YYYY')}`}
+            {date && ` · ${formatDate(date)}`}
           </>
         }
         onBack={() => navigate('/route-lookup')}
@@ -330,10 +330,10 @@ export default function TripSearchResultPage() {
                   className="tabular-nums"
                   style={{ fontSize: 18, fontWeight: 700, color: token.colorTextHeading }}
                 >
-                  {dayjs(trip.departureTime).format('HH:mm')}
+                  {formatTime(trip.departureTime)}
                 </div>
                 <Text className="tabular-nums" type="secondary" style={{ fontSize: 13 }}>
-                  {trip.arrivalTime ? `đến ${dayjs(trip.arrivalTime).format('HH:mm')}` : '—'}
+                  {trip.arrivalTime ? `đến ${formatTime(trip.arrivalTime)}` : '—'}
                 </Text>
               </div>
 
@@ -369,9 +369,10 @@ export default function TripSearchResultPage() {
                 </div>
               </div>
 
-              {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. */}
+              {/* Vào màn hình chọn ghế — hết chỗ thì khoá nút. KHÔNG dùng type="primary":
+                  mỗi chuyến một tấm biển, để primary là N nút xanh tranh nhau; nút primary
+                  của luồng mua nằm ở bước kế tiếp (màn chọn ghế). */}
               <Button
-                type="primary"
                 disabled={trip.seatsRemaining === 0}
                 onClick={() => openSeatMap(trip)}
               >

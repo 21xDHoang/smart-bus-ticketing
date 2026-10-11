@@ -1,7 +1,7 @@
 import { CheckCircleFilled, ClockCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import StatusTag from './ui/StatusTag';
-import dayjs from 'dayjs';
+import { formatDateTime } from './ui/format';
 import type { Dayjs } from 'dayjs';
 import type { Ticket } from '../api/ticketApi';
 import { getTicketStatus, TICKET_STATUS_META } from './ticketStatus';
@@ -24,11 +24,11 @@ function buildTooltip(
   departureTime: string,
   usedAt: string | null,
 ): string {
-  const departure = dayjs(departureTime).format('HH:mm DD/MM/YYYY');
+  const departure = formatDateTime(departureTime);
 
   switch (status) {
     case 'Used':
-      return usedAt ? `Đã soát vé lúc ${dayjs(usedAt).format('HH:mm DD/MM/YYYY')}` : 'Vé đã được soát vé';
+      return usedAt ? `Đã soát vé lúc ${formatDateTime(usedAt)}` : 'Vé đã được soát vé';
     case 'Expired':
       return `Chuyến đã khởi hành lúc ${departure} — vé không còn dùng được`;
     case 'Cancelled':

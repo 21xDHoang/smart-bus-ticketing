@@ -126,11 +126,15 @@ export default function MyTicketsPage() {
       <PageCard
         toolbar={
           <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Segmented<Filter>
-              options={FILTER_OPTIONS}
-              value={filter}
-              onChange={(value) => setFilter(value as Filter)}
-            />
+            {/* Năm lựa chọn lọc chiếm ~430px — tràn khổ 360px. Bọc trong khung cuộn ngang:
+                Segmented không tự xuống dòng nên Space wrap không cứu được. */}
+            <div style={{ maxWidth: '100%', minWidth: 0, overflowX: 'auto' }}>
+              <Segmented<Filter>
+                options={FILTER_OPTIONS}
+                value={filter}
+                onChange={(value) => setFilter(value as Filter)}
+              />
+            </div>
             {state.status === 'done' && (
               <Text type="secondary">
                 Hiển thị <Text strong>{filtered.length}</Text> vé

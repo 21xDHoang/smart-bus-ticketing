@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -19,6 +19,7 @@ import type { RouteLookupResult } from '../api/routeLookupApi';
 import type { AppError } from '../api/axiosClient';
 import { EmptyState, PageCard, PageHeader, RouteBadge } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
+import { rememberRecentRoute } from '../components/ui/recentRoutes';
 
 const { Text } = Typography;
 
@@ -29,15 +30,36 @@ interface SearchFormValues {
   date: Dayjs;
 }
 
+/** Dữ liệu điều hướng do trang chủ gửi sang (chip "tuyến gần đây") — có thể thiếu hoặc sai kiểu. */
+interface RouteLookupPrefill {
+  origin?: string;
+  destination?: string;
+}
+
+function readPrefill(state: unknown): RouteLookupPrefill {
+  if (typeof state !== 'object' || state === null) return {};
+  const value = state as Record<string, unknown>;
+  return {
+    origin: typeof value.origin === 'string' ? value.origin : undefined,
+    destination: typeof value.destination === 'string' ? value.destination : undefined,
+  };
+}
+
 // Màn hình tra cứu tuyến (User Story 1): form "điểm đi - điểm đến - ngày" + kết quả tuyến.
 // Đây là màn hình cho HÀNH KHÁCH — không giới hạn vai trò như các màn hình quản trị.
 // Phần "Component autocomplete chọn trạm dừng" (Hoàng Văn Thịnh) là task riêng, nên ở đây
 // điểm đi/điểm đến dùng Input thường và kết quả hiển thị gọn ở mức tuyến. Mỗi tuyến có nút
 // "Xem chuyến" mở màn "Kết quả tìm kiếm" (Nguyễn Đình Băng) — mang theo routeId để màn đó
 // gọi thẳng GET /trips/search (công khai, không cần đăng nhập).
+//
+// Trang chủ gửi sang cặp điểm đi – điểm đến qua `location.state` (chip "tuyến gần đây") →
+// điền sẵn form, người dùng chỉ cần bấm "Tìm tuyến". Mỗi lượt tìm CÓ kết quả được ghi nhớ
+// lại (recentRoutes.ts) để lần sau trang chủ gợi ý.
 export default function RouteLookupPage() {
   const [form] = Form.useForm<SearchFormValues>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefill = readPrefill(location.state);
   // Màu lấy từ token của theme chung — không viết hex tay trong màn hình.
   const { token } = theme.useToken();
 
@@ -67,6 +89,8 @@ export default function RouteLookupPage() {
       setResults(found);
       setLastCriteria({ destination: destination.trim(), date: date.format('YYYY-MM-DD') });
       setHasSearched(true);
+      // Chỉ ghi nhớ lượt tìm CÓ kết quả — tuyến không tồn tại mà gợi ý lại ở trang chủ là vô nghĩa.
+      if (found.length > 0) rememberRecentRoute(origin, destination);
     } catch (error) {
       const appError = error as AppError;
       message.error(appError.customMessage || 'Không thể tra cứu tuyến.');
@@ -101,7 +125,11 @@ export default function RouteLookupPage() {
         <Form<SearchFormValues>
           form={form}
           layout="vertical"
-          initialValues={{ date: dayjs() }}
+          initialValues={{
+            date: dayjs(),
+            origin: prefill.origin ?? '',
+            destination: prefill.destination ?? '',
+          }}
           onFinish={handleSearch}
         >
           <Space size="large" wrap align="start" style={{ display: 'flex', width: '100%' }}>
@@ -172,7 +200,9 @@ export default function RouteLookupPage() {
                         Giá từ {formatVnd(route.minPrice)}
                       </Text>
                     )}
-                    <Button type="primary" block onClick={() => handleViewTrips(route)}>
+                    {/* Nút này KHÔNG dùng type="primary": màn chỉ có một hành động nổi bật là
+                        "Tìm tuyến"; để primary ở đây sẽ thành mỗi thẻ một nút xanh tranh nhau. */}
+                    <Button block onClick={() => handleViewTrips(route)}>
                       Xem chuyến
                     </Button>
                   </Space>

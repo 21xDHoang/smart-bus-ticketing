@@ -1,8 +1,9 @@
 /* Reset tối thiểu + biến CSS cho hai chế độ sáng/tối.
 
    Biến `--app-*` là cầu nối cho những chỗ KHÔNG dùng được token antd: CSS thô và thuộc
-   tính style nội tuyến cần đổi theo chế độ (ví dụ màu chữ footer trong App.tsx). Bảng màu
-   đầy đủ nằm ở src/components/ui/theme.ts — sửa màu thì sửa ở đó rồi đồng bộ các biến này. */
+   tính style nội tuyến cần đổi theo chế độ (ví dụ màu chữ footer trong
+   components/layout/AppFooter.tsx). Bảng màu đầy đủ nằm ở src/components/ui/theme.ts —
+   sửa màu thì sửa ở đó rồi đồng bộ các biến này. */
 
 *,
 *::before,
@@ -20,6 +21,11 @@ body,
 
 :root {
   color-scheme: light;
+
+  /* Khung điều hướng: header dính trên cùng, thanh tab đáy trên điện thoại.
+     Chiều cao đổi ở media query bên dưới; component đọc qua var() để khỏi lệch nhau. */
+  --app-header-h: 64px;
+  --app-bottom-nav-h: 56px;
 
   --app-bg: #f6f8fb;
   --app-surface: #ffffff;
@@ -70,7 +76,14 @@ body {
   outline-offset: 2px;
 }
 
-/* Màn hẹp: giấu tên người dùng cạnh avatar trong header để nhường chỗ cho menu. */
+/* Màn hẹp: header thấp lại cho đỡ chật; giấu tên người dùng cạnh avatar để nhường
+   chỗ cho logo và nút chế độ sáng/tối. */
+@media (max-width: 768px) {
+  :root {
+    --app-header-h: 56px;
+  }
+}
+
 @media (max-width: 640px) {
   .app-user-name {
     display: none;

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Avatar, Card, Input, Select, Space, Table, Typography, message } from 'antd';
+import { Avatar, Input, Select, Space, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import { fetchAdminUsers, getRoleMeta, ROLE_OPTIONS } from '../api/adminUserApi';
 import type { AdminUser, RoleCode } from '../api/adminUserApi';
 import type { AppError } from '../api/axiosClient';
-import { StatusTag } from '../components/ui';
+import { FilterBar, PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDate } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
 /** Trạng thái tài khoản dùng cho bộ lọc — ánh xạ sang AdminUser.isActive. */
 type StatusFilter = 'active' | 'locked';
@@ -65,7 +66,7 @@ const columns: TableProps<AdminUser>['columns'] = [
     dataIndex: 'createdAt',
     key: 'createdAt',
     width: 130,
-    render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY'),
+    render: (createdAt: string) => formatDate(createdAt),
   },
 ];
 
@@ -110,60 +111,55 @@ const AdminUserListPage = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          Danh sách người dùng
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          Quản lý tài khoản Admin, Quản lý, Tài xế và Hành khách trong hệ thống.
-        </Typography.Text>
-      </div>
+      <PageHeader
+        title="Danh sách người dùng"
+        subtitle="Quản lý tài khoản Admin, Quản lý, Tài xế và Hành khách trong hệ thống."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Input.Search
-            allowClear
-            placeholder="Tìm theo tên, SĐT hoặc email"
-            style={{ width: 300 }}
-            onSearch={(value) => {
-              setSearch(value.trim());
-              setPage(1);
-            }}
-            onChange={(e) => {
-              // Bấm nút X (allowClear) thì cập nhật ngay, không cần chờ Enter.
-              if (!e.target.value) {
-                setSearch('');
+      <PageCard
+        toolbar={
+          <FilterBar>
+            <Input.Search
+              allowClear
+              placeholder="Tìm theo tên, SĐT hoặc email"
+              style={{ width: 300 }}
+              onSearch={(value) => {
+                setSearch(value.trim());
                 setPage(1);
-              }
-            }}
-          />
+              }}
+              onChange={(e) => {
+                // Bấm nút X (allowClear) thì cập nhật ngay, không cần chờ Enter.
+                if (!e.target.value) {
+                  setSearch('');
+                  setPage(1);
+                }
+              }}
+            />
 
-          <Select<RoleCode>
-            allowClear
-            placeholder="Vai trò"
-            style={{ width: 180 }}
-            options={ROLE_OPTIONS}
-            onChange={(value) => {
-              setRole(value ?? undefined);
-              setPage(1);
-            }}
-          />
+            <Select<RoleCode>
+              allowClear
+              placeholder="Vai trò"
+              style={{ width: 180 }}
+              options={ROLE_OPTIONS}
+              onChange={(value) => {
+                setRole(value ?? undefined);
+                setPage(1);
+              }}
+            />
 
-          <Select<StatusFilter>
-            allowClear
-            placeholder="Trạng thái"
-            style={{ width: 180 }}
-            options={STATUS_OPTIONS}
-            onChange={(value) => {
-              setStatus(value ?? undefined);
-              setPage(1);
-            }}
-          />
-        </Space>
-
+            <Select<StatusFilter>
+              allowClear
+              placeholder="Trạng thái"
+              style={{ width: 180 }}
+              options={STATUS_OPTIONS}
+              onChange={(value) => {
+                setStatus(value ?? undefined);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
+      >
         <Table<AdminUser>
           rowKey="id"
           columns={columns}
@@ -171,22 +167,19 @@ const AdminUserListPage = () => {
           loading={loading}
           scroll={{ x: 760 }}
           locale={{ emptyText: 'Không tìm thấy người dùng nào' }}
-          pagination={{
-            current: page,
+          pagination={tablePagination({
+            page,
             pageSize,
             total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: [10, 20, 50],
-            showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} người dùng`,
+            unitLabel: 'người dùng',
             onChange: (nextPage, nextPageSize) => {
               // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
               setPage(nextPageSize !== pageSize ? 1 : nextPage);
               setPageSize(nextPageSize);
             },
-          }}
+          })}
         />
-      </Card>
+      </PageCard>
     </div>
   );
 };

@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
-  Card,
   Col,
   DatePicker,
-  Empty,
   Form,
   InputNumber,
   Popconfirm,
@@ -27,7 +25,13 @@ import type { BusOption } from '../api/busApi';
 import { generateTrips } from '../api/tripGenerateApi';
 import type { GenerateTripsPayload, GenerateTripsResult } from '../api/tripGenerateApi';
 import type { AppError } from '../api/axiosClient';
-import { StatusTag } from '../components/ui';
+import {
+  EmptyState,
+  PageCard,
+  PageHeader,
+  StatusTag,
+} from '../components/ui';
+import { formatDateTime, formatTime } from '../components/ui/format';
 
 // -----------------------------------------------------------------------------
 // Màn hình cấu hình tần suất chạy xe theo khung giờ trong ngày — story 13
@@ -46,7 +50,7 @@ import { StatusTag } from '../components/ui';
 // hộp xác nhận).
 // -----------------------------------------------------------------------------
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /** Múi giờ Việt Nam cố định — cùng lối TripSchedulePage / TripScheduleFormModal. */
 const VIETNAM_OFFSET = '+07:00';
@@ -237,7 +241,7 @@ export default function TripFrequencyPage() {
       key: 'departureTime',
       width: 160,
       render: (departureTime: string) => (
-        <span style={{ fontWeight: 600 }}>{dayjs(departureTime).format('DD/MM/YYYY HH:mm')}</span>
+        <span style={{ fontWeight: 600 }}>{formatDateTime(departureTime)}</span>
       ),
     },
     {
@@ -245,8 +249,7 @@ export default function TripFrequencyPage() {
       dataIndex: 'arrivalTime',
       key: 'arrivalTime',
       width: 100,
-      render: (arrivalTime: string | null) =>
-        arrivalTime ? dayjs(arrivalTime).format('HH:mm') : '—',
+      render: (arrivalTime: string | null) => (arrivalTime ? formatTime(arrivalTime) : '—'),
     },
     {
       title: 'Biển số xe',
@@ -275,22 +278,14 @@ export default function TripFrequencyPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Cấu hình tần suất chạy xe
-        </Title>
-        <Text type="secondary">
-          Chọn tuyến, ngày áp dụng, khung giờ và tần suất — hệ thống sinh các chuyến cách đều
-          nhau trong khung giờ đó.
-        </Text>
-      </div>
+      <PageHeader
+        title="Cấu hình tần suất chạy xe"
+        subtitle="Chọn tuyến, ngày áp dụng, khung giờ và tần suất — hệ thống sinh các chuyến cách đều nhau trong khung giờ đó."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
+      <PageCard>
         {!loadingOptions && routes.length === 0 ? (
-          <Empty description="Chưa có tuyến nào để cấu hình tần suất." />
+          <EmptyState description="Chưa có tuyến nào để cấu hình tần suất." />
         ) : (
           <>
             {!loadingOptions && buses.length === 0 && (
@@ -484,36 +479,34 @@ export default function TripFrequencyPage() {
             </div>
           </>
         )}
-      </Card>
+      </PageCard>
 
       {result && resultInfo && (
-        <Card
-          variant="borderless"
-          style={{
-            marginTop: 24,
-            borderRadius: 16,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
-          }}
-          title={`Đã sinh ${result.total} chuyến`}
-          extra={
-            <Text type="secondary">
-              {resultInfo.routeLabel ? `${resultInfo.routeLabel} · ` : ''}
-              ngày {resultInfo.date.format('DD/MM/YYYY')}
-            </Text>
-          }
-        >
-          <Table<Trip>
-            rowKey="id"
-            columns={columns}
-            dataSource={result.items}
-            scroll={{ x: 600 }}
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: false,
-              showTotal: (total, range) => `Hiển thị ${range[0]}–${range[1]} trên ${total} chuyến`,
-            }}
-          />
-        </Card>
+        // PageCard không có prop style — bọc ngoài để giữ khoảng cách với khối trên.
+        <div style={{ marginTop: 24 }}>
+          <PageCard
+            title={`Đã sinh ${result.total} chuyến`}
+            extra={
+              <Text type="secondary">
+                {resultInfo.routeLabel ? `${resultInfo.routeLabel} · ` : ''}
+                ngày {resultInfo.date.format('DD/MM/YYYY')}
+              </Text>
+            }
+          >
+            <Table<Trip>
+              rowKey="id"
+              columns={columns}
+              dataSource={result.items}
+              scroll={{ x: 600 }}
+              pagination={{
+                pageSize: 20,
+                showSizeChanger: false,
+                showTotal: (total, range) =>
+                  `Hiển thị ${range[0]}–${range[1]} trên ${total} chuyến`,
+              }}
+            />
+          </PageCard>
+        </div>
       )}
     </div>
   );

@@ -454,7 +454,14 @@ export default function SeatMapPage() {
                     <Text type="secondary">Tổng tiền tạm tính</Text>
                     <div
                       className="tabular-nums"
-                      style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}
+                      style={{
+                        fontSize: 22,
+                        fontWeight: 700,
+                        // colorPrimaryText (không phải colorPrimary) — màu primary làm CHỮ trên
+                        // nền tối chỉ đạt ~2.85:1; token *Text là biến thể đã tính đủ tương phản
+                        // ở cả hai chế độ.
+                        color: token.colorPrimaryText,
+                      }}
                     >
                       {totalPrice != null ? formatVnd(totalPrice) : 'Chưa có giá'}
                     </div>

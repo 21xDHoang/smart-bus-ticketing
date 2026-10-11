@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  DatePicker,
-  Empty,
-  Select,
-  Space,
-  Table,
-  Typography,
-  message,
-} from 'antd';
+import { Button, DatePicker, Select, Table, message } from 'antd';
 import type { TableProps } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -20,9 +11,15 @@ import {
 } from '../api/tripApi';
 import type { Trip, TripRouteOption, TripStatus } from '../api/tripApi';
 import type { AppError } from '../api/axiosClient';
-import { PageCard, StatusTag } from '../components/ui';
-
-const { Title, Text } = Typography;
+import {
+  EmptyState,
+  FilterBar,
+  PageCard,
+  PageHeader,
+  StatusTag,
+} from '../components/ui';
+import { formatTime } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
 /**
  * Múi giờ Việt Nam (UTC+7), cố định quanh năm — không đổi theo DST.
@@ -58,7 +55,7 @@ const COLUMNS: TableProps<Trip>['columns'] = [
     key: 'departureTime',
     width: 130,
     render: (departureTime: string) => (
-      <span style={{ fontWeight: 600 }}>{dayjs(departureTime).format('HH:mm')}</span>
+      <span style={{ fontWeight: 600 }}>{formatTime(departureTime)}</span>
     ),
   },
   {
@@ -66,7 +63,7 @@ const COLUMNS: TableProps<Trip>['columns'] = [
     dataIndex: 'arrivalTime',
     key: 'arrivalTime',
     width: 110,
-    render: (arrivalTime: string | null) => (arrivalTime ? dayjs(arrivalTime).format('HH:mm') : '—'),
+    render: (arrivalTime: string | null) => (arrivalTime ? formatTime(arrivalTime) : '—'),
   },
   {
     title: 'Biển số xe',
@@ -166,60 +163,60 @@ export default function TripListByDayPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Danh sách chuyến theo ngày
-        </Title>
-        <Text type="secondary">
-          Xem các chuyến xe của một tuyến trong ngày, lọc theo trạng thái.
-        </Text>
-      </div>
+      <PageHeader
+        title="Danh sách chuyến theo ngày"
+        subtitle="Xem các chuyến xe của một tuyến trong ngày, lọc theo trạng thái."
+      />
 
-      <PageCard>
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="Chọn tuyến"
-            style={{ minWidth: 280 }}
-            value={selectedRouteId}
-            loading={loadingRoutes}
-            onChange={(value) => {
-              setSelectedRouteId(value);
-              setPage(1);
-            }}
-            options={routes.map((route) => ({
-              value: route.id,
-              label: `${route.code} — ${route.name}`,
-            }))}
-          />
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+                Làm mới
+              </Button>
+            }
+          >
+            <Select
+              placeholder="Chọn tuyến"
+              style={{ minWidth: 280 }}
+              value={selectedRouteId}
+              loading={loadingRoutes}
+              onChange={(value) => {
+                setSelectedRouteId(value);
+                setPage(1);
+              }}
+              options={routes.map((route) => ({
+                value: route.id,
+                label: `${route.code} — ${route.name}`,
+              }))}
+            />
 
-          <DatePicker
-            value={date}
-            format="DD/MM/YYYY"
-            allowClear={false}
-            onChange={(value) => {
-              setDate(value ?? dayjs());
-              setPage(1);
-            }}
-          />
+            <DatePicker
+              value={date}
+              format="DD/MM/YYYY"
+              allowClear={false}
+              onChange={(value) => {
+                setDate(value ?? dayjs());
+                setPage(1);
+              }}
+            />
 
-          <Select<TripStatus>
-            allowClear
-            placeholder="Trạng thái"
-            style={{ width: 200 }}
-            options={TRIP_STATUS_OPTIONS}
-            onChange={(value) => {
-              setStatus(value ?? undefined);
-              setPage(1);
-            }}
-          />
-
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Làm mới
-          </Button>
-        </Space>
-
+            <Select<TripStatus>
+              allowClear
+              placeholder="Trạng thái"
+              style={{ width: 200 }}
+              options={TRIP_STATUS_OPTIONS}
+              onChange={(value) => {
+                setStatus(value ?? undefined);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
+      >
         {!selectedRouteId && !loadingRoutes ? (
-          <Empty description="Chưa có tuyến nào để xem chuyến." />
+          <EmptyState description="Chưa có tuyến nào để xem chuyến." />
         ) : (
           <Table<Trip>
             rowKey="id"
@@ -228,20 +225,17 @@ export default function TripListByDayPage() {
             loading={loading}
             scroll={{ x: 560 }}
             locale={{ emptyText: 'Không có chuyến nào trong ngày này' }}
-            pagination={{
-              current: page,
+            pagination={tablePagination({
+              page,
               pageSize,
               total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              pageSizeOptions: [10, 20, 50],
-              showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} chuyến`,
+              unitLabel: 'chuyến',
               onChange: (nextPage, nextPageSize) => {
                 // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
                 setPage(nextPageSize !== pageSize ? 1 : nextPage);
                 setPageSize(nextPageSize);
               },
-            }}
+            })}
           />
         )}
       </PageCard>

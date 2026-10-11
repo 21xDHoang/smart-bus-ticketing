@@ -22,6 +22,11 @@ export function formatDateTime(iso: string): string {
   return dayjs(iso).format('DD/MM/YYYY HH:mm');
 }
 
+/** Ngày + giờ + giây: DD/MM/YYYY HH:mm:ss — dùng cho nhật ký hoạt động (nhiều thao tác trong cùng một phút). */
+export function formatDateTimeSeconds(iso: string): string {
+  return dayjs(iso).format('DD/MM/YYYY HH:mm:ss');
+}
+
 /** Giờ trong ngày: HH:mm. */
 export function formatTime(iso: string): string {
   return dayjs(iso).format('HH:mm');

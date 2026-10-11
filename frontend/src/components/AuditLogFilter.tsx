@@ -65,7 +65,8 @@ export default function AuditLogFilter({
   extra,
 }: AuditLogFilterProps) {
   return (
-    <div style={{ marginBottom: 16 }}>
+    // Không tự thêm lề dưới: PageCard đã bọc toolbar bằng lề 16px, thêm nữa là lề đôi.
+    <div>
       <Space wrap size="middle">
         <RangePicker
           // Ép định dạng để `dateStrings` chắc chắn là `yyyy-MM-dd` — đúng thứ hợp đồng

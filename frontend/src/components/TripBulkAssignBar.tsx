@@ -61,7 +61,7 @@ export default function TripBulkAssignBar({
         marginBottom: 16,
         padding: '10px 16px',
         background: token.colorPrimaryBg,
-        borderRadius: 10,
+        borderRadius: token.borderRadius,
       }}
     >
       <Text>

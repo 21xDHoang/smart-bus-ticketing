@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Avatar, Space, Table, Typography } from 'antd';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import { PhoneOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts';
 import { fetchMyLoginActivity, getAuditActionMeta } from '../api/auditLogApi';
 import type { AuditLog } from '../api/auditLogApi';
 import { getRoleMeta } from '../api/adminUserApi';
-import { PageCard, StatusTag } from '../components/ui';
+import { PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDateTimeSeconds } from '../components/ui/format';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // Cột của bảng "Nhật ký đăng nhập gần nhất" — chỉ hiển thị, không phân trang (vài dòng).
 const columns: TableProps<AuditLog>['columns'] = [
@@ -18,7 +18,7 @@ const columns: TableProps<AuditLog>['columns'] = [
     dataIndex: 'createdAt',
     key: 'createdAt',
     width: 190,
-    render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY HH:mm:ss'),
+    render: (createdAt: string) => formatDateTimeSeconds(createdAt),
   },
   {
     title: 'Hành động',
@@ -77,12 +77,10 @@ const ProfilePage = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Trang cá nhân
-        </Title>
-        <Text type="secondary">Thông tin tài khoản và nhật ký đăng nhập gần nhất của bạn.</Text>
-      </div>
+      <PageHeader
+        title="Trang cá nhân"
+        subtitle="Thông tin tài khoản và nhật ký đăng nhập gần nhất của bạn."
+      />
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <PageCard>

@@ -14,7 +14,6 @@ import {
 } from 'antd';
 import type { UploadFile } from 'antd';
 import { CheckCircleFilled, EnvironmentOutlined, UploadOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import feedbackSubmitApi from '../api/feedbackSubmitApi';
 import type {
   FeedbackTripOption,
@@ -25,9 +24,10 @@ import type {
 import { FEEDBACK_STATUS_META, FEEDBACK_TYPE_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackSubmitApi';
 import type { AppError } from '../api/axiosClient';
 import SatisfactionRating from '../components/SatisfactionRating';
-import { PageCard, StatusTag } from '../components/ui';
+import { PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDateTime } from '../components/ui/format';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 /** Giá trị của form gửi phản ánh — `tripId`/`rating` bỏ trống nghĩa là không chọn. */
 interface FeedbackFormValues {
@@ -109,14 +109,10 @@ export default function FeedbackSubmitPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Gửi phản ánh
-        </Title>
-        <Text type="secondary">
-          Gửi khiếu nại hoặc đánh giá chất lượng chuyến đi để nhà xe cải thiện dịch vụ.
-        </Text>
-      </div>
+      <PageHeader
+        title="Gửi phản ánh"
+        subtitle="Gửi khiếu nại hoặc đánh giá chất lượng chuyến đi để nhà xe cải thiện dịch vụ."
+      />
 
       <PageCard>
         <Form<FeedbackFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
@@ -141,8 +137,8 @@ export default function FeedbackSubmitPage() {
               optionFilterProp="label"
               options={trips.map((trip) => ({
                 value: trip.id,
-                label: `${trip.routeCode} — ${trip.routeName} · ${dayjs(trip.departureTime).format(
-                  'HH:mm DD/MM/YYYY',
+                label: `${trip.routeCode} — ${trip.routeName} · ${formatDateTime(
+                  trip.departureTime,
                 )}`,
               }))}
               suffixIcon={<EnvironmentOutlined />}
@@ -194,7 +190,9 @@ export default function FeedbackSubmitPage() {
           <PageCard
             title={
               <Space>
-                <CheckCircleFilled style={{ color: token.colorSuccess }} />
+                {/* colorSuccessText — bản dành cho chữ/nét mảnh của màu success; colorSuccess
+                    gốc chỉ đạt ~2.5–3.3:1 khi làm icon nhỏ. */}
+                <CheckCircleFilled style={{ color: token.colorSuccessText }} />
                 <span>Gửi phản ánh thành công</span>
               </Space>
             }
@@ -216,9 +214,9 @@ export default function FeedbackSubmitPage() {
                   key: 'trip',
                   label: 'Chuyến xe',
                   children: submittedTrip
-                    ? `${submittedTrip.routeCode} — ${submittedTrip.routeName} · ${dayjs(
+                    ? `${submittedTrip.routeCode} — ${submittedTrip.routeName} · ${formatDateTime(
                         submittedTrip.departureTime,
-                      ).format('HH:mm DD/MM/YYYY')}`
+                      )}`
                     : 'Không kèm chuyến',
                 },
                 {
@@ -243,8 +241,8 @@ export default function FeedbackSubmitPage() {
             </Paragraph>
 
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Gửi lúc {dayjs(submitted.createdAt).format('HH:mm DD/MM/YYYY')}. Nhà xe sẽ phản hồi
-              trong thời gian sớm nhất.
+              Gửi lúc {formatDateTime(submitted.createdAt)}. Nhà xe sẽ phản hồi trong thời gian
+              sớm nhất.
             </Text>
 
             <Button style={{ marginTop: 16 }} onClick={handleSubmitAnother}>

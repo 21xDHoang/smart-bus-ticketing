@@ -3,7 +3,7 @@ import { Alert, Form, Modal, Select, Typography } from 'antd';
 import type { BusOption } from '../api/busApi';
 import { findConflictingTrips } from '../api/tripApi';
 import type { Trip } from '../api/tripApi';
-import dayjs from 'dayjs';
+import { formatDateTime, formatTime } from './ui/format';
 
 const { Text } = Typography;
 
@@ -114,8 +114,7 @@ export default function TripAssignmentModal({
     >
       {trip && (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          Chuyến khởi hành lúc{' '}
-          <Text strong>{dayjs(trip.departureTime).format('HH:mm — DD/MM/YYYY')}</Text> · xe hiện
+          Chuyến khởi hành lúc <Text strong>{formatDateTime(trip.departureTime)}</Text> · xe hiện
           tại: <Text strong>{trip.busLicensePlate}</Text>
         </Typography.Paragraph>
       )}
@@ -129,8 +128,8 @@ export default function TripAssignmentModal({
             <ul style={{ margin: 0, paddingLeft: 20 }}>
               {conflictingTrips.map((other) => (
                 <li key={other.id}>
-                  Chuyến khởi hành {dayjs(other.departureTime).format('HH:mm — DD/MM/YYYY')}
-                  {other.arrivalTime ? ` → đến ${dayjs(other.arrivalTime).format('HH:mm')}` : ''}
+                  Chuyến khởi hành {formatDateTime(other.departureTime)}
+                  {other.arrivalTime ? ` → đến ${formatTime(other.arrivalTime)}` : ''}
                 </li>
               ))}
             </ul>
