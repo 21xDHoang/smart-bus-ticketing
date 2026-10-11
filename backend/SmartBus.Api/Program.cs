@@ -433,6 +433,15 @@ builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<ITicketPdfService, TicketPdfService>();
 builder.Services.AddScoped<ITicketEmailService, TicketEmailService>();
 
+// Vé điện tử của chính người gọi: GET /api/tickets/me và GET /api/tickets/{id} (US 4).
+// Task "API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự xem vé của mình, quyền sở hữu
+// kiểm ngay trong truy vấn theo userId (vé của người khác trả 404 chứ không 403). Đặt ngay sau
+// khối PDF/email vé vì cùng story 4 và cùng bảng Tickets: phát hành (service nội bộ), soạn vé
+// (Hoàng) và tra cứu vé của tôi (endpoint này) đứng liền một mạch.
+builder.Services.AddScoped<IMyTicketsService, MyTicketsService>();
+
 // Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
 // sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).
 // Task "Đồng bộ trạng thái ghế realtime giữa các phiên (SignalR)" (dòng 11 Sprint 3) — Hoàng Văn Thịnh.
