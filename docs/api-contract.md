@@ -3585,7 +3585,7 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > | Dòng | Việc | Người | Trạng thái |
 > |---|---|---|---|
 > | 50 | Migrate bảng `Vouchers`, `VoucherUsages` | Vàng Thị Dăm | ✅ Đã merge (PR #144) — còn bước `database update` trên CSDL chung |
-> | 51 | API CRUD voucher | Trần Trung Hiếu | Chưa làm — dùng chung bề mặt `api/vouchers` |
+> | 51 | API CRUD voucher | Trần Trung Hiếu | ✅ mục "CRUD voucher" dưới — dùng chung bề mặt `api/vouchers` |
 > | **52** | **API kiểm tra và áp dụng voucher vào đơn hàng** | **Nguyễn Duy Kiên** | ✅ mục này |
 > | 53 | Validate điều kiện voucher: thời gian, tuyến, giá trị đơn tối thiểu | Phùng Duy Hoàng | ⚠️ **gộp vào dòng 52** — xem dưới |
 > | **54** | **API thống kê hiệu quả voucher** | **Nguyễn Duy Kiên** | ✅ mục "GET /vouchers/statistics" dưới đây |
@@ -3663,10 +3663,11 @@ GHI THÊM: **không** `updatedAt` (A4), **không** `isDeleted`.
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
 | POST | `/vouchers/validate` | *"API kiểm tra và áp dụng voucher vào đơn hàng"* — Nguyễn Duy Kiên (dòng 52 + 53) | ✅ mục này |
-| GET | `/vouchers` | Danh sách + lọc (màn quản trị — `voucherApi.list`) | Chưa làm — dòng 51 (Hiếu) |
-| POST | `/vouchers` | Thêm voucher | Chưa làm — dòng 51 (Hiếu) |
-| PUT | `/vouchers/{id}` | Sửa voucher | Chưa làm — dòng 51 (Hiếu) |
-| PATCH | `/vouchers/{id}/status` | Bật/tắt áp dụng | Chưa làm — dòng 51 (Hiếu) |
+| GET | `/vouchers` | Danh sách + lọc (màn quản trị — `voucherApi.list`) | ✅ mục "CRUD voucher" dưới |
+| GET | `/vouchers/{id}` | Chi tiết một voucher | ✅ mục "CRUD voucher" dưới |
+| POST | `/vouchers` | Thêm voucher | ✅ mục "CRUD voucher" dưới |
+| PUT | `/vouchers/{id}` | Sửa voucher | ✅ mục "CRUD voucher" dưới |
+| PATCH | `/vouchers/{id}/status` | Bật/tắt áp dụng | ✅ mục "CRUD voucher" dưới |
 | GET | `/vouchers/statistics` | *"API thống kê hiệu quả voucher"* — Nguyễn Duy Kiên (dòng 54) | ✅ mục này |
 | — | *áp dụng vào đơn* | Phần "áp dụng" của dòng 52 | ✅ **không phải endpoint riêng** — service nội bộ, `POST /payments` gọi, xem dưới |
 
@@ -3679,6 +3680,112 @@ Bốn dòng của dòng 51, `POST /vouchers/validate` và `GET /vouchers/statist
 đoạn literal (`validate`, `statistics`); nới `:guid` thành `{id}` trần là `statistics` bị nuốt và
 endpoint chi tiết nhận một chuỗi không phải GUID — đúng cái bẫy mà `{id:guid}` của
 `/admin/feedbacks` đang tránh (xem "Thống kê phản ánh").
+
+#### CRUD voucher — năm endpoint của dòng 51
+
+> Task *"API CRUD voucher: mã, loại giảm giá, điều kiện áp dụng, số lượng"* (dòng 51, US 18,
+> Sprint 3, Trần Trung Hiếu). Năm endpoint này dùng chung bề mặt `api/vouchers` với `validate`
+> (Kiên) và `statistics` (Kiên) — mỗi task một controller, cùng lối `api/seat-holds`.
+>
+> Quyền: `ManagerOrAbove` — màn quản lý voucher là của nhân viên Marketing/quản lý, cùng quyền
+> `GET /vouchers/statistics`. Không có token → 401; thiếu quyền → 403.
+
+Response của mọi endpoint ở đây là **`VoucherResponse`** — đúng bảng trường entity `Voucher` ở trên,
+trừ `routeId` kèm thêm `routeCode`/`routeName` (nối sẵn tên tuyến để màn quản lý hiển thị, null khi
+voucher dùng cho mọi tuyến — cùng lối `GET /vouchers/statistics`):
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | `string` (GUID) | |
+| `code` | `string` | Đã chuẩn hoá **CHỮ HOA** |
+| `name` | `string` | |
+| `discountType` | `string` | `'Percent'` / `'FixedAmount'` |
+| `discountValue` | `number` | |
+| `minOrderValue` | `number` | |
+| `maxDiscount` | `number \| null` | |
+| `routeId` / `routeCode` / `routeName` | `string \| null` | Điều kiện tuyến; null = mọi tuyến |
+| `quantity` / `usedCount` | `number` | `usedCount` do backend giữ — **không có trong request**, gửi lên cũng bị bỏ qua |
+| `validFrom` / `validUntil` | `string` | ISO 8601 (UTC) — tính CẢ hai đầu mút |
+| `status` | `string` | `'Active'` / `'Inactive'` |
+| `createdAt` / `updatedAt` | `string` / `string \| null` | |
+
+##### `GET /vouchers` — danh sách + lọc + phân trang (màn quản trị)
+
+| Tham số | Mô tả |
+|---|---|
+| `search` | Tìm theo mã hoặc tên — không phân biệt hoa thường. Bỏ trống = tất cả |
+| `status` | `'Active'` / `'Inactive'`. Bỏ trống = cả hai |
+| `page` | Mặc định 1 |
+| `pageSize` | Mặc định 10, tối đa 100 |
+
+Trả `{ items: VoucherResponse[], total, page, pageSize }` — `total` là tổng số dòng **khớp bộ lọc**
+(không phải số dòng trong `items`), sắp theo `createdAt` giảm dần (mới tạo trước). Giá trị `status`
+ngoài hai giá trị chốt → 400 (lỗi bind query).
+
+##### `GET /vouchers/{id}` — chi tiết một voucher
+
+Ràng buộc `{id:guid}` (xem 🔴 ngay trên). Không tồn tại → 404.
+
+##### `POST /vouchers` — tạo voucher
+
+```json
+// CreateVoucherRequest — body
+{
+  "code": "SUMMER10",
+  "name": "Giảm giá mùa hè 10%",
+  "discountType": "Percent",
+  "discountValue": 10,
+  "minOrderValue": 0,
+  "maxDiscount": 20000,
+  "routeId": null,
+  "quantity": 500,
+  "validFrom": "2026-10-12T00:00:00Z",
+  "validUntil": "2026-11-30T23:59:59Z"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `code` | ✅ | 2–20 ký tự. Chuẩn hoá `Trim().ToUpperInvariant()`. Trùng mã đã có (sau chuẩn hoá) → **409** |
+| `name` | ✅ | 1–200 ký tự |
+| `discountType` | ✅ | `'Percent'` / `'FixedAmount'` |
+| `discountValue` | ✅ | `Percent`: **1–100** · `FixedAmount`: **> 0** và ≤ 9.999.999.999,99 — sai theo kiểu → 400 kèm `errors.discountValue` |
+| `minOrderValue` | ❌ (mặc định 0) | 0 … 9.999.999.999,99 — so với tổng tiền TRƯỚC giảm |
+| `maxDiscount` | ❌ | Chỉ có nghĩa khi `Percent`; `FixedAmount` thì backend **ép null** (trần với số tiền cố định là khái niệm vô nghĩa). `Percent` mà gửi 0/âm → 400 kèm `errors.maxDiscount` (trần 0đ = vô hiệu hoá voucher) |
+| `routeId` | ❌ | Điều kiện tuyến: null = mọi tuyến. Tuyến không tồn tại → **404** (lỗi phía gọi — cùng lối `tripId` của `POST /vouchers/validate`) |
+| `quantity` | ✅ | ≥ 1 — tổng số lượt phát hành |
+| `validFrom` | ✅ | |
+| `validUntil` | ✅ | Phải **sau** `validFrom` (bằng nhau cũng bị từ chối — khoảng hiệu lực rỗng) → 400 kèm `errors.validUntil` |
+| `status` | — | **KHÔNG nhận** — voucher mới luôn `Active` (đổi trạng thái qua PATCH) |
+| `usedCount` | — | **KHÔNG nhận** — backend giữ, chỉ tăng khi tiền về (mục "Áp dụng voucher vào giao dịch") |
+
+Trả **201** + `VoucherResponse` (kèm header `Location`). Body sai khuôn → 400 `{ message, errors }`.
+
+##### `PUT /vouchers/{id}` — sửa voucher
+
+Cùng bảng ràng buộc của POST, thêm ba điều:
+
+- Không tồn tại → 404; trùng mã với voucher **khác** → 409.
+- `quantity` phải ≥ `usedCount` — hạ tổng lượt xuống dưới số đã tiêu thụ là dữ liệu tự mâu thuẫn
+  → 400 kèm `errors.quantity`.
+- `usedCount`/`status` trong body bị bỏ qua (đổi trạng thái qua PATCH). Sửa thành công thì
+  `updatedAt` được làm mới.
+
+##### `PATCH /vouchers/{id}/status` — bật/tắt áp dụng
+
+```json
+// UpdateVoucherStatusRequest — body
+{ "status": "Inactive" }
+```
+
+Bật/tắt là quyết định của người vận hành, KHÔNG phải trạng thái hiệu lực — voucher `Active` vẫn có
+thể chưa tới `validFrom`/đã quá `validUntil`/hết lượt, những thứ đó `POST /vouchers/validate` tự
+suy (xem `VoucherStatus`). Không tồn tại → 404; `status` ngoài hai giá trị → 400. Trả 200 +
+`VoucherResponse` đã đổi (kèm `updatedAt` mới).
+
+> 📌 **Màn quản lý voucher cần hiển thị "hết hạn"/"hết lượt"** thì tự suy từ `validUntil`/`quantity`
+> vs `usedCount` — backend không trả trạng thái thứ ba (xem `VoucherStatus`, không có
+> `Expired`/`OutOfStock`).
 
 #### `POST /vouchers/validate` — kiểm tra mã và tính số tiền giảm
 
