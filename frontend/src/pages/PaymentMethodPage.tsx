@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Alert, Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
+import dayjs from 'dayjs';
 import paymentApi from '../api/paymentApi';
 import type { PaymentMethodCode, PaymentMethodOption } from '../api/paymentApi';
 import type { AppError } from '../api/axiosClient';
+import seatHoldApi from '../api/seatHoldApi';
+import type { SeatHoldSession } from '../api/seatHoldApi';
+import seatHoldReleaseApi from '../api/seatHoldReleaseApi';
 import type { VoucherValidationResponse } from '../api/voucherApi';
 import { formatTime } from '../components/ui/format';
 import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader } from '../components/ui';
+import SeatHoldCountdown from '../components/SeatHoldCountdown';
+import SeatHoldConnectionNotice from '../components/SeatHoldConnectionNotice';
+import SeatHoldExpiryModal from '../components/SeatHoldExpiryModal';
+import { getSeatHoldTimeInfo } from '../components/seatHoldReminder';
+import { useSeatHoldAutoRelease } from '../components/useSeatHoldAutoRelease';
 import VoucherCodeInput from '../components/VoucherCodeInput';
 import VoucherDiscountSummary from '../components/VoucherDiscountSummary';
 
@@ -21,13 +30,21 @@ type Outcome =
 
 // Màn hình chọn phương thức thanh toán (User Story 6 "Cổng thanh toán", Sprint 4 — task của
 // Dương Thị Hạnh). Là bước tiếp theo của luồng tra cứu tuyến → kết quả tìm kiếm chuyến →
-// sơ đồ ghế: hành khách xem lại tóm tắt đặt vé và chọn kênh thanh toán. Backend chưa có
-// bảng Payments và chưa có endpoint thanh toán nên màn hình chạy dữ liệu giả (paymentApi.ts).
+// sơ đồ ghế: hành khách xem lại tóm tắt đặt vé và chọn kênh thanh toán. Bảng Payments đã
+// migrate nhưng endpoint thanh toán chưa có (chờ controller của Hiếu/Kiên) nên bước trả tiền
+// còn dùng dữ liệu giả (paymentApi.ts).
 //
 // Nhận ngữ cảnh qua query string, cùng lối SeatMapPage: `tripId` (bắt buộc) + `routeName`,
 // `departureTime`, `busType`, `seats` (số ghế cách nhau bằng dấu phẩy) và `total` (tổng tiền
 // VND) để hiển thị. Các trường ngoài `tripId` đều là ngữ cảnh do màn trước truyền sang —
 // thiếu thì vẫn mở được màn hình, chỉ là phần tóm tắt hiện chỗ trống tương ứng.
+//
+// Phiên giữ chỗ (US 3): màn chọn ghế ĐÃ giữ ghế trước khi chuyển sang đây — nhận `sessionCode`
+// qua query kèm cả phiên qua state điều hướng để đếm ngược có ngay không phải chờ mạng (F5 thì
+// tra lại bằng GET /seat-holds/{sessionCode}). Suốt bước thanh toán, cụm giữ chỗ đứng trên đầu
+// màn hình: banner đếm ngược + banner mất kết nối, modal cảnh báo sắp hết hạn kèm nút gia hạn,
+// và tự động nhả ghế + quay về chọn ghế khi đồng hồ về 0. Khách chủ động "Quay về chọn ghế"
+// thì nhả phiên luôn, không đợi job nền.
 export default function PaymentMethodPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -90,6 +107,82 @@ export default function PaymentMethodPage() {
     };
   }, [reloadToken]);
 
+  // ── Phiên giữ chỗ (US 3) ──────────────────────────────────────────────────────────────────
+  // Màn chọn ghế đã tạo phiên (POST /seat-holds) rồi chuyển sang đây kèm sessionCode. Ưu tiên
+  // phiên đi kèm state điều hướng để đếm ngược có ngay khung hình đầu; mở thẳng / tải lại
+  // trang (F5) thì không còn state — tra lại phiên theo mã.
+  const location = useLocation();
+  const sessionCode = searchParams.get('sessionCode')?.trim() ?? '';
+  const routedSession =
+    (location.state as { seatHold?: SeatHoldSession } | null)?.seatHold ?? null;
+
+  const [session, setSession] = useState<SeatHoldSession | null>(routedSession);
+  const [holdLookupFailed, setHoldLookupFailed] = useState(false);
+  const [expiryDismissed, setExpiryDismissed] = useState(false);
+  const [holdNow, setHoldNow] = useState(() => dayjs());
+
+  useEffect(() => {
+    if (!sessionCode || session) return;
+
+    let cancelled = false;
+
+    seatHoldApi
+      .getSession(sessionCode)
+      .then((fetched) => {
+        if (!cancelled) setSession(fetched);
+      })
+      .catch(() => {
+        if (!cancelled) setHoldLookupFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionCode, session]);
+
+  // Đồng hồ 1 giây dùng CHUNG cho banner đếm ngược và modal (truyền xuống qua prop `now`) —
+  // mỗi mảnh tự tick sẽ lệch nhau một nhịp. Chỉ chạy khi phiên còn đang giữ.
+  useEffect(() => {
+    if (session?.status !== 'Holding') return;
+
+    const timer = window.setInterval(() => setHoldNow(dayjs()), 1000);
+    return () => window.clearInterval(timer);
+  }, [session]);
+
+  const holdInfo = session ? getSeatHoldTimeInfo(session, holdNow) : null;
+
+  // Đường về màn chọn ghế, giữ đúng ngữ cảnh chuyến (SeatMapPage đọc `busType` cho phần đầu
+  // trang) — dùng chung cho lượt tự nhả khi hết hạn và nút "Quay về chọn ghế".
+  const seatMapParams = new URLSearchParams({ tripId });
+  if (routeName) seatMapParams.set('routeName', routeName);
+  if (departureTime) seatMapParams.set('departureTime', departureTime);
+  if (busType) seatMapParams.set('busType', busType);
+  const seatMapUrl = `/seat-map?${seatMapParams.toString()}`;
+
+  // Hết hạn (đồng hồ về 0, hoặc phiên đã khép lại từ trước): hook tự nhả ghế best-effort rồi
+  // gọi callback đúng MỘT lần — đưa khách về chọn ghế kèm lời báo thay vì để đứng lại.
+  useSeatHoldAutoRelease(session, () => {
+    message.warning('Phiên giữ chỗ đã hết hạn — ghế đã được nhả. Hãy chọn lại ghế.');
+    navigate(seatMapUrl, { replace: true });
+  });
+
+  // "Quay về chọn ghế" khi khách chủ động bỏ phiên — đúng mục đích "khách huỷ thao tác" của
+  // endpoint release: nhả ngay cho người sau, không đợi job nền. Best-effort: lỗi không chặn
+  // việc rời trang (job nền vẫn tự nhả khi hết hạn).
+  const handleBackToSeats = () => {
+    if (session) {
+      seatHoldReleaseApi.release(session.sessionCode).catch(() => {
+        // Bỏ qua: nhả best-effort, không đổi kết cục của người dùng.
+      });
+    }
+    navigate(seatMapUrl, { replace: true });
+  };
+
+  // Modal cảnh báo bật khi phiên sắp hết hạn hoặc đã hết hạn; `expiryDismissed` xuống lại
+  // false sau mỗi lượt gia hạn để cửa sổ mới còn nhắc được khi lại gần hết giờ.
+  const expiryOpen =
+    session !== null && holdInfo !== null && !expiryDismissed && holdInfo.phase !== 'Holding';
+
   const handlePay = async () => {
     if (!selectedCode) return;
 
@@ -149,6 +242,30 @@ export default function PaymentMethodPage() {
           .join(' · ')}
         onBack={() => navigate(-1)}
       />
+
+      {/* Cụm giữ chỗ (US 3) — đứng trên đầu suốt bước thanh toán. Banner đếm ngược và banner
+          mất kết nối tự ẩn khi phiên khép lại (Confirmed/Released). */}
+      {session && (
+        <Space direction="vertical" size={8} style={{ display: 'flex', marginBottom: 16 }}>
+          <SeatHoldCountdown session={session} now={holdNow} />
+          <SeatHoldConnectionNotice session={session} onResync={setSession} />
+        </Space>
+      )}
+
+      {holdLookupFailed && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Chưa kiểm tra được phiên giữ chỗ"
+          description="Không tra được phiên giữ chỗ theo mã. Nếu đã quá giờ giữ, ghế có thể đã được nhả — hãy kiểm tra lại trước khi thanh toán."
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleBackToSeats}>
+              Quay về chọn ghế
+            </Button>
+          }
+        />
+      )}
 
       <Row gutter={[16, 16]}>
         {/* Danh sách phương thức thanh toán — mỗi phương thức là một thẻ chọn được. */}
@@ -226,6 +343,20 @@ export default function PaymentMethodPage() {
           </div>
         </Col>
       </Row>
+
+      {/* Modal sắp / đã hết hạn kèm nút gia hạn (r21) — chỉ mở khi thật sự cần; khách đóng thì
+          `expiryDismissed` giữ yên cho tới lượt gia hạn kế tiếp hoặc khi quay lại chọn ghế. */}
+      <SeatHoldExpiryModal
+        open={expiryOpen}
+        session={session}
+        now={holdNow}
+        onClose={() => setExpiryDismissed(true)}
+        onBackToSeats={handleBackToSeats}
+        onExtended={(renewed) => {
+          setSession(renewed);
+          setExpiryDismissed(false);
+        }}
+      />
     </div>
   );
 }

@@ -10,9 +10,10 @@ import type { SeatHoldSession } from './seatHoldApi';
 // mở (task *"Tự động nhả ghế và quay về trang chọn ghế khi hết hạn"* — Dương Thị Hạnh): trả
 // ghế về sơ đồ ngay, không đợi job nền SeatHoldExpiryBackgroundService quét.
 //
-// File này là module API RIÊNG của task nhả ghế — không sửa seatHoldApi.ts (file dùng chung
-// của Băng, đang có getSession/extend). Khi Băng nối luồng giữ chỗ vào màn sơ đồ ghế, chỉ cần
-// đổi cờ USE_MOCK_DATA ở đây sang false để gọi endpoint thật.
+// File này là module API RIÊNG của task nhả ghế — nhánh `api` chỉ có một endpoint. Phiên để
+// nhả nay là phiên THẬT: màn chọn ghế tạo qua POST /seat-holds (`create` trong seatHoldApi.ts)
+// trước khi chuyển sang bước thanh toán; phiên đó được nhả khi khách chủ động quay về chọn
+// ghế hoặc khi đồng hồ đếm ngược về 0.
 //
 // Nhả là thao tác KẾT THÚC nên idempotent (hợp đồng): gọi lại bao nhiêu lần vẫn 200, kể cả khi
 // phiên đã Expired/Released do job nền quét trước vài giây. Vì vậy chỗ gọi nhả không cần lo lỗi
@@ -26,10 +27,10 @@ export interface SeatHoldReleaseApi {
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì luồng giữ chỗ chưa nối vào màn
-// sơ đồ ghế (chưa có phiên thật để nhả); cùng trạng thái với seatHoldApi.ts. Sau khi Băng nối
-// luồng thì đổi xuống `false` — nhánh `api` đã viết sẵn đúng hợp đồng.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Để `false` — luồng giữ chỗ đã nối vào màn chọn ghế
+// (phiên thật sinh từ POST /seat-holds nên có phiên thật để nhả); cùng trạng thái với
+// seatHoldApi.ts. Đổi lên `true` khi cần phát triển giao diện offline (không chạy API).
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
