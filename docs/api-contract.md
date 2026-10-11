@@ -3173,7 +3173,7 @@ trả về.
 | `origin` / `destination` | `string` | Tên điểm đầu / điểm cuối |
 | `departureTime` | `string` | Giờ khởi hành (ISO 8601) — căn cứ suy "hết hạn": chuyến đã đi mà chưa soát |
 | `seatNumber` | `string` | Số ghế đã chọn |
-| `boardingStopName` / `alightingStopName` | `string` | Tên trạm lên/xuống — lưu để hiển thị, không phải khoá nghiệp vụ (A8.1) |
+| `boardingStopName` / `alightingStopName` | `string \| null` | Tên trạm lên/xuống — lưu để hiển thị, không phải khoá nghiệp vụ (A8.1). Null khi vé không có trạm lên/xuống (hai cột nguồn `BoardingStopId`/`AlightingStopId` vốn nullable — đổi từ bản chốt trước khi làm endpoint, xem ⚠️ dưới bảng Endpoints) |
 | `price` | `number` | Giá đã thanh toán (VND) — `numeric(12,2)` |
 | `status` | `string` | `"Paid"` / `"Used"` / `"Cancelled"` — do nghiệp vụ đặt (A3) |
 | `createdAt` | `string` | Thời điểm phát hành |
@@ -3183,9 +3183,66 @@ trả về.
 
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
-| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | Chưa làm — bảng có sau khi merge PR migration |
-| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | Chưa làm — bảng có sau khi merge PR migration |
+| GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | ✅ mục dưới |
+| GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | ✅ mục dưới — cùng task tra cứu vé của tôi |
 | — | *phát hành vé* | *"API phát hành vé điện tử sau khi thanh toán thành công"* — Trần Trung Hiếu | ⚠️ xem luồng dưới |
+
+⚠️ **Bảng trường Ticket (ở trên) đổi một dòng so với bản đã chốt:** `boardingStopName` và
+`alightingStopName` chuyển thành `string | null`. Bản chốt cũ ghi `string` trong khi hai cột nguồn
+(`Tickets.BoardingStopId`, `AlightingStopId`) vốn nullable (vé mua ở màn chọn ghế có thể không chọn
+trạm cụ thể — lên ở bến đầu). Response trả null khi vé không có trạm lên/xuống; FE hiển thị rỗng
+khi null. Đổi để contract khớp sự thật của entity thay vì ép service bịa một tên trạm.
+
+#### `GET /tickets/me` — danh sách vé của chính người gọi
+
+> Task *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* (dòng 45, US 4, Sprint 3, Trần Trung
+> Hiếu). Hai endpoint này dùng chung bề mặt `api/tickets` với các task soát vé của Sprint sau — mỗi
+> task một controller, cùng lối `api/seat-holds` và `api/vouchers`.
+
+- `[Authorize]` trần (không policy): hành khách tự xem vé của mình — RBAC của dự án chỉ có
+  AdminOnly/ManagerOrAbove, không có policy Passenger. Phạm vi "của tôi" nằm ở truy vấn theo
+  `UserId`, không có tham số nào để dò vé người khác.
+- Trả về **mảng trần** — không bọc `{ items, total }`, không phân trang: một người chỉ có vài chục
+  vé (cùng lý do `GET /monthly-passes/me` và `GET /feedbacks/me`). Không có vé nào → **mảng rỗng**
+  (200) — "chưa có vé" là câu trả lời, không phải lỗi.
+- **Không hứa thứ tự** — màn "Vé của tôi" tự sắp lại (vé chưa khởi hành trước, rồi mới tới vé đã
+  đi / đã huỷ — xem `MyTicketsPage.sortByDeparture`).
+- Không nhận tham số lọc trạng thái: màn "Vé của tôi" lọc `Paid`/`Used`/`Cancelled` ngay trên
+  client (bản nháp `ticketApi.ts` cũng gọi không tham số). "Hết hạn" không phải trạng thái lưu —
+  FE suy từ `departureTime`, đúng như `TicketStatus` đã chốt.
+- Không có token → 401. Không có nhánh lỗi nào khác.
+
+```json
+// 200 — mảng trần, mỗi phần tử đúng bảng trường "Hình dạng Ticket" ở trên
+[
+  {
+    "id": "b7c1d2e3-0000-0000-0000-000000000000",
+    "code": "SBT1:…",
+    "routeCode": "01",
+    "routeName": "Bến xe Mỹ Đình — Bến xe Gia Lâm",
+    "origin": "Bến xe Mỹ Đình",
+    "destination": "Bến xe Gia Lâm",
+    "departureTime": "2026-10-12T01:00:00Z",
+    "seatNumber": "A12",
+    "boardingStopName": null,
+    "alightingStopName": null,
+    "price": 12000,
+    "status": "Paid",
+    "createdAt": "2026-10-10T08:30:00Z",
+    "usedAt": null
+  }
+]
+```
+
+#### `GET /tickets/{id}` — một vé của chính người gọi
+
+Màn "Mã QR vé" mở trực tiếp một vé trong danh sách bằng id trên URL (`/my-tickets/{id}/qr`).
+
+- `[Authorize]` trần; vé không tồn tại **hoặc thuộc người khác** → **404** (không phải 403 — không
+  để lộ vé nào đang tồn tại, cùng lối `GET /seat-holds/{sessionCode}` và `GET /feedbacks/me/{id}`).
+- Ràng buộc `{id:guid}` — cùng lý do các bề mặt có đoạn literal (`validate`, `statistics`): id
+  không phải GUID thì routing trả 404 chứ không chui vào endpoint.
+- Response là một đối tượng Ticket đúng bảng trường ở trên.
 
 ### Phát hành vé sau khi thanh toán — KHÔNG phải endpoint riêng
 
