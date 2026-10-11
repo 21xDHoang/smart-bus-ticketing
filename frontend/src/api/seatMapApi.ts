@@ -54,8 +54,11 @@ export interface SeatMapSeat {
 
   status: SeatStatus;
 
-  /** Giá ghế này (VND) — đã gồm phụ trội VIP (DỰ KIẾN, xem ghi chú đầu file). */
-  price: number;
+  /**
+   * Giá ghế này (VND) = `pricePerSeat` + phụ trội VIP khi có nguồn. `null` khi tuyến chưa cấu
+   * hình giá vé — khớp `price: number | null` của `GET /trips/{id}/seats` (docs/api-contract.md).
+   */
+  price: number | null;
 }
 
 /** Kết quả GET /trips/{tripId}/seats — toàn bộ sơ đồ ghế của một chuyến. */

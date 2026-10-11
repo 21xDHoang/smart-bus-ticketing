@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Col, Row, Space, Tag, Typography, theme } from 'antd';
+import { CloseOutlined } from '@ant-design/icons';
 import seatMapApi from '../api/seatMapApi';
 import type { SeatMapSeat, TripSeatMap } from '../api/seatMapApi';
 import type { AppError } from '../api/axiosClient';
@@ -81,10 +82,12 @@ export default function SeatMapPage() {
       );
   }, [seatMap, selectedSeatIds]);
 
-  const totalPrice = useMemo(
-    () => selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
-    [selectedSeats],
-  );
+  // Tổng tiền tạm tính. Ghế nào chưa có giá (tuyến chưa cấu hình giá vé) thì không thể cộng —
+  // trả null để hiển thị "Chưa có giá" thay vì âm thầm coi ghế đó bằng 0.
+  const totalPrice = useMemo(() => {
+    if (selectedSeats.some((seat) => seat.price == null)) return null;
+    return selectedSeats.reduce((sum, seat) => sum + (seat.price ?? 0), 0);
+  }, [selectedSeats]);
 
   const busType = seatMap?.busType ?? fallbackBusType;
 
@@ -112,7 +115,7 @@ export default function SeatMapPage() {
     // thay `paymentCode` giả bằng mã thanh toán thật do backend tạo giao dịch trả về.
     const params = new URLSearchParams({
       paymentCode: `demo-${tripId}`,
-      amount: String(totalPrice),
+      amount: String(totalPrice ?? 0),
       seats: labels,
     });
 
@@ -208,27 +211,49 @@ export default function SeatMapPage() {
                 </Text>
               ) : (
                 <>
-                  <Space size={[8, 8]} wrap style={{ marginBottom: 16 }}>
-                    {selectedSeats.map((seat) => (
-                      <Tag
+                  <div style={{ marginBottom: 16 }}>
+                    {selectedSeats.map((seat, index) => (
+                      <div
                         key={seat.id}
-                        closable
-                        color="blue"
-                        onClose={(e) => {
-                          e.preventDefault();
-                          toggleSeat(seat);
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '8px 0',
+                          borderBottom:
+                            index === selectedSeats.length - 1
+                              ? 'none'
+                              : `1px solid ${token.colorBorderSecondary}`,
                         }}
                       >
-                        {seat.seatNumber}
-                        {seat.seatType === 'Vip' ? ' · VIP' : ''}
-                      </Tag>
+                        <Space size={6}>
+                          <Text strong>{seat.seatNumber}</Text>
+                          {seat.seatType === 'Vip' && (
+                            <Tag color="gold" style={{ marginInlineEnd: 0 }}>
+                              VIP
+                            </Tag>
+                          )}
+                        </Space>
+
+                        <Space size={4}>
+                          <Text>{seat.price != null ? formatVnd(seat.price) : 'Chưa có giá'}</Text>
+                          <Button
+                            type="text"
+                            size="small"
+                            aria-label={`Bỏ chọn ghế ${seat.seatNumber}`}
+                            icon={<CloseOutlined />}
+                            onClick={() => toggleSeat(seat)}
+                          />
+                        </Space>
+                      </div>
                     ))}
-                  </Space>
+                  </div>
 
                   <div style={{ marginBottom: 16 }}>
                     <Text type="secondary">Tổng tiền tạm tính</Text>
                     <div style={{ fontSize: 22, fontWeight: 700, color: token.colorPrimary }}>
-                      {formatVnd(totalPrice)}
+                      {totalPrice != null ? formatVnd(totalPrice) : 'Chưa có giá'}
                     </div>
                   </div>
                 </>
