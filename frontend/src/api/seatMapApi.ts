@@ -3,27 +3,17 @@ import axiosClient from './axiosClient';
 // -----------------------------------------------------------------------------
 // API sơ đồ ghế — nối với nhóm endpoint của User Story 2 "Chọn vị trí ghế" (Sprint 3).
 //
-// Backend CHƯA có endpoint "lấy sơ đồ ghế theo chuyến + trạng thái từng ghế" — task của
-// Trần Trung Hiếu, hợp đồng chưa vào docs/api-contract.md. Nhưng Dăm ĐÃ migrate xong bảng
-// (nhánh feature/2-migrate-seats-seatlayouts-seatholds, docs/26-csdl-so-do-ghe.md), nên kiểu
-// dưới đây bám theo đúng cột thật của entity để sau chỉ đổi cờ USE_MOCK_DATA:
-//   Seat:   Id, SeatNumber, Floor, RowIndex, ColumnIndex, SeatType (Standard|Vip)
-//   SeatLayout: NumberOfFloors, TotalSeats, BusType (mẫu của một LOẠI xe)
-//   SeatHold: (TripId, SeatId) + Status Holding → trạng thái "đang giữ" của ghế
+// Endpoint GET /trips/{id}/seats có trên main (TripSeatMapController — Trần Trung Hiếu, story 2)
+// và hợp đồng đã vào docs/api-contract.md (mục "GET /trips/{id}/seats") — đó là nguồn duy nhất
+// cho hình dạng dữ liệu; kiểu dưới đây bám đúng hợp đồng. Hai điểm đáng nhớ:
+//   • pricePerSeat / vipSurcharge / price là NULLABLE — thiếu giá là trạng thái dữ liệu bình
+//     thường (tuyến chưa cấu hình giá, phụ trội VIP chưa có nguồn), không phải lỗi.
+//   • "Paid" chỉ xuất hiện khi có vé bán cho chuyến — hợp đồng chốt sẵn hình dạng ba trạng thái
+//     ngay từ bây giờ để màn hình ghép được mà không phải sửa hợp đồng lần nữa.
 //
 // Trạng thái ghế (Available/Held/Paid) là SUY RA theo CHUYẾN từ SeatHolds + Tickets — không
-// phải cột của Seats. Giá ghế (price) là DỰ KIẾN: phần "giá theo ghế + tổng tiền tạm tính"
-// là task của Dương Thị Hạnh, chưa có hợp đồng fare VIP.
-//
-// Hợp đồng DỰ KIẾN — GET /trips/{tripId}/seats (công khai cho hành khách):
-//   {
-//     "tripId": "…",
-//     "busType": "Hyundai County 29 chỗ",
-//     "floors": 1,
-//     "pricePerSeat": 8000,      // giá phổ thông của chuyến (VND)
-//     "vipSurcharge": 5000,      // phụ trội ghế VIP (VND) — DỰ KIẾN
-//     "seats": [ … ]
-//   }
+// phải cột của Seats (docs/26-csdl-so-do-ghe.md): trạng thái là của CẶP (chuyến, ghế). Cột tĩnh
+// (SeatNumber, Floor, RowIndex, ColumnIndex, SeatType) vẫn nằm trên entity Seat.
 // -----------------------------------------------------------------------------
 
 /** Trạng thái một ghế trong một chuyến — suy ra từ SeatHolds/Tickets, chưa chốt tên chính thức. */
@@ -66,8 +56,15 @@ export interface TripSeatMap {
   tripId: string;
   busType: string;
   floors: number;
-  pricePerSeat: number;
-  vipSurcharge: number;
+  /**
+   * Giá vé phổ thông của tuyến (VND) — cùng nguồn và cùng nghĩa với `price` của
+   * GET /trips/search. Tuyến chưa cấu hình giá → null.
+   */
+  pricePerSeat: number | null;
+
+  /** Phụ trội ghế VIP (VND) — chưa có nguồn lưu con số này nên hôm nay luôn null. */
+  vipSurcharge: number | null;
+
   seats: SeatMapSeat[];
 }
 
@@ -77,9 +74,10 @@ export interface SeatMapApi {
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` vì endpoint chưa có (xem ghi chú
-// đầu file); sau khi Hiếu chốt hợp đồng thì đổi xuống `false` — nhánh `api` đã viết sẵn.
-const USE_MOCK_DATA = true;
+// Cờ chuyển giữa dữ liệu giả và API thật. Đã bật API thật — GET /trips/{id}/seats có trên main
+// (xem ghi chú đầu file). Nhánh giả giữ lại làm đường lùi khi cần dựng giao diện lúc mất
+// mạng; đổi cờ này thành `true` là quay lại được.
+const USE_MOCK_DATA = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
