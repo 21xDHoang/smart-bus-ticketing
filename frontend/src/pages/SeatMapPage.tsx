@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Col, Row, Space, Tag, Typography, message, theme } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
+import seatHoldApi from '../api/seatHoldApi';
 import seatMapApi from '../api/seatMapApi';
 import type { SeatMapSeat, TripSeatMap } from '../api/seatMapApi';
 import type { AppError } from '../api/axiosClient';
@@ -32,6 +33,12 @@ type Outcome =
 // Hoàng Văn Thịnh, hook ở ../realtime/useSeatMapRealtime.ts): nhận sự kiện "sơ đồ ghế vừa đổi"
 // thì gọi lại endpoint sơ đồ ghế trong nền — không bật loading, và nếu ghế khách đang chọn vừa
 // bị phiên khác giữ / mua thì bỏ khỏi lựa chọn kèm một lời báo.
+//
+// Bấm "Tiếp tục đặt vé": gọi POST /seat-holds giữ CẢ NHÓM ghế vừa chọn trong 10 phút (US 3,
+// SeatHoldApi.create) rồi mới chuyển sang màn chọn phương thức thanh toán kèm `sessionCode` —
+// từ đây phiên giữ chỗ theo khách suốt bước thanh toán (đếm ngược, gia hạn, tự nhả khi hết hạn
+// ở PaymentMethodPage). Ghế vừa bị phiên khác giữ thì backend trả 409 kèm số ghế: hiện nguyên
+// văn máy chủ rồi đồng bộ lại sơ đồ (ghế vừa mất tự rời khỏi lựa chọn).
 export default function SeatMapPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -46,6 +53,9 @@ export default function SeatMapPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [selectedSeatIds, setSelectedSeatIds] = useState<ReadonlySet<string>>(new Set());
   const [hoveredSeatId, setHoveredSeatId] = useState<string | null>(null);
+
+  // Đang gọi POST /seat-holds — chặn bấm hai lần và hiện loading trên nút "Tiếp tục đặt vé".
+  const [creatingHold, setCreatingHold] = useState(false);
 
   useEffect(() => {
     if (!tripId) return;
@@ -218,20 +228,44 @@ export default function SeatMapPage() {
     });
   };
 
-  const handleContinue = () => {
-    const labels = selectedSeats.map((seat) => seat.seatNumber).join(', ');
+  // Bấm "Tiếp tục đặt vé": GIỮ GHẾ trước rồi mới sang bước thanh toán (US 3 — giữ chỗ 10 phút
+  // trong lúc khách thao tác thanh toán). Ghế gửi lên theo `seat.id`; `seatNumber` chỉ để hiển
+  // thị. Ghế vừa bị phiên khác giữ thì backend trả 409 kèm số ghế vướng: hiện nguyên văn máy
+  // chủ rồi đồng bộ lại sơ đồ — syncFromServer tự bỏ ghế đã mất khỏi lựa chọn kèm lời báo.
+  const handleContinue = async () => {
+    if (selectedSeats.length === 0 || creatingHold) return;
 
-    // Sang màn hình chờ kết quả thanh toán (US 6, Sprint 3 — task của Nguyễn Đình Băng).
-    // Đây là lối tắt DEMO để chạm được màn hình chờ ngay khi các bước trung gian (giữ chỗ của
-    // Kiên/Thịnh/Hạnh, chọn phương thức thanh toán của Hạnh) chưa nối xong. Khi các bước đó có,
-    // thay `paymentCode` giả bằng mã thanh toán thật do backend tạo giao dịch trả về.
-    const params = new URLSearchParams({
-      paymentCode: `demo-${tripId}`,
-      amount: String(totalPrice ?? 0),
-      seats: labels,
-    });
+    setCreatingHold(true);
+    try {
+      const hold = await seatHoldApi.create({
+        tripId,
+        seatIds: selectedSeats.map((seat) => seat.id),
+      });
 
-    navigate(`/payment-waiting?${params.toString()}`);
+      // Sang màn chọn phương thức thanh toán (US 6, task của Hạnh) kèm `sessionCode` — phiên
+      // giữ chỗ theo khách suốt bước thanh toán. Ghế lấy từ `hold.seatNumbers` (thứ tự chuẩn
+      // của máy chủ) thay vì nhãn cục bộ để hai bên không lệch nhau.
+      const params = new URLSearchParams({
+        tripId,
+        sessionCode: hold.sessionCode,
+        seats: hold.seatNumbers.join(', '),
+      });
+      if (routeName) params.set('routeName', routeName);
+      if (departureTime) params.set('departureTime', departureTime);
+      if (busType) params.set('busType', busType);
+
+      // Ghế chưa có giá thì KHÔNG truyền `total` — thà để màn sau hiện thiếu còn hơn âm thầm
+      // coi bằng 0.
+      if (totalPrice != null) params.set('total', String(totalPrice));
+
+      navigate(`/payment?${params.toString()}`, { state: { seatHold: hold } });
+    } catch (err) {
+      const appError = err as AppError;
+      message.error(appError.customMessage || 'Không thể giữ ghế. Vui lòng thử lại.');
+      syncFromServer();
+    } finally {
+      setCreatingHold(false);
+    }
   };
 
   // Chưa có tripId → không có chuyến nào để vẽ sơ đồ. Mời quay lại luồng tra cứu.
@@ -389,6 +423,7 @@ export default function SeatMapPage() {
               <Button
                 type="primary"
                 block
+                loading={creatingHold}
                 disabled={selectedSeats.length === 0}
                 onClick={handleContinue}
               >
