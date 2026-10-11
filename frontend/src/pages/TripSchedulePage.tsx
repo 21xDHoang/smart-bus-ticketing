@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Button,
-  Card,
-  DatePicker,
-  Empty,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Typography,
-  message,
-} from 'antd';
+import { Button, DatePicker, Popconfirm, Select, Space, Table, message } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -30,9 +19,15 @@ import {
 import type { BusOption, CreateTripPayload, UpdateTripPayload } from '../api/tripScheduleApi';
 import type { AppError } from '../api/axiosClient';
 import TripScheduleFormModal from '../components/TripScheduleFormModal';
-import { StatusTag } from '../components/ui';
-
-const { Title, Text } = Typography;
+import {
+  EmptyState,
+  FilterBar,
+  PageCard,
+  PageHeader,
+  StatusTag,
+} from '../components/ui';
+import { formatDateTime, formatTime } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
 /** Múi giờ Việt Nam cố định — cùng lối dayBounds của TripListByDayPage. */
 const VIETNAM_OFFSET = '+07:00';
@@ -191,9 +186,7 @@ export default function TripSchedulePage() {
       key: 'departureTime',
       width: 150,
       render: (departureTime: string) => (
-        <span style={{ fontWeight: 600 }}>
-          {dayjs(departureTime).format('DD/MM/YYYY HH:mm')}
-        </span>
+        <span style={{ fontWeight: 600 }}>{formatDateTime(departureTime)}</span>
       ),
     },
     {
@@ -201,8 +194,7 @@ export default function TripSchedulePage() {
       dataIndex: 'arrivalTime',
       key: 'arrivalTime',
       width: 110,
-      render: (arrivalTime: string | null) =>
-        arrivalTime ? dayjs(arrivalTime).format('HH:mm') : '—',
+      render: (arrivalTime: string | null) => (arrivalTime ? formatTime(arrivalTime) : '—'),
     },
     {
       title: 'Biển số xe',
@@ -259,72 +251,73 @@ export default function TripSchedulePage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Quản lý lịch trình
-        </Title>
-        <Text type="secondary">Thêm, sửa và huỷ chuyến xe của từng tuyến theo ngày.</Text>
-      </div>
+      <PageHeader
+        title="Quản lý lịch trình"
+        subtitle="Thêm, sửa và huỷ chuyến xe của từng tuyến theo ngày."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="Chọn tuyến"
-            style={{ minWidth: 280 }}
-            value={selectedRouteId}
-            loading={loadingRoutes}
-            onChange={(value) => {
-              setSelectedRouteId(value);
-              setPage(1);
-            }}
-            options={routes.map((route) => ({
-              value: route.id,
-              label: `${route.code} — ${route.name}`,
-            }))}
-          />
-
-          <DatePicker
-            value={date}
-            format="DD/MM/YYYY"
-            allowClear
-            placeholder="Lọc theo ngày"
-            onChange={(value) => {
-              // Bỏ chọn ngày (allowClear) = xem mọi ngày, không lọc khoảng.
-              setDate(value ?? null);
-              setPage(1);
-            }}
-          />
-
-          <Select<TripStatus>
-            allowClear
-            placeholder="Trạng thái"
-            style={{ width: 200 }}
-            options={TRIP_STATUS_OPTIONS}
-            onChange={(value) => {
-              setStatus(value ?? undefined);
-              setPage(1);
-            }}
-          />
-
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Làm mới
-          </Button>
-
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!selectedRouteId}
-            onClick={openCreate}
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <>
+                <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+                  Làm mới
+                </Button>
+                {/* Nút primary duy nhất của màn hình. */}
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  disabled={!selectedRouteId}
+                  onClick={openCreate}
+                >
+                  Thêm chuyến
+                </Button>
+              </>
+            }
           >
-            Thêm chuyến
-          </Button>
-        </Space>
+            <Select
+              placeholder="Chọn tuyến"
+              style={{ minWidth: 280 }}
+              value={selectedRouteId}
+              loading={loadingRoutes}
+              onChange={(value) => {
+                setSelectedRouteId(value);
+                setPage(1);
+              }}
+              options={routes.map((route) => ({
+                value: route.id,
+                label: `${route.code} — ${route.name}`,
+              }))}
+            />
 
+            <DatePicker
+              value={date}
+              format="DD/MM/YYYY"
+              allowClear
+              placeholder="Lọc theo ngày"
+              onChange={(value) => {
+                // Bỏ chọn ngày (allowClear) = xem mọi ngày, không lọc khoảng.
+                setDate(value ?? null);
+                setPage(1);
+              }}
+            />
+
+            <Select<TripStatus>
+              allowClear
+              placeholder="Trạng thái"
+              style={{ width: 200 }}
+              options={TRIP_STATUS_OPTIONS}
+              onChange={(value) => {
+                setStatus(value ?? undefined);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
+      >
         {!selectedRouteId && !loadingRoutes ? (
-          <Empty description="Chưa có tuyến nào để quản lý lịch trình." />
+          <EmptyState description="Chưa có tuyến nào để quản lý lịch trình." />
         ) : (
           <Table<Trip>
             rowKey="id"
@@ -333,23 +326,20 @@ export default function TripSchedulePage() {
             loading={loading}
             scroll={{ x: 700 }}
             locale={{ emptyText: 'Không có chuyến nào khớp bộ lọc' }}
-            pagination={{
-              current: page,
+            pagination={tablePagination({
+              page,
               pageSize,
               total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              pageSizeOptions: [10, 20, 50],
-              showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} chuyến`,
+              unitLabel: 'chuyến',
               onChange: (nextPage, nextPageSize) => {
                 // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
                 setPage(nextPageSize !== pageSize ? 1 : nextPage);
                 setPageSize(nextPageSize);
               },
-            }}
+            })}
           />
         )}
-      </Card>
+      </PageCard>
 
       <TripScheduleFormModal
         open={modalOpen}

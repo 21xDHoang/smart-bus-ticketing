@@ -53,7 +53,7 @@ export default function StopMapPicker({ value, onChange }: StopMapPickerProps) {
     <div
       style={{
         height: 320,
-        borderRadius: 12,
+        borderRadius: token.borderRadius,
         overflow: 'hidden',
         border: `1px solid ${token.colorBorder}`,
       }}

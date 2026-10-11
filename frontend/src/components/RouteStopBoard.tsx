@@ -109,7 +109,7 @@ const RouteStopBoard = ({ stops, disabled, onReorder, onRemove }: RouteStopBoard
               gap: 12,
               padding: '10px 12px',
               marginBottom: 8,
-              borderRadius: 10,
+              borderRadius: token.borderRadius,
               border: `1px solid ${isOver ? token.colorPrimary : token.colorBorderSecondary}`,
               background: isDragging
                 ? token.colorFillQuaternary

@@ -9,6 +9,7 @@ import { TRIP_STATUS_META } from '../api/tripApi';
 import { SHIFT_STATE_META, deriveShiftSummary, describeShift, vietnamDayRange } from './driverShift';
 import RouteBadge from './ui/RouteBadge';
 import StatusTag from './ui/StatusTag';
+import { formatTime } from './ui/format';
 
 const { Text } = Typography;
 
@@ -43,7 +44,7 @@ const TRIP_COLUMNS: TableProps<DriverTrip>['columns'] = [
     dataIndex: 'departureTime',
     key: 'departureTime',
     width: 110,
-    render: (departureTime: string) => dayjs(departureTime).format('HH:mm'),
+    render: (departureTime: string) => formatTime(departureTime),
   },
   {
     title: 'Dự kiến tới',
@@ -51,7 +52,7 @@ const TRIP_COLUMNS: TableProps<DriverTrip>['columns'] = [
     key: 'arrivalTime',
     width: 120,
     render: (arrivalTime: string | null) =>
-      arrivalTime ? dayjs(arrivalTime).format('HH:mm') : <Text type="secondary">Chưa chốt</Text>,
+      arrivalTime ? formatTime(arrivalTime) : <Text type="secondary">Chưa chốt</Text>,
   },
   {
     title: 'Trạng thái',

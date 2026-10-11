@@ -170,11 +170,13 @@ export default function StopManagePage() {
       />
 
       <PageCard>
+        {/* 4 cột — riêng ô toạ độ 220px + hành động 140px đã tràn khổ 360px → cho bảng cuộn ngang. */}
         <Table<Stop>
           rowKey="id"
           columns={columns}
           dataSource={filtered}
           loading={loading}
+          scroll={{ x: 800 }}
           pagination={{ pageSize: 6, showSizeChanger: true }}
         />
       </PageCard>

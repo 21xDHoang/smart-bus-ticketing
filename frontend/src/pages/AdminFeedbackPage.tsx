@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   Button,
-  Card,
-  Col,
   Descriptions,
   Divider,
   Input,
   Modal,
-  Row,
   Segmented,
   Select,
   Space,
-  Spin,
-  Statistic,
   Table,
   theme,
   Typography,
@@ -26,13 +22,11 @@ import {
   SendOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import adminFeedbackApi from '../api/adminFeedbackApi';
 import type {
   AdminFeedbackDetail,
   AdminFeedbackListItem,
   AdminFeedbackListParams,
-  FeedbackRouteCount,
   FeedbackStatistics,
   FeedbackTripInfo,
 } from '../api/adminFeedbackApi';
@@ -46,15 +40,14 @@ import type { FeedbackReply, FeedbackStatus, FeedbackType } from '../api/feedbac
 import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
 import SatisfactionRating from '../components/SatisfactionRating';
-import { PageCard, RouteBadge, StatusTag } from '../components/ui';
+import { FilterBar, LoadingState, PageCard, PageHeader, RouteBadge, StatusTag } from '../components/ui';
+import { formatDateTime } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
 /** Số ký tự tối đa của một phản hồi — khớp ràng buộc `content` 1..2000 của backend. */
 const REPLY_MAX_LENGTH = 2000;
-
-/** Cỡ trang cho phép — hợp đồng chặn `pageSize` ngoài 1..100, ba mốc này đều nằm trong. */
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 /** Lựa chọn cho bộ lọc loại phản ánh — dựng từ FEEDBACK_TYPE_META để nhãn không lệch với cột bảng. */
 const TYPE_FILTER_OPTIONS = (Object.keys(FEEDBACK_TYPE_META) as FeedbackType[]).map((value) => ({
@@ -105,7 +98,7 @@ function TripInfo({ tripId }: { tripId: string | null }) {
         {trip.routeName}
       </div>
       <Text type="secondary" style={{ fontSize: 12 }}>
-        {dayjs(trip.departureTime).format('HH:mm DD/MM/YYYY')} · {trip.origin} → {trip.destination}
+        {formatDateTime(trip.departureTime)} · {trip.origin} → {trip.destination}
       </Text>
     </div>
   );
@@ -143,7 +136,7 @@ function ReplyThread({ replies }: { replies: FeedbackReply[] }) {
           <Space size={8}>
             <Text strong>{reply.userFullName ?? 'Không xác định'}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {dayjs(reply.createdAt).format('HH:mm DD/MM/YYYY')}
+              {formatDateTime(reply.createdAt)}
             </Text>
           </Space>
           <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{reply.content}</Paragraph>
@@ -165,71 +158,108 @@ function ReplyThread({ replies }: { replies: FeedbackReply[] }) {
  * vị trí trong mảng, để thứ tự backend có đổi cũng không gán nhầm số.
  */
 function StatisticsStrip({ stats }: { stats: FeedbackStatistics }) {
+  const { token } = theme.useToken();
+
   const countOfType = (type: FeedbackType) =>
     stats.byType.find((row) => row.type === type)?.count ?? 0;
 
-  const routeColumns: TableProps<FeedbackRouteCount>['columns'] = [
-    {
-      title: 'Tuyến',
-      key: 'route',
-      render: (_, record) => (
-        <Space size={6}>
-          <RouteBadge code={record.routeCode} size="sm" />
-          <span>{record.routeName}</span>
-        </Space>
-      ),
-    },
-    {
-      title: 'Số phản ánh',
-      dataIndex: 'count',
-      key: 'count',
-      width: 110,
-      align: 'right',
-    },
+  const figures = [
+    { label: 'Tổng phản ánh', value: stats.total },
+    { label: FEEDBACK_TYPE_META.Complaint.label, value: countOfType('Complaint') },
+    { label: FEEDBACK_TYPE_META.Compliment.label, value: countOfType('Compliment') },
+    { label: FEEDBACK_TYPE_META.Suggestion.label, value: countOfType('Suggestion') },
+    { label: 'Không kèm chuyến', value: stats.withoutTrip },
   ];
 
+  // Thanh dài nhất luôn đầy 100% — chia theo giá trị lớn nhất để so tương quan giữa các
+  // tuyến, tránh mọi thanh đều ngắn khi tuyến đứng đầu có ít phản ánh.
+  const maxRouteCount = Math.max(1, ...stats.byRoute.map((row) => row.count));
+
   return (
-    <Card
-      variant="borderless"
-      style={{ borderRadius: 16, marginBottom: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-    >
-      <Row gutter={[24, 16]}>
-        <Col flex="150px">
-          <Statistic title="Tổng phản ánh" value={stats.total} />
-        </Col>
-        <Col flex="150px">
-          <Statistic title={FEEDBACK_TYPE_META.Complaint.label} value={countOfType('Complaint')} />
-        </Col>
-        <Col flex="150px">
-          <Statistic title={FEEDBACK_TYPE_META.Compliment.label} value={countOfType('Compliment')} />
-        </Col>
-        <Col flex="150px">
-          <Statistic title={FEEDBACK_TYPE_META.Suggestion.label} value={countOfType('Suggestion')} />
-        </Col>
-        <Col flex="170px">
-          <Statistic title="Không kèm chuyến" value={stats.withoutTrip} />
-        </Col>
-      </Row>
+    // PageCard không có prop style — bọc ngoài để giữ khoảng cách với thẻ bảng bên dưới.
+    <div style={{ marginBottom: 16 }}>
+      <PageCard
+        title="Thống kê phản ánh"
+        extra={
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Số liệu toàn hệ thống — không đổi theo bộ lọc bên dưới.
+          </Text>
+        }
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 32px' }}>
+          {figures.map((figure) => (
+            <div key={figure.label} style={{ minWidth: 130 }}>
+              <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2 }}>
+                {figure.value}
+              </div>
+              <Text type="secondary">{figure.label}</Text>
+            </div>
+          ))}
+        </div>
 
-      <Divider style={{ margin: '16px 0 12px' }} />
+        <Divider style={{ margin: '16px 0 12px' }} />
 
-      <Text strong>Phản ánh theo tuyến</Text>
-      {stats.byRoute.length === 0 ? (
-        <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
-          Chưa có phản ánh nào gắn với chuyến của một tuyến.
-        </Paragraph>
-      ) : (
-        <Table<FeedbackRouteCount>
-          rowKey="routeId"
-          columns={routeColumns}
-          dataSource={stats.byRoute}
-          size="small"
-          pagination={false}
-          scroll={{ y: 180 }}
-          style={{ marginTop: 8 }}
-        />
-      )}
-    </Card>
+        <Text strong>Phản ánh theo tuyến</Text>
+        {stats.byRoute.length === 0 ? (
+          <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
+            Chưa có phản ánh nào gắn với chuyến của một tuyến.
+          </Paragraph>
+        ) : (
+          <div
+            style={{ marginTop: 12, maxHeight: 300, overflowY: 'auto', display: 'grid', gap: 12 }}
+          >
+            {stats.byRoute.map((row) => (
+              <div key={row.routeId}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <RouteBadge code={row.routeCode} size="sm" style={{ marginRight: 6 }} />
+                    {row.routeName}
+                  </div>
+                  <Text strong style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {row.count}
+                  </Text>
+                </div>
+                {/* Thanh tỉ lệ là trang trí — con số ở trên mới là dữ liệu, thanh giúp mắt
+                    so tương quan độ dài giữa các tuyến. */}
+                <div
+                  style={{
+                    marginTop: 4,
+                    height: 8,
+                    borderRadius: token.borderRadius,
+                    background: token.colorFillSecondary,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.round((row.count / maxRouteCount) * 100)}%`,
+                      minWidth: 6,
+                      height: '100%',
+                      background: token.colorPrimary,
+                      borderRadius: token.borderRadius,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </PageCard>
+    </div>
   );
 }
 
@@ -430,7 +460,7 @@ export default function AdminFeedbackPage() {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 150,
-      render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY HH:mm'),
+      render: (createdAt: string) => formatDateTime(createdAt),
     },
     {
       title: 'Người gửi',
@@ -527,60 +557,60 @@ export default function AdminFeedbackPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Xử lý phản ánh
-        </Title>
-        <Text type="secondary">
-          Tiếp nhận khiếu nại, khen ngợi và góp ý của hành khách, trả lời và theo dõi trạng thái
-          xử lý.
-        </Text>
-      </div>
+      <PageHeader
+        title="Xử lý phản ánh"
+        subtitle="Tiếp nhận khiếu nại, khen ngợi và góp ý của hành khách, trả lời và theo dõi trạng thái xử lý."
+      />
 
       {stats && <StatisticsStrip stats={stats} />}
 
       {statsFailed && (
-        <Card
-          variant="borderless"
-          style={{ borderRadius: 16, marginBottom: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-        >
-          <Text type="secondary">Không tải được số liệu thống kê phản ánh.</Text>
-        </Card>
+        <Alert
+          type="warning"
+          showIcon
+          message="Không tải được số liệu thống kê phản ánh."
+          style={{ marginBottom: 16 }}
+        />
       )}
 
-      <PageCard>
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Select<FeedbackStatus>
-            allowClear
-            placeholder="Tất cả trạng thái"
-            style={{ width: 200 }}
-            value={statusFilter}
-            options={FEEDBACK_STATUS_OPTIONS}
-            onChange={(value) => {
-              // Đổi bộ lọc luôn quay về trang 1 để không đứng ở trang không còn tồn tại.
-              setStatusFilter(value);
-              setPage(1);
-            }}
-          />
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              hasFilter ? (
+                <Button type="link" size="small" onClick={clearFilters}>
+                  Xoá lọc
+                </Button>
+              ) : undefined
+            }
+          >
+            <Select<FeedbackStatus>
+              allowClear
+              placeholder="Tất cả trạng thái"
+              style={{ width: 200 }}
+              value={statusFilter}
+              options={FEEDBACK_STATUS_OPTIONS}
+              onChange={(value) => {
+                // Đổi bộ lọc luôn quay về trang 1 để không đứng ở trang không còn tồn tại.
+                setStatusFilter(value);
+                setPage(1);
+              }}
+            />
 
-          <Select<FeedbackType>
-            allowClear
-            placeholder="Tất cả loại phản ánh"
-            style={{ width: 200 }}
-            value={typeFilter}
-            options={TYPE_FILTER_OPTIONS}
-            onChange={(value) => {
-              setTypeFilter(value);
-              setPage(1);
-            }}
-          />
-
-          {hasFilter && (
-            <Button type="link" size="small" onClick={clearFilters}>
-              Xoá lọc
-            </Button>
-          )}
-        </Space>
+            <Select<FeedbackType>
+              allowClear
+              placeholder="Tất cả loại phản ánh"
+              style={{ width: 200 }}
+              value={typeFilter}
+              options={TYPE_FILTER_OPTIONS}
+              onChange={(value) => {
+                setTypeFilter(value);
+                setPage(1);
+              }}
+            />
+          </FilterBar>
+        }
+      >
 
         <Table<AdminFeedbackListItem>
           rowKey="id"
@@ -591,20 +621,17 @@ export default function AdminFeedbackPage() {
           locale={{
             emptyText: hasFilter ? 'Không có phản ánh nào khớp bộ lọc' : 'Chưa có phản ánh nào',
           }}
-          pagination={{
-            current: page,
+          pagination={tablePagination({
+            page,
             pageSize,
             total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: PAGE_SIZE_OPTIONS,
-            showTotal: (count, range) => `Hiển thị ${range[0]}–${range[1]} trên ${count} phản ánh`,
+            unitLabel: 'phản ánh',
             onChange: (nextPage, nextPageSize) => {
               // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
               setPage(nextPageSize !== pageSize ? 1 : nextPage);
               setPageSize(nextPageSize);
             },
-          }}
+          })}
         />
       </PageCard>
 
@@ -615,13 +642,9 @@ export default function AdminFeedbackPage() {
         footer={null}
         width={720}
       >
-        {detailLoading && <Spin style={{ display: 'block', margin: '24px auto' }} />}
+        {detailLoading && <LoadingState description="Đang tải chi tiết phản ánh…" />}
 
-        {detailError && (
-          <Paragraph type="danger" style={{ margin: 0 }}>
-            {detailError}
-          </Paragraph>
-        )}
+        {detailError && <Alert type="error" showIcon message={detailError} />}
 
         {detail && (
           <>
@@ -664,13 +687,13 @@ export default function AdminFeedbackPage() {
                 {
                   key: 'createdAt',
                   label: 'Gửi lúc',
-                  children: dayjs(detail.createdAt).format('HH:mm DD/MM/YYYY'),
+                  children: formatDateTime(detail.createdAt),
                 },
                 {
                   key: 'updatedAt',
                   label: 'Cập nhật lần cuối',
                   children: detail.updatedAt ? (
-                    dayjs(detail.updatedAt).format('HH:mm DD/MM/YYYY')
+                    formatDateTime(detail.updatedAt)
                   ) : (
                     <Text type="secondary">—</Text>
                   ),

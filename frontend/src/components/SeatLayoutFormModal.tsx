@@ -210,7 +210,7 @@ export default function SeatLayoutFormModal({
 
         <Form.Item label="Sơ đồ ghế (bấm để chọn ghế VIP)">
           <div
-            style={{ border: `1px dashed ${token.colorBorder}`, borderRadius: 12, padding: 16 }}
+            style={{ border: `1px dashed ${token.colorBorder}`, borderRadius: token.borderRadius, padding: 16 }}
           >
             <SeatMap
               floors={numberOfFloors}

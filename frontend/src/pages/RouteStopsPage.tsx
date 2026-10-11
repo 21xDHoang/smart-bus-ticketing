@@ -1,18 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Button,
-  Card,
-  Empty,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Spin,
-  Typography,
-  message,
-} from 'antd';
+import { Button, InputNumber, Modal, Select, Spin, Typography, message } from 'antd';
 import { PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import RouteStopBoard from '../components/RouteStopBoard';
+import { EmptyState, FilterBar, LoadingState, PageCard, PageHeader } from '../components/ui';
 import {
   assignStop,
   fetchRouteStops,
@@ -25,7 +15,7 @@ import { fetchRoutes } from '../api/routeApi';
 import type { Route } from '../api/routeApi';
 import type { AppError } from '../api/axiosClient';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /**
  * Gán trạm vào tuyến và sắp xếp thứ tự trạm (story 12).
@@ -242,82 +232,83 @@ const RouteStopsPage = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Gán trạm vào tuyến
-        </Title>
-        <Text type="secondary">
-          Chọn tuyến, kéo-thả để sắp thứ tự xe chạy qua các trạm, rồi bấm Lưu thứ tự.
-        </Text>
-      </div>
+      <PageHeader
+        title="Gán trạm vào tuyến"
+        subtitle="Chọn tuyến, kéo-thả để sắp thứ tự xe chạy qua các trạm, rồi bấm Lưu thứ tự."
+      />
 
-      <Card
-        variant="borderless"
-        style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}
-      >
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="Chọn tuyến"
-            style={{ minWidth: 320 }}
-            value={selectedRouteId}
-            loading={loadingRoutes}
-            onChange={handleRouteChange}
-            options={routes.map((route) => ({
-              value: route.id,
-              label: `${route.code} — ${route.name}`,
-            }))}
-          />
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Làm mới
-          </Button>
-        </Space>
-
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Select
-            showSearch
-            allowClear
-            placeholder="Chọn trạm để gán vào tuyến"
-            style={{ minWidth: 320 }}
-            value={pendingStopId}
-            loading={loadingStopOptions}
-            disabled={assignLocked}
-            optionFilterProp="label"
-            onChange={(value) => setPendingStopId(value)}
-            options={availableStopOptions}
-            notFoundContent={
-              loadingStopOptions ? <Spin size="small" /> : 'Không còn trạm nào để gán'
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+                Làm mới
+              </Button>
             }
-          />
-          <InputNumber
-            placeholder="Khoảng cách (km)"
-            style={{ width: 170 }}
-            min={0}
-            max={9999.99}
-            step={0.1}
-            value={pendingDistanceKm}
-            disabled={assignLocked}
-            onChange={(value) => setPendingDistanceKm(value ?? undefined)}
-          />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            loading={assigning}
-            disabled={assignLocked || !pendingStopId}
-            onClick={handleAssign}
           >
-            Gán vào cuối tuyến
-          </Button>
-          {isDirty && (
-            <Text type="warning">Lưu thứ tự trước khi gán thêm trạm.</Text>
-          )}
-        </Space>
+            <Select
+              placeholder="Chọn tuyến"
+              style={{ minWidth: 320 }}
+              value={selectedRouteId}
+              loading={loadingRoutes}
+              onChange={handleRouteChange}
+              options={routes.map((route) => ({
+                value: route.id,
+                label: `${route.code} — ${route.name}`,
+              }))}
+            />
+          </FilterBar>
+        }
+      >
+        <div style={{ marginBottom: 16 }}>
+          <FilterBar
+            actions={
+              <>
+                {isDirty && <Text type="warning">Lưu thứ tự trước khi gán thêm trạm.</Text>}
+                {/* Nút thường — cả màn chỉ giữ một primary là "Lưu thứ tự". */}
+                <Button
+                  icon={<PlusOutlined />}
+                  loading={assigning}
+                  disabled={assignLocked || !pendingStopId}
+                  onClick={handleAssign}
+                >
+                  Gán vào cuối tuyến
+                </Button>
+              </>
+            }
+          >
+            <Select
+              showSearch
+              allowClear
+              placeholder="Chọn trạm để gán vào tuyến"
+              style={{ minWidth: 320 }}
+              value={pendingStopId}
+              loading={loadingStopOptions}
+              disabled={assignLocked}
+              optionFilterProp="label"
+              onChange={(value) => setPendingStopId(value)}
+              options={availableStopOptions}
+              notFoundContent={
+                loadingStopOptions ? <Spin size="small" /> : 'Không còn trạm nào để gán'
+              }
+            />
+            <InputNumber
+              placeholder="Khoảng cách (km)"
+              style={{ width: 170 }}
+              min={0}
+              max={9999.99}
+              step={0.1}
+              value={pendingDistanceKm}
+              disabled={assignLocked}
+              onChange={(value) => setPendingDistanceKm(value ?? undefined)}
+            />
+          </FilterBar>
+        </div>
 
         {!selectedRouteId && !loadingRoutes ? (
-          <Empty description="Chưa có tuyến nào để gán trạm." />
+          <EmptyState description="Chưa có tuyến nào để gán trạm." />
         ) : loadingStops ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <Spin />
-          </div>
+          <LoadingState />
         ) : (
           <>
             <RouteStopBoard
@@ -351,7 +342,7 @@ const RouteStopsPage = () => {
             )}
           </>
         )}
-      </Card>
+      </PageCard>
     </div>
   );
 };

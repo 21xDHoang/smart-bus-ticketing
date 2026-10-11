@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import type { AuditLog } from '../api/auditLogApi';
 import { getAuditActionMeta } from '../api/auditLogApi';
 import StatusTag from './ui/StatusTag';
+import { formatDateTimeSeconds } from './ui/format';
 
 const { Text } = Typography;
 
@@ -52,7 +53,7 @@ export default function AuditLogDetailModal({ open, log, onClose }: AuditLogDeta
           <Descriptions.Item label="Thời gian">
             {time?.isValid() ? (
               <div>
-                <div>{time.format('DD/MM/YYYY HH:mm:ss')}</div>
+                <div>{formatDateTimeSeconds(log.createdAt)}</div>
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {log.createdAt} (UTC)
                 </Text>

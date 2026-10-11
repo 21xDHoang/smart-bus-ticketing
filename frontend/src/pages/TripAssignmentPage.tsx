@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Key } from 'react';
-import {
-  Button,
-  DatePicker,
-  Empty,
-  Select,
-  Space,
-  Table,
-  Tooltip,
-  Typography,
-  message,
-} from 'antd';
+import { Button, DatePicker, Select, Table, Tooltip, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import { ReloadOutlined, WarningOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -36,9 +26,17 @@ import {
 import type { AssignableTrip, DriverOption } from '../api/tripAssignmentApi';
 import TripBulkAssignBar from '../components/TripBulkAssignBar';
 import UnassignedTripsFilter from '../components/UnassignedTripsFilter';
-import { PageCard, StatusTag } from '../components/ui';
+import {
+  EmptyState,
+  FilterBar,
+  PageCard,
+  PageHeader,
+  StatusTag,
+} from '../components/ui';
+import { formatTime } from '../components/ui/format';
+import { tablePagination } from '../components/ui/table';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /**
  * Múi giờ Việt Nam (UTC+7), cố định quanh năm — không đổi theo DST.
@@ -290,7 +288,7 @@ export default function TripAssignmentPage() {
       key: 'departureTime',
       width: 120,
       render: (departureTime: string) => (
-        <span style={{ fontWeight: 600 }}>{dayjs(departureTime).format('HH:mm')}</span>
+        <span style={{ fontWeight: 600 }}>{formatTime(departureTime)}</span>
       ),
     },
     {
@@ -298,8 +296,7 @@ export default function TripAssignmentPage() {
       dataIndex: 'arrivalTime',
       key: 'arrivalTime',
       width: 100,
-      render: (arrivalTime: string | null) =>
-        arrivalTime ? dayjs(arrivalTime).format('HH:mm') : '—',
+      render: (arrivalTime: string | null) => (arrivalTime ? formatTime(arrivalTime) : '—'),
     },
     {
       title: 'Biển số xe',
@@ -323,8 +320,8 @@ export default function TripAssignmentPage() {
               <div>
                 {conflicts.map((other) => (
                   <div key={other.id}>
-                    Trùng chuyến {dayjs(other.departureTime).format('HH:mm')}
-                    {other.arrivalTime ? `–${dayjs(other.arrivalTime).format('HH:mm')}` : ''}
+                    Trùng chuyến {formatTime(other.departureTime)}
+                    {other.arrivalTime ? `–${formatTime(other.arrivalTime)}` : ''}
                   </div>
                 ))}
               </div>
@@ -399,67 +396,68 @@ export default function TripAssignmentPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>
-          Phân công điều xe theo chuyến
-        </Title>
-        <Text type="secondary">
-          Gán xe cho từng chuyến + phân công tài xế hàng loạt cho các chuyến đã chọn.
-        </Text>
-      </div>
+      <PageHeader
+        title="Phân công điều xe theo chuyến"
+        subtitle="Gán xe cho từng chuyến + phân công tài xế hàng loạt cho các chuyến đã chọn."
+      />
 
-      <PageCard>
-        <Space wrap size="middle" style={{ marginBottom: 16 }}>
-          <Select
-            placeholder="Chọn tuyến"
-            style={{ minWidth: 280 }}
-            value={selectedRouteId}
-            loading={loadingRoutes}
-            onChange={(value) => {
-              setSelectedRouteId(value);
-              setPage(1);
-            }}
-            options={routes.map((route) => ({
-              value: route.id,
-              label: `${route.code} — ${route.name}`,
-            }))}
-          />
+      <PageCard
+        toolbar={
+          <FilterBar
+            actions={
+              <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+                Làm mới
+              </Button>
+            }
+          >
+            <Select
+              placeholder="Chọn tuyến"
+              style={{ minWidth: 280 }}
+              value={selectedRouteId}
+              loading={loadingRoutes}
+              onChange={(value) => {
+                setSelectedRouteId(value);
+                setPage(1);
+              }}
+              options={routes.map((route) => ({
+                value: route.id,
+                label: `${route.code} — ${route.name}`,
+              }))}
+            />
 
-          <DatePicker
-            value={date}
-            format="DD/MM/YYYY"
-            allowClear={false}
-            onChange={(value) => {
-              setDate(value ?? dayjs());
-              setPage(1);
-            }}
-          />
+            <DatePicker
+              value={date}
+              format="DD/MM/YYYY"
+              allowClear={false}
+              onChange={(value) => {
+                setDate(value ?? dayjs());
+                setPage(1);
+              }}
+            />
 
-          <Select<TripStatus>
-            allowClear
-            placeholder="Trạng thái"
-            style={{ width: 200 }}
-            value={status}
-            options={TRIP_STATUS_OPTIONS}
-            onChange={(value) => {
-              setStatus(value ?? undefined);
-              setPage(1);
-            }}
-          />
+            <Select<TripStatus>
+              allowClear
+              placeholder="Trạng thái"
+              style={{ width: 200 }}
+              value={status}
+              options={TRIP_STATUS_OPTIONS}
+              onChange={(value) => {
+                setStatus(value ?? undefined);
+                setPage(1);
+              }}
+            />
 
-          <UnassignedTripsFilter
-            value={onlyUnassigned}
-            onChange={(value) => {
-              setOnlyUnassigned(value);
-              setSelectedTripIds([]);
-            }}
-          />
-
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-            Làm mới
-          </Button>
-        </Space>
-
+            <UnassignedTripsFilter
+              value={onlyUnassigned}
+              onChange={(value) => {
+                setOnlyUnassigned(value);
+                setSelectedTripIds([]);
+              }}
+            />
+          </FilterBar>
+        }
+      >
+        {/* Thanh ngữ cảnh — chỉ hiện khi có chuyến đang chọn, không phải bộ lọc. */}
         <TripBulkAssignBar
           selectedCount={selectedTripIds.length}
           drivers={driverOptions}
@@ -470,7 +468,7 @@ export default function TripAssignmentPage() {
         />
 
         {!selectedRouteId && !loadingRoutes ? (
-          <Empty description="Chưa có tuyến nào để phân công điều xe." />
+          <EmptyState description="Chưa có tuyến nào để phân công điều xe." />
         ) : (
           <Table<AssignableTrip>
             rowKey="id"
@@ -488,20 +486,17 @@ export default function TripAssignmentPage() {
                 disabled: record.status !== 'Scheduled' || record.driverId !== null,
               }),
             }}
-            pagination={{
-              current: page,
+            pagination={tablePagination({
+              page,
               pageSize,
               total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              pageSizeOptions: [10, 20, 50],
-              showTotal: (t, range) => `Hiển thị ${range[0]}–${range[1]} trên ${t} chuyến`,
+              unitLabel: 'chuyến',
               onChange: (nextPage, nextPageSize) => {
                 // Đổi cỡ trang thì quay về trang 1 để tránh đứng ở trang không còn tồn tại.
                 setPage(nextPageSize !== pageSize ? 1 : nextPage);
                 setPageSize(nextPageSize);
               },
-            }}
+            })}
           />
         )}
       </PageCard>

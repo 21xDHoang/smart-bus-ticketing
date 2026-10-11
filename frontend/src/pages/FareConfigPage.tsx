@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Empty, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
+import { Button, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import fareApi from '../api/fareApi';
 import { PASSENGER_TYPE_META, PASSENGER_TYPE_OPTIONS } from '../api/fareApi';
 import type { Fare, FarePayload, PassengerType, RouteOption } from '../api/fareApi';
 import FareFormModal from '../components/FareFormModal';
-import { PageCard, PageHeader, StatusTag } from '../components/ui';
-import { formatVnd } from '../components/ui/format';
+import { EmptyState, PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDateTime, formatVnd } from '../components/ui/format';
 
 export default function FareConfigPage() {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
@@ -136,9 +135,7 @@ export default function FareConfigPage() {
       render: (_, fare) => {
         const at = fare.updatedAt ?? fare.createdAt;
         return (
-          <Typography.Text type="secondary">
-            {dayjs(at).format('DD/MM/YYYY HH:mm')}
-          </Typography.Text>
+          <Typography.Text type="secondary">{formatDateTime(at)}</Typography.Text>
         );
       },
     },
@@ -203,7 +200,7 @@ export default function FareConfigPage() {
 
       <PageCard>
         {!selectedRouteId && !loadingRoutes ? (
-          <Empty description="Chưa có tuyến nào để cấu hình giá vé." />
+          <EmptyState description="Chưa có tuyến nào để cấu hình giá vé." />
         ) : (
           <Table<Fare>
             rowKey="id"
