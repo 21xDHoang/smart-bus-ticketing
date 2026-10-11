@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Avatar, Space, Table, Typography } from 'antd';
 import type { TableProps } from 'antd';
-import dayjs from 'dayjs';
 import { PhoneOutlined, UserOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts';
 import { fetchMyLoginActivity, getAuditActionMeta } from '../api/auditLogApi';
 import type { AuditLog } from '../api/auditLogApi';
 import { getRoleMeta } from '../api/adminUserApi';
 import { PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDateTimeSeconds } from '../components/ui/format';
 
 const { Text } = Typography;
 
@@ -18,7 +18,7 @@ const columns: TableProps<AuditLog>['columns'] = [
     dataIndex: 'createdAt',
     key: 'createdAt',
     width: 190,
-    render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY HH:mm:ss'),
+    render: (createdAt: string) => formatDateTimeSeconds(createdAt),
   },
   {
     title: 'Hành động',

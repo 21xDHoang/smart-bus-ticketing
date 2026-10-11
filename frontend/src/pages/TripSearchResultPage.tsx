@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Segmented, Space, Typography, theme } from 'antd';
 import { ArrowLeftOutlined, CarOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import tripSearchApi from '../api/tripSearchApi';
 import type { TripSearchResult } from '../api/tripSearchApi';
 import type { AppError } from '../api/axiosClient';
@@ -16,7 +15,7 @@ import {
   RouteBadge,
   RouteLine,
 } from '../components/ui';
-import { formatVnd } from '../components/ui/format';
+import { formatDate, formatTime, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
 
@@ -249,7 +248,7 @@ export default function TripSearchResultPage() {
         subtitle={
           <>
             <RouteLine from={origin} to={destination} size="sm" />
-            {date && ` · ${dayjs(date).format('DD/MM/YYYY')}`}
+            {date && ` · ${formatDate(date)}`}
           </>
         }
         onBack={() => navigate('/route-lookup')}
@@ -331,10 +330,10 @@ export default function TripSearchResultPage() {
                   className="tabular-nums"
                   style={{ fontSize: 18, fontWeight: 700, color: token.colorTextHeading }}
                 >
-                  {dayjs(trip.departureTime).format('HH:mm')}
+                  {formatTime(trip.departureTime)}
                 </div>
                 <Text className="tabular-nums" type="secondary" style={{ fontSize: 13 }}>
-                  {trip.arrivalTime ? `đến ${dayjs(trip.arrivalTime).format('HH:mm')}` : '—'}
+                  {trip.arrivalTime ? `đến ${formatTime(trip.arrivalTime)}` : '—'}
                 </Text>
               </div>
 

@@ -341,7 +341,7 @@ function SearchHero({ recent, onOpen }: { recent: RecentRoute[]; onOpen: OpenPag
             height: 44,
             borderRadius: '50%',
             background: token.colorPrimary,
-            color: '#fff',
+            color: token.colorTextLightSolid,
             fontSize: 20,
           }}
         >

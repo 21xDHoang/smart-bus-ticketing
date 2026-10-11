@@ -14,7 +14,6 @@ import {
 } from 'antd';
 import type { UploadFile } from 'antd';
 import { CheckCircleFilled, EnvironmentOutlined, UploadOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import feedbackSubmitApi from '../api/feedbackSubmitApi';
 import type {
   FeedbackTripOption,
@@ -26,6 +25,7 @@ import { FEEDBACK_STATUS_META, FEEDBACK_TYPE_OPTIONS, getFeedbackTypeMeta } from
 import type { AppError } from '../api/axiosClient';
 import SatisfactionRating from '../components/SatisfactionRating';
 import { PageCard, PageHeader, StatusTag } from '../components/ui';
+import { formatDateTime } from '../components/ui/format';
 
 const { Text, Paragraph } = Typography;
 
@@ -137,8 +137,8 @@ export default function FeedbackSubmitPage() {
               optionFilterProp="label"
               options={trips.map((trip) => ({
                 value: trip.id,
-                label: `${trip.routeCode} — ${trip.routeName} · ${dayjs(trip.departureTime).format(
-                  'HH:mm DD/MM/YYYY',
+                label: `${trip.routeCode} — ${trip.routeName} · ${formatDateTime(
+                  trip.departureTime,
                 )}`,
               }))}
               suffixIcon={<EnvironmentOutlined />}
@@ -214,9 +214,9 @@ export default function FeedbackSubmitPage() {
                   key: 'trip',
                   label: 'Chuyến xe',
                   children: submittedTrip
-                    ? `${submittedTrip.routeCode} — ${submittedTrip.routeName} · ${dayjs(
+                    ? `${submittedTrip.routeCode} — ${submittedTrip.routeName} · ${formatDateTime(
                         submittedTrip.departureTime,
-                      ).format('HH:mm DD/MM/YYYY')}`
+                      )}`
                     : 'Không kèm chuyến',
                 },
                 {
@@ -241,8 +241,8 @@ export default function FeedbackSubmitPage() {
             </Paragraph>
 
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Gửi lúc {dayjs(submitted.createdAt).format('HH:mm DD/MM/YYYY')}. Nhà xe sẽ phản hồi
-              trong thời gian sớm nhất.
+              Gửi lúc {formatDateTime(submitted.createdAt)}. Nhà xe sẽ phản hồi trong thời gian
+              sớm nhất.
             </Text>
 
             <Button style={{ marginTop: 16 }} onClick={handleSubmitAnother}>

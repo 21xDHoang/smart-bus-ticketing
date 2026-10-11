@@ -1,7 +1,7 @@
 import { CheckCircleFilled, ClockCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import type { ReactNode } from 'react';
 import StatusTag from './ui/StatusTag';
-import dayjs from 'dayjs';
+import { formatDate } from './ui/format';
 import type { Dayjs } from 'dayjs';
 import type { MonthlyPass } from '../api/monthlyPassApi';
 import { getMonthlyPassStatus, MONTHLY_PASS_STATUS_META } from './monthlyPassStatus';
@@ -19,7 +19,7 @@ const STATUS_ICONS: Record<MonthlyPassDisplayStatus, ReactNode> = {
  * trạng thái "sắp hết hạn" — chỗ nhạy cảm nhất với hành khách.
  */
 function buildTooltip(status: MonthlyPassDisplayStatus, daysLeft: number, validTo: string): string {
-  const date = dayjs(validTo).format('DD/MM/YYYY');
+  const date = formatDate(validTo);
 
   switch (status) {
     case 'Expired':

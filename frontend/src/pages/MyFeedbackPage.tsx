@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Segmented, Space, Spin, Table, Typography, message } from 'antd';
 import type { TableProps } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import feedbackApi from '../api/feedbackApi';
 import type { FeedbackStatus, MyFeedback, MyFeedbackDetail } from '../api/feedbackApi';
 import { FEEDBACK_STATUS_OPTIONS, getFeedbackTypeMeta } from '../api/feedbackApi';
@@ -10,6 +9,7 @@ import type { AppError } from '../api/axiosClient';
 import FeedbackStatusTag from '../components/FeedbackStatusTag';
 import SatisfactionRating from '../components/SatisfactionRating';
 import { PageCard, PageHeader, RouteBadge, StatusTag } from '../components/ui';
+import { formatDateTime } from '../components/ui/format';
 
 const { Text, Paragraph } = Typography;
 
@@ -80,7 +80,7 @@ function FeedbackReplies({ feedbackId }: { feedbackId: string }) {
           <Space size={8}>
             <Text strong>{reply.userFullName ?? 'Nhà xe'}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {dayjs(reply.createdAt).format('HH:mm DD/MM/YYYY')}
+              {formatDateTime(reply.createdAt)}
             </Text>
           </Space>
           <Paragraph style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{reply.content}</Paragraph>
@@ -132,7 +132,7 @@ export default function MyFeedbackPage() {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 160,
-      render: (createdAt: string) => dayjs(createdAt).format('DD/MM/YYYY HH:mm'),
+      render: (createdAt: string) => formatDateTime(createdAt),
     },
     {
       title: 'Loại phản ánh',
@@ -170,7 +170,7 @@ export default function MyFeedbackPage() {
             </div>
             {record.departureTime && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                {dayjs(record.departureTime).format('HH:mm DD/MM/YYYY')}
+                {formatDateTime(record.departureTime)}
               </Text>
             )}
           </div>
@@ -246,7 +246,7 @@ export default function MyFeedbackPage() {
 
                 {record.updatedAt && (
                   <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-                    Cập nhật lần cuối {dayjs(record.updatedAt).format('DD/MM/YYYY HH:mm')}
+                    Cập nhật lần cuối {formatDateTime(record.updatedAt)}
                   </Text>
                 )}
               </div>

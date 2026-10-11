@@ -19,7 +19,7 @@ import stopSearchApi from '../api/stopSearchApi';
 import type { AppError } from '../api/axiosClient';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
 import { PageCard, PageHeader } from '../components/ui';
-import { formatVnd } from '../components/ui/format';
+import { formatDate, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
 
@@ -361,7 +361,7 @@ export default function MonthlyPassRegistrationPage() {
                 {
                   key: 'validity',
                   label: 'Hiệu lực',
-                  children: `${dayjs(registered.validFrom).format('DD/MM/YYYY')} → ${dayjs(registered.validTo).format('DD/MM/YYYY')}`,
+                  children: `${formatDate(registered.validFrom)} → ${formatDate(registered.validTo)}`,
                 },
                 {
                   key: 'price',
