@@ -46,13 +46,18 @@ public class CreateVoucherRequest
     /// Giá trị giảm. Trần 9.999.999.999,99 khớp numeric(12,2) của cột tiền — nhận số lớn hơn là để
     /// nó tràn ở tầng CSDL với một lỗi khó lần theo. Cận dưới phụ thuộc kiểu (Percent: 1–100,
     /// FixedAmount: &gt; 0) nên nằm ở tầng service.
+    ///
+    /// Hai mốc trần dạng CHUỖI của <c>[Range(typeof(decimal), …)]</c> được parse theo culture của
+    /// MÁY chạy — máy vi-VN coi "." là phân cách nghìn nên thiếu cờ là FormatException → 500 cho
+    /// MỌI request bind DTO này (đo được 12/10/2026, CI ubuntu không lộ). Ba attribute Range trong
+    /// file đều bật <c>ParseLimitsInInvariantCulture</c>; hai file Update/Validate cùng cờ.
     /// </summary>
     [Required(ErrorMessage = "Giá trị giảm không được để trống")]
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Giá trị giảm không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Giá trị giảm không hợp lệ")]
     public decimal? DiscountValue { get; set; }
 
     /// <summary>Giá trị đơn tối thiểu — bỏ trống coi như 0 (không yêu cầu).</summary>
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Giá trị đơn tối thiểu không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Giá trị đơn tối thiểu không hợp lệ")]
     public decimal? MinOrderValue { get; set; }
 
     /// <summary>
@@ -60,7 +65,7 @@ public class CreateVoucherRequest
     /// service ép null (trần với số tiền cố định là khái niệm vô nghĩa — xem Voucher.MaxDiscount).
     /// Percent mà gửi 0/âm → 400 kèm <c>errors.maxDiscount</c> ở tầng service.
     /// </summary>
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Trần giảm không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Trần giảm không hợp lệ")]
     public decimal? MaxDiscount { get; set; }
 
     /// <summary>Điều kiện tuyến — null = áp dụng cho mọi tuyến. Tuyến không tồn tại → 404 ở tầng service.</summary>

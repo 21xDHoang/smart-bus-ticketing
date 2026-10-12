@@ -30,7 +30,8 @@ function conditionsText(voucher: Voucher): string {
 
 // Màn hình quản lý voucher (story 18 "Quản lý Voucher", Sprint 5 — task của Dương Thị Hạnh):
 // bảng + tìm kiếm + lọc trạng thái + phân trang, thêm/sửa qua form, bật/tắt áp dụng voucher.
-// Backend chưa có bảng Vouchers nên màn hình chạy dữ liệu giả (voucherApi.ts).
+// Màn hình gọi thẳng API thật qua voucherApi.ts — backend VouchersController (dòng 51) đã có;
+// lỗi từ backend hiện nguyên câu qua AppError.customMessage.
 export default function VoucherManagePage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<VoucherStatus>();
