@@ -1,4 +1,4 @@
-# CSDL huỷ & đổi vé — Sprint 4: cấu hình xong, migration chưa sinh
+# CSDL huỷ & đổi vé — Sprint 4: migration đã sinh và đã soát
 
 > Viết cho các task đang chờ hai bảng này — **US 5 "Hủy & Đổi vé"**, sheet *Sprint 4*:
 > **Hiếu** (API gửi yêu cầu huỷ + kiểm tra điều kiện thời gian, dòng 3) · **Kiên** (API gửi yêu cầu
@@ -7,12 +7,12 @@
 > dòng 11) · **Thịnh** (component chọn chuyến mới, dòng 9) · **Băng** (màn theo dõi trạng thái,
 > dòng 10) · **Giàng A Vàng** (test API + kiểm thử chéo, dòng 12–13).
 >
-> 🟡 **Trạng thái 12/10/2026:** entity `CancellationRequest` + `TicketChange` và cấu hình
-> `AppDbContext.CancellationRequest.cs` / `AppDbContext.TicketChange.cs` **đã xong**, model đã dựng
-> thử và SQL sinh ra đã soát (§8). **Migration CHƯA sinh** — `dotnet ef migrations add` là lệnh bị
-> chặn với trợ lý, Dăm chạy tay theo đúng lệnh ở §8. **Chưa merge, chưa áp lên CSDL chung**: hai
-> bảng chỉ có thật sau khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp
-> vẫn chạy được trên EF InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem §4.
+> 🟢 **Trạng thái 12/10/2026:** entity `CancellationRequest` + `TicketChange`, cấu hình
+> `AppDbContext.CancellationRequest.cs` / `AppDbContext.TicketChange.cs`, và migration
+> `20261012023745_Sprint4_CancellationRequests_TicketChanges` (Vàng Thị Dăm, task Sprint 4 dòng 2)
+> **đã xong và đã soát** — xem §8. **Chưa merge, chưa áp lên CSDL chung**: hai bảng chỉ có thật sau
+> khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp vẫn chạy được trên EF
+> InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem §4.
 
 ## 1. Hai bảng này KHÔNG nằm trong A9 — phải báo nhóm
 
@@ -262,15 +262,17 @@ duyệt gộp đọc được cả ba bảng bằng một câu truy vấn.
    sẽ có ít nhất 5 migration, mỗi task migrate một cái. Nhóm sửa A7 cho khớp, **đừng gộp migration** —
    gộp 5 bảng của 5 story khác nhau vào một file là chặn nhau giữa các nhánh.
 
-## 8. Migration — CHƯA sinh
+## 8. Migration đã sinh và đã soát — 12/10/2026
 
-Tên dự kiến theo A7 (`<Sprint><Nội dung>`): **`Sprint4_CancellationRequests_TicketChanges`**.
+File `Migrations/20261012023745_Sprint4_CancellationRequests_TicketChanges.cs` (kèm `.Designer.cs`, và
+`AppDbContextModelSnapshot.cs` bị sửa — **thuần thêm 217 dòng, 0 dòng xoá**, nên không bảng nào khác
+bị đụng). Tên theo A7 (`<Sprint><Nội dung>`).
 
-⚠️ `dotnet ef migrations add` / `migrations remove` / `database drop` **bị chặn với trợ lý** — Dăm
-chạy tay. Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì mọi lệnh
-`dotnet ef` cần hai biến môi trường **giá trị giả** để host design-time dựng được model. `migrations
-add` và `migrations script` đều **không mở kết nối** nào — **đừng tạo file `appsettings.Development.json`
-thật**, `scripts/setup-csdl.sh` bỏ qua file đã tồn tại nên nó sẽ chặn luôn phần cài đặt thật về sau:
+Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì mọi lệnh `dotnet ef`
+cần các biến môi trường **giá trị giả** để host design-time dựng được model. `migrations add`,
+`has-pending-model-changes` và `migrations script` đều **không mở kết nối** nào — **đừng tạo file
+`appsettings.Development.json` thật**, `scripts/setup-csdl.sh` bỏ qua file đã tồn tại nên nó sẽ chặn
+luôn phần cài đặt thật về sau:
 
 ```bash
 ConnectionStrings__Default="<chuoi-ket-noi-gia — chi can dung dinh dang>" \
@@ -280,13 +282,19 @@ Jwt__Audience="SmartBusClient" \
 dotnet ef migrations add Sprint4_CancellationRequests_TicketChanges --project backend/SmartBus.Api
 ```
 
-**Đã soát trước khi sinh migration** — bằng `dotnet ef dbcontext script --no-build` (lệnh này không bị
-chặn) với các biến môi trường giả ở trên. SQL sinh ra **khớp** §2, §3, §4 và §5:
+**Hai phép kiểm, không cần CSDL thật** — chạy trên đúng file migration vừa sinh:
 
 | Phép kiểm | Kết quả |
 |---|---|
-| `CREATE TABLE "CancellationRequests"` / `"TicketChanges"` | ✅ có, cột đúng bảng ở §2 và §3 |
-| `grep -c xmin` trên toàn bộ SQL | ✅ `0` — không cột `xmin` nào lọt vào DDL (§4.3) |
+| `dotnet ef migrations has-pending-model-changes --no-build` | ✅ "No changes have been made to the model since the last migration" |
+| `dotnet ef migrations script <Sprint3> <Sprint4> --no-build` rồi `grep -ci xmin` | ✅ `0` — không cột `xmin` nào lọt vào SQL |
+| SQL đó có `ALTER TABLE` / `DROP` / `UPDATE` nào không | ✅ không — **chỉ** `CREATE TABLE` ×2 + `CREATE INDEX` ×13 + 1 dòng `INSERT` vào `__EFMigrationsHistory` |
+
+SQL sinh ra khớp §2, §3, §4 và §5:
+
+| Hạng mục | Kết quả |
+|---|---|
+| Hai `CREATE TABLE` | ✅ có, cột đúng bảng ở §2 (12 cột) và §3 (14 cột) |
 | Tiền | ✅ `"CancellationFee" numeric(12,2)`, `"NewPrice" numeric(12,2)` |
 | Thời gian | ✅ mọi mốc `timestamp with time zone` |
 | Trạng thái | ✅ `character varying(20)` |
@@ -296,12 +304,16 @@ chặn) với các biến môi trường giả ở trên. SQL sinh ra **khớp**
 | Chỉ mục thường cùng cột | ✅ cả hai `IX_..._TicketId` **vẫn còn** — tức cách gọi kèm tên ở §4.2 đã đúng |
 | Build | ✅ `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` — 0 warning, 0 error |
 
+⚠️ **Đừng "dọn" dòng `xmin` trong file migration.** Trong `Up()` có
+`xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)` — trông như đang tạo một
+cột, nhưng **Npgsql lọc cột hệ thống `xid` ra khỏi DDL**, nên SQL thật không hề có cột đó (bảng trên,
+`grep -ci xmin` = 0). Đây là **đúng lối đã có ở migration Sprint 3 đã merge**
+(`Sprint3_Payments_Vouchers_Tickets` khai y hệt cho `Payments` và `Vouchers`), không phải sai sót của
+file này. Xoá dòng đó đi thì mất concurrency token của §4.3.
+
 **Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4:**
 
-1. Dăm chạy lệnh `migrations add` ở trên, rồi soát file vừa sinh (bảng, cột, chỉ mục, FK, `xmin`).
-2. `dotnet ef migrations has-pending-model-changes --no-build` → phải ra *"No changes have been made to
-   the model since the last migration"*. Ra khác nghĩa là cấu hình còn sót, **đừng** merge.
-3. PR nhánh này → có người khác approve → **Squash and merge** vào `main`.
-4. **Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.
+1. PR nhánh này → có người khác approve → **Squash and merge** vào `main`.
+2. **Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.
    Trước bước đó, CSDL chung **chưa có** hai bảng — endpoint nào chạm chúng sẽ lỗi
    `relation "…" does not exist`.
