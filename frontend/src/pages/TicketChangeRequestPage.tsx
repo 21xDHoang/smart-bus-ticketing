@@ -8,6 +8,7 @@ import {
   Input,
   Result,
   Segmented,
+  Select,
   Space,
   Typography,
   message,
@@ -16,17 +17,20 @@ import {
 import { CheckCircleFilled } from '@ant-design/icons';
 import ticketApi from '../api/ticketApi';
 import type { Ticket } from '../api/ticketApi';
-import ticketChangeRequestApi from '../api/ticketChangeRequestApi';
+import ticketChangeRequestApi, {
+  MOCK_NEW_TRIPS,
+  mockCancellationFee,
+} from '../api/ticketChangeRequestApi';
 import type {
-  SubmittedTicketChange,
   SubmitTicketChangePayload,
-  TicketChangeType,
+  TicketChangeNewTripOption,
 } from '../api/ticketChangeRequestApi';
 import {
-  TICKET_CHANGE_STATUS_META,
-  TICKET_CHANGE_TYPE_OPTIONS,
-  getTicketChangeTypeMeta,
-} from '../api/ticketChangeRequestApi';
+  TICKET_REQUEST_STATUS_META,
+  TICKET_REQUEST_TYPE_META,
+  getTicketRequestTypeMeta,
+} from '../api/ticketRequestApi';
+import type { TicketRequestStatus, TicketRequestType } from '../api/ticketRequestApi';
 import type { AppError } from '../api/axiosClient';
 import TicketStatusTag from '../components/TicketStatusTag';
 import { getTicketStatus, isTicketUsable } from '../components/ticketStatus';
@@ -43,14 +47,20 @@ import { formatDateTime, formatVnd } from '../components/ui/format';
 
 const { Text, Paragraph } = Typography;
 
-/** Giá trị của form gửi yêu cầu huỷ/đổi vé — hai trường đều bắt buộc. */
+/** Giá trị của form gửi yêu cầu huỷ/đổi vé — `newTripId` chỉ có khi chọn loại "đổi chuyến". */
 interface TicketChangeFormValues {
-  type: TicketChangeType;
+  type: TicketRequestType;
+  newTripId?: string;
   reason: string;
 }
 
 /** Số ký tự tối đa của lý do — chừa đủ chỗ cho hành khách giải thích, không cần quá dài. */
 const REASON_MAX_LENGTH = 1000;
+
+/** Hai lựa chọn loại yêu cầu, sinh từ TICKET_REQUEST_TYPE_META để nhãn không lệch màn theo dõi. */
+const TYPE_OPTIONS: { value: TicketRequestType; label: string }[] = (
+  Object.keys(TICKET_REQUEST_TYPE_META) as TicketRequestType[]
+).map((value) => ({ value, label: TICKET_REQUEST_TYPE_META[value].label }));
 
 /** Kết quả một lượt tải vé theo id — bốn trạng thái, không gộp trạng thái nào vào nhau. */
 type LoadState =
@@ -59,14 +69,36 @@ type LoadState =
   | { status: 'not-found' }
   | { status: 'done'; ticket: Ticket };
 
-// Màn hình "Gửi yêu cầu huỷ / đổi vé" (story 5 "Hủy & đổi vé", Sprint 4 — task của Dương Thị
-// Hạnh): hành khách chọn huỷ vé (hoàn tiền) hay đổi vé (chuyển sang chuyến khác), viết lý do rồi
-// gửi yêu cầu để nhà xe xem xét. Đây là màn hình cho HÀNH KHÁCH — không giới hạn vai trò như
-// các màn hình quản trị. Vào từ nút "Huỷ/Đổi vé" trên màn "Vé của tôi".
+/** Tóm tắt yêu cầu vừa gửi — đủ để vẽ màn hình thành công, kèm phí/hoàn đã hiện trước khi gửi. */
+interface SubmittedSummary {
+  type: TicketRequestType;
+  status: TicketRequestStatus;
+  reason: string;
+  /** Phí huỷ (Cancel) hoặc chênh lệch giá (Change; dương = trả thêm, âm = hoàn lại). */
+  fee: number;
+  /** Số tiền hoàn lại (Cancel) = giá vé - phí. null với đổi chuyến. */
+  refundAmount: number | null;
+  /** Chuyến mới — chỉ có khi đổi chuyến. */
+  newTrip: TicketChangeNewTripOption | null;
+  createdAt: string;
+}
+
+/** Câu mô tả chênh lệch giá khi đổi chuyến — dấu dương/âm nói rõ ai trả ai. */
+function priceDiffMessage(diff: number): string {
+  if (diff > 0) return `Chênh lệch +${formatVnd(diff)} — bạn trả thêm khi nhà xe duyệt.`;
+  if (diff < 0) return `Chênh lệch ${formatVnd(diff)} — nhà xe hoàn lại khi duyệt.`;
+  return 'Đổi ngang giá — không phát sinh thêm.';
+}
+
+// Màn hình "Gửi yêu cầu huỷ / đổi vé" (story 5 "Hủy & Đổi vé", Sprint 4 — task của Dương Thị
+// Hạnh): hành khách chọn huỷ vé (hoàn tiền) hay đổi chuyến (sang chuyến khác), xem phí/hoàn
+// TRƯỚC khi gửi, viết lý do rồi gửi yêu cầu để nhà xe xem xét. Đây là màn hình cho HÀNH KHÁCH —
+// không giới hạn vai trò như các màn hình quản trị. Vào từ nút "Huỷ / Đổi vé" trên màn "Vé của tôi".
 //
-// Chỉ vé "Còn hiệu lực" (đã thanh toán, chuyến chưa khởi hành) mới gửi được yêu cầu — vé đã
-// dùng / hết hạn / đã huỷ thì hiện cảnh báo thay vì form. Backend yêu cầu huỷ/đổi chưa có nên
-// màn hình đang chạy dữ liệu giả (xem ticketChangeRequestApi.ts).
+// Chỉ vé "Còn hiệu lực" (đã thanh toán, chuyến chưa khởi hành) mới gửi được yêu cầu. Hai loại yêu
+// cầu khớp hai bảng `CancellationRequests` (huỷ) và `TicketChanges` (đổi chuyến) — xem
+// docs/32-csdl-huy-doi-ve.md. Backend yêu cầu huỷ/đổi chưa có nên màn hình đang chạy dữ liệu giả
+// (xem ticketChangeRequestApi.ts); type/trạng thái/meta dùng chung ticketRequestApi.ts.
 export default function TicketChangeRequestPage() {
   const { ticketId = '' } = useParams();
   const navigate = useNavigate();
@@ -74,12 +106,17 @@ export default function TicketChangeRequestPage() {
 
   const [form] = Form.useForm<TicketChangeFormValues>();
 
+  // Loại yêu cầu và chuyến mới đang chọn — gọi HOOK trước mọi nhánh trả về sớm để thứ tự hook
+  // không đổi giữa các lần render (rules-of-hooks). Giá trị chỉ được dùng ở nhánh vẽ form.
+  const type = Form.useWatch('type', form) ?? 'Cancel';
+  const newTripId = Form.useWatch('newTripId', form);
+
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
 
   const [submitting, setSubmitting] = useState(false);
   // Yêu cầu vừa gửi thành công — null khi chưa gửi.
-  const [submitted, setSubmitted] = useState<SubmittedTicketChange | null>(null);
+  const [submitted, setSubmitted] = useState<SubmittedSummary | null>(null);
 
   // Tải vé theo id trên URL. `cancelled` chặn setState sau khi đã rời màn hình.
   useEffect(() => {
@@ -110,11 +147,44 @@ export default function TicketChangeRequestPage() {
     };
   }, [ticketId, reloadKey]);
 
-  const handleSubmit = async ({ type, reason }: TicketChangeFormValues) => {
+  const handleSubmit = async (values: TicketChangeFormValues) => {
     setSubmitting(true);
     try {
-      const payload: SubmitTicketChangePayload = { ticketId, type, reason };
-      setSubmitted(await ticketChangeRequestApi.submit(payload));
+      const newTrip = MOCK_NEW_TRIPS.find((trip) => trip.id === values.newTripId) ?? null;
+
+      let payload: SubmitTicketChangePayload;
+      let fee: number;
+      let refundAmount: number | null = null;
+
+      if (values.type === 'Cancel') {
+        fee = mockCancellationFee(ticket.departureTime, ticket.price);
+        refundAmount = ticket.price - fee;
+        payload = { type: 'Cancel', ticketId, reason: values.reason };
+      } else if (newTrip) {
+        fee = newTrip.price - ticket.price;
+        payload = {
+          type: 'Change',
+          ticketId,
+          newTripId: newTrip.id,
+          newSeatId: newTrip.seatId,
+          reason: values.reason,
+        };
+      } else {
+        // Không thể xảy ra — Form đã chặn thiếu chuyến mới khi loại là "Đổi chuyến".
+        message.error('Vui lòng chọn chuyến mới.');
+        return;
+      }
+
+      const result = await ticketChangeRequestApi.submit(payload);
+      setSubmitted({
+        type: values.type,
+        status: result.status,
+        reason: values.reason,
+        fee,
+        refundAmount,
+        newTrip,
+        createdAt: result.createdAt,
+      });
       message.success('Đã gửi yêu cầu huỷ/đổi vé thành công.');
     } catch (error) {
       message.error((error as AppError).customMessage || 'Không thể gửi yêu cầu.');
@@ -170,8 +240,12 @@ export default function TicketChangeRequestPage() {
   }
 
   const ticket = state.ticket;
-  const displayStatus = getTicketStatus(ticket);
-  const usable = isTicketUsable(displayStatus);
+  const usable = isTicketUsable(getTicketStatus(ticket));
+
+  const newTrip = MOCK_NEW_TRIPS.find((trip) => trip.id === newTripId) ?? null;
+
+  const cancelFee = mockCancellationFee(ticket.departureTime, ticket.price);
+  const priceDiff = newTrip ? newTrip.price - ticket.price : 0;
 
   return (
     <div>
@@ -223,6 +297,7 @@ export default function TicketChangeRequestPage() {
             <Form<TicketChangeFormValues>
               form={form}
               layout="vertical"
+              initialValues={{ type: 'Cancel' }}
               onFinish={handleSubmit}
               disabled={submitting}
             >
@@ -231,8 +306,40 @@ export default function TicketChangeRequestPage() {
                 label="Loại yêu cầu"
                 rules={[{ required: true, message: 'Vui lòng chọn loại yêu cầu.' }]}
               >
-                <Segmented options={TICKET_CHANGE_TYPE_OPTIONS} />
+                <Segmented options={TYPE_OPTIONS} />
               </Form.Item>
+
+              {type === 'Change' && (
+                <Form.Item
+                  name="newTripId"
+                  label="Chuyến mới"
+                  rules={[{ required: true, message: 'Vui lòng chọn chuyến mới.' }]}
+                  extra="Ghế trống được chọn sẵn trong dữ liệu giả — khi nối API thật sẽ cho chọn ghế cụ thể."
+                >
+                  <Select
+                    placeholder="Chọn chuyến muốn đổi sang"
+                    options={MOCK_NEW_TRIPS.map((trip) => ({
+                      value: trip.id,
+                      label: `${trip.routeCode} — ${trip.routeName} · ${formatDateTime(
+                        trip.departureTime,
+                      )} · Ghế ${trip.seatNumber} · ${formatVnd(trip.price)}`,
+                    }))}
+                  />
+                </Form.Item>
+              )}
+
+              {/* Phí/hoàn hiện TRƯỚC khi gửi — con số khách đã thấy là con số nhà xe áp dụng. */}
+              {type === 'Cancel' && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={`Phí huỷ ${formatVnd(cancelFee)} · Hoàn lại ${formatVnd(ticket.price - cancelFee)}`}
+                />
+              )}
+              {type === 'Change' && newTrip && (
+                <Alert type="info" showIcon style={{ marginBottom: 16 }} message={priceDiffMessage(priceDiff)} />
+              )}
 
               <Form.Item
                 name="reason"
@@ -279,8 +386,8 @@ export default function TicketChangeRequestPage() {
                   key: 'type',
                   label: 'Loại yêu cầu',
                   children: (
-                    <StatusTag color={getTicketChangeTypeMeta(submitted.type).color}>
-                      {getTicketChangeTypeMeta(submitted.type).label}
+                    <StatusTag color={getTicketRequestTypeMeta(submitted.type).color}>
+                      {getTicketRequestTypeMeta(submitted.type).label}
                     </StatusTag>
                   ),
                 },
@@ -288,10 +395,29 @@ export default function TicketChangeRequestPage() {
                   key: 'status',
                   label: 'Trạng thái',
                   children: (
-                    <StatusTag color={TICKET_CHANGE_STATUS_META[submitted.status].color}>
-                      {TICKET_CHANGE_STATUS_META[submitted.status].label}
+                    <StatusTag color={TICKET_REQUEST_STATUS_META[submitted.status].color}>
+                      {TICKET_REQUEST_STATUS_META[submitted.status].label}
                     </StatusTag>
                   ),
+                },
+                ...(submitted.type === 'Change' && submitted.newTrip
+                  ? [
+                      {
+                        key: 'newTrip',
+                        label: 'Chuyến mới',
+                        children: `${submitted.newTrip.routeCode} — ${submitted.newTrip.routeName} · ${formatDateTime(
+                          submitted.newTrip.departureTime,
+                        )}`,
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'money',
+                  label: submitted.type === 'Cancel' ? 'Hoàn lại' : 'Chênh lệch',
+                  children:
+                    submitted.type === 'Cancel'
+                      ? `${formatVnd(submitted.refundAmount ?? 0)} (phí huỷ ${formatVnd(submitted.fee)})`
+                      : priceDiffMessage(submitted.fee),
                 },
               ]}
             />

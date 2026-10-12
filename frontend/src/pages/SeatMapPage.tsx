@@ -559,6 +559,16 @@ function FloorGrid({
     return [...byRow.entries()].sort(([a], [b]) => a - b);
   }, [seats, floor]);
 
+  // Số cột của tầng này = cột lớn nhất có ghế; lối đi chia đôi theo đó.
+  const maxColumn = seats.reduce(
+    (max, seat) => (seat.floor === floor ? Math.max(max, seat.columnIndex) : max),
+    0,
+  );
+  // Cùng công thức với bản xem trước ở màn cấu hình sơ đồ ghế (SeatMap.tsx): chia ceil(n/2)
+  // và chỉ vẽ lối đi khi từ 4 cột — sơ đồ 5–6 cột không lệch nhau giữa hai màn.
+  const leftCols = Math.ceil(maxColumn / 2);
+  const hasAisle = maxColumn >= 4;
+
   return (
     <div style={{ marginBottom: floors > 1 ? 20 : 0 }}>
       {floors > 1 && (
@@ -583,8 +593,8 @@ function FloorGrid({
 
       {rows.map(([, rowSeats]) => {
         const sorted = [...rowSeats].sort((a, b) => a.columnIndex - b.columnIndex);
-        const left = sorted.filter((seat) => seat.columnIndex <= 2);
-        const right = sorted.filter((seat) => seat.columnIndex >= 3);
+        const left = sorted.filter((seat) => seat.columnIndex <= leftCols);
+        const right = sorted.filter((seat) => seat.columnIndex > leftCols);
 
         return (
           <div
@@ -602,8 +612,8 @@ function FloorGrid({
               />
             ))}
 
-            {/* Lối đi giữa xe — khoảng trống ngăn hai dãy ghế. */}
-            <div style={{ width: 20 }} />
+            {/* Lối đi giữa xe — khoảng trống ngăn hai dãy ghế; xe dưới 4 cột thì không có. */}
+            {hasAisle && <div style={{ width: 20 }} />}
 
             {right.map((seat) => (
               <SeatStatusCell

@@ -94,6 +94,71 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("Buses");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.CancellationRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("CancellationFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("DepartureAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RejectReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex(new[] { "TicketId" }, "IX_CancellationRequests_TicketId");
+
+                    b.HasIndex(new[] { "TicketId" }, "IX_CancellationRequests_TicketId_Pending")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.ToTable("CancellationRequests");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.DiscountRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -868,6 +933,83 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("Tickets");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.TicketChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("NewPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<Guid>("NewSeatId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("NewTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("NewTripId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RejectReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NewSeatId");
+
+                    b.HasIndex("NewTicketId");
+
+                    b.HasIndex("NewTripId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex(new[] { "TicketId" }, "IX_TicketChanges_TicketId");
+
+                    b.HasIndex(new[] { "TicketId" }, "IX_TicketChanges_TicketId_Pending")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.ToTable("TicketChanges");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.Trip", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1113,6 +1255,32 @@ namespace SmartBus.Api.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.CancellationRequest", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.User", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedBy");
+
+                    b.Navigation("Ticket");
 
                     b.Navigation("User");
                 });
@@ -1368,6 +1536,55 @@ namespace SmartBus.Api.Migrations
                     b.Navigation("Seat");
 
                     b.Navigation("Trip");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.TicketChange", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Seat", "NewSeat")
+                        .WithMany()
+                        .HasForeignKey("NewSeatId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.Ticket", "NewTicket")
+                        .WithMany()
+                        .HasForeignKey("NewTicketId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.Trip", "NewTrip")
+                        .WithMany()
+                        .HasForeignKey("NewTripId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.User", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("NewSeat");
+
+                    b.Navigation("NewTicket");
+
+                    b.Navigation("NewTrip");
+
+                    b.Navigation("ReviewedBy");
+
+                    b.Navigation("Ticket");
 
                     b.Navigation("User");
                 });

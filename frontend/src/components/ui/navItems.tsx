@@ -24,6 +24,7 @@ import {
   ScheduleOutlined,
   SearchOutlined,
   SettingOutlined,
+  SwapOutlined,
   TagsOutlined,
   TeamOutlined,
   UserOutlined,
@@ -103,6 +104,12 @@ const NAV: NavEntry[] = [
         label: 'Vé của tôi',
         roles: PASSENGER,
         icon: <QrcodeOutlined />,
+      },
+      {
+        to: '/my-ticket-requests',
+        label: 'Hủy/đổi vé của tôi',
+        roles: PASSENGER,
+        icon: <SwapOutlined />,
       },
       {
         to: '/my-monthly-passes',
@@ -402,7 +409,7 @@ export function bottomNavTabs(role: string | null): NavTab[] {
       label: 'Vé',
       to: '/my-tickets',
       icon: <QrcodeOutlined />,
-      activeFor: ['/my-tickets', '/my-monthly-passes', '/monthly-passes'],
+      activeFor: ['/my-tickets', '/my-ticket-requests', '/my-monthly-passes', '/monthly-passes'],
     },
     {
       key: 'vouchers',
