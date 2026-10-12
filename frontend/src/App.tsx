@@ -23,6 +23,7 @@ import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
+import MyTicketRequestsPage from './pages/MyTicketRequestsPage';
 import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
 import FareConfigPage from './pages/FareConfigPage';
@@ -204,6 +205,13 @@ function App() {
                   "Vé của tôi", mọi người đã đăng nhập đều dùng được. Backend Tickets chưa có
                   nên màn hình đang chạy dữ liệu giả (xem ticketApi.ts). */}
               <Route path="/my-tickets/:ticketId/qr" element={<TicketQrPage />} />
+              {/* /my-ticket-requests là màn hình theo dõi trạng thái yêu cầu hủy/đổi vé
+                  (US 5, Sprint 4, task của Nguyễn Đình Băng) — danh sách yêu cầu hủy vé /
+                  đổi chuyến của chính người dùng kèm trạng thái xử lý của nhà xe. Mọi người
+                  đã đăng nhập đều dùng được, mỗi người chỉ thấy yêu cầu của chính mình.
+                  Backend TicketChanges / CancellationRequests chưa có nên màn hình đang chạy
+                  dữ liệu giả (ticketRequestApi.ts). */}
+              <Route path="/my-ticket-requests" element={<MyTicketRequestsPage />} />
               {/* /feedback-submit là màn hình gửi phản ánh (US 24, task của Dương Thị Hạnh) —
                   mọi người đã đăng nhập đều dùng được. Backend gửi phản ánh chưa có nên màn
                   hình đang chạy dữ liệu giả (xem feedbackSubmitApi.ts). */}
