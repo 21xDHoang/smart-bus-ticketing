@@ -5,18 +5,18 @@ import {
   Card,
   DatePicker,
   Form,
-  Input,
   List,
   Space,
   Typography,
   message,
   theme,
 } from 'antd';
-import { EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
+import { SearchOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import routeLookupApi from '../api/routeLookupApi';
 import type { RouteLookupResult } from '../api/routeLookupApi';
 import type { AppError } from '../api/axiosClient';
+import StopAutocomplete from '../components/StopAutocomplete';
 import { EmptyState, PageCard, PageHeader, RouteBadge } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
 import { rememberRecentRoute } from '../components/ui/recentRoutes';
@@ -47,10 +47,18 @@ function readPrefill(state: unknown): RouteLookupPrefill {
 
 // Màn hình tra cứu tuyến (User Story 1): form "điểm đi - điểm đến - ngày" + kết quả tuyến.
 // Đây là màn hình cho HÀNH KHÁCH — không giới hạn vai trò như các màn hình quản trị.
-// Phần "Component autocomplete chọn trạm dừng" (Hoàng Văn Thịnh) là task riêng, nên ở đây
-// điểm đi/điểm đến dùng Input thường và kết quả hiển thị gọn ở mức tuyến. Mỗi tuyến có nút
-// "Xem chuyến" mở màn "Kết quả tìm kiếm" (Nguyễn Đình Băng) — mang theo routeId để màn đó
-// gọi thẳng GET /trips/search (công khai, không cần đăng nhập).
+//
+// Hai ô điểm đi/điểm đến dùng StopAutocomplete (components/StopAutocomplete.tsx) thay cho Input
+// thường. Không phải để cho đẹp: GET /routes/search giải từ khoá ra trạm bằng ToLower().Contains
+// theo TÊN trạm, tức khớp KHÔNG PHÂN BIỆT HOA THƯỜNG nhưng CÓ PHÂN BIỆT DẤU. Ô nhập tự do bắt
+// hành khách gõ đúng chính tả tiếng Việt của một trạm có thật thì mới ra kết quả — gõ "ben thanh"
+// hay làm theo ví dụ in trong placeholder đều trả về rỗng. Ô gợi ý trả về TÊN trạm có dấu, nên
+// giá trị gửi đi luôn đúng thứ endpoint kia cần. (Lỗ hổng bỏ dấu của /routes/search đã được ghi
+// nhận riêng ở docs/api-contract.md mục "/stops/search" — thuộc endpoint của Hiếu, không sửa ở đây.)
+//
+// Kết quả hiển thị gọn ở mức tuyến. Mỗi tuyến có nút "Xem chuyến" mở màn "Kết quả tìm kiếm"
+// (Nguyễn Đình Băng) — mang theo routeId để màn đó gọi thẳng GET /trips/search (công khai,
+// không cần đăng nhập).
 //
 // Trang chủ gửi sang cặp điểm đi – điểm đến qua `location.state` (chip "tuyến gần đây") →
 // điền sẵn form, người dùng chỉ cần bấm "Tìm tuyến". Mỗi lượt tìm CÓ kết quả được ghi nhớ
@@ -139,7 +147,7 @@ export default function RouteLookupPage() {
               style={{ flex: 1, minWidth: 220 }}
               rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập điểm đi.' }]}
             >
-              <Input placeholder="Ví dụ: Bến xe Mỹ Đình" prefix={<EnvironmentOutlined />} />
+              <StopAutocomplete placeholder="Nhập tên trạm, ví dụ: Bến Thành" />
             </Form.Item>
 
             <Form.Item
@@ -148,7 +156,7 @@ export default function RouteLookupPage() {
               style={{ flex: 1, minWidth: 220 }}
               rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập điểm đến.' }]}
             >
-              <Input placeholder="Ví dụ: Bến xe Gia Lâm" prefix={<EnvironmentOutlined />} />
+              <StopAutocomplete placeholder="Nhập tên trạm, ví dụ: Chợ Lớn" />
             </Form.Item>
 
             <Form.Item name="date" label="Ngày đi" style={{ minWidth: 180 }}>

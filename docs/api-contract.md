@@ -1697,6 +1697,141 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 > tải nên dữ liệu không bao giờ cũ quá một lần tải trang. Muốn xuyên máy chủ thì thêm backplane
 > (Azure SignalR / `AddStackExchangeRedis`) — ngoài phạm vi Sprint 3.
 
+## Thông báo kết quả xử lý — `/hubs/notifications`
+
+> ⏳ Backend đã có code (`NotificationHub` + `TicketRequestResultNotifier` — task *"Ghi log và thông
+> báo kết quả xử lý cho hành khách"*, dòng 7 Sprint 4, phân công bảng tính: Vàng Thị Dăm) nhưng
+> **chưa nối vào `Program.cs`**: còn thiếu `AddScoped<ITicketRequestResultNotifier, …>` và
+> `MapHub<NotificationHub>("/hubs/notifications")` — hai dòng thuộc file của Phùng Duy Hoàng. Chi
+> tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
+>
+> Hub KHÔNG phải nguồn dữ liệu: nó chỉ báo "bạn vừa có thông báo mới", còn **danh sách** thông báo
+> sẽ đến từ một endpoint REST (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19
+> Sprint 5 — cùng người làm, **chưa có trong tài liệu này**). Mục này chỉ mô tả kênh đẩy.
+
+### Kết nối
+
+| Thuộc tính | Giá trị |
+|---|---|
+| URL | `/hubs/notifications` |
+| Giao thức | SignalR JSON (mặc định) |
+| Yêu cầu đăng nhập | **Có** — `[Authorize]`. Không có token hợp lệ thì lượt negotiate trả **401** |
+| Token gửi kèm | Query string `?access_token=<JWT>` — xem "Vì sao token đi bằng query string" |
+| Nhóm (group) | Mỗi người một nhóm: `user:{userId}` — **server tự thêm khi kết nối**, client không xin được |
+| Thư viện client | `@microsoft/signalr` (frontend) |
+
+> **Vì sao hub này bắt đăng nhập, khác `/hubs/seat-map`?** Sơ đồ ghế là thông tin công khai (khách
+> tra cứu được trước khi có tài khoản), còn thông báo là **dữ liệu riêng của một người**: kết quả
+> duyệt/từ chối yêu cầu huỷ vé của họ. Không xác thực thì không có cách nào biết ai là ai để gửi
+> riêng cho đúng người.
+
+### Method client gọi (invoke)
+
+**Không có.** Khác `/hubs/seat-map` (client gọi `JoinTrip`), ở đây **không có method nào để client
+gọi** — client chỉ kết nối và lắng nghe.
+
+> **Vì sao không có `JoinUser`?** Nếu để client tự gửi id người dùng lên thì bất kỳ ai cũng xin được
+> vào nhóm của người khác và đọc thông báo của họ. Server tự suy nhóm từ chính token đã xác thực
+> (`Context.UserIdentifier`), nên **không tồn tại đường nào để đọc nhóm của người khác**. Đây là lý
+> do duy nhất khiến hub này khác hình dạng với `SeatMapHub` — không phải để cho gọn.
+
+### Sự kiện server đẩy (event)
+
+| Sự kiện | Payload | Mô tả |
+|---|---|---|
+| `NotificationReceived` | `{ "notificationId": "<GUID>" }` | Khách vừa có một thông báo mới — client gọi lại API danh sách thông báo |
+
+```json
+// Ví dụ payload sự kiện NotificationReceived
+{ "notificationId": "8f2b1d64-0000-0000-0000-000000000000" }
+```
+
+> **Vì sao payload chỉ có mỗi id, không gửi kèm `title`/`body`?** Gửi kèm thì nội dung thông báo
+> tồn tại ở hai nơi (bảng `Notifications` và payload) và hai nơi đó có thể lệch nhau — client phải
+> tin cái nào? Cùng lý do `/hubs/seat-map` chỉ báo "đã đổi" thay vì gửi cả sơ đồ ghế: giữ **một
+> nguồn sự thật duy nhất**. Cái giá là một request danh sách mỗi lần có sự kiện.
+>
+> Client **không cần** lấy nội dung từ payload: chúng nằm sẵn trong bảng `Notifications` để khách đọc
+> lại kể cả khi offline (quyết định A8.5), nên kênh đẩy chỉ có một việc là đánh thức màn hình.
+
+### Khi nào sự kiện được phát
+
+Đúng hai nguồn, mỗi nguồn phát **một lần** cho người gửi yêu cầu:
+
+| Nguồn | Phát khi |
+|---|---|
+| `PATCH /cancellation-requests/{id}` (duyệt / từ chối yêu cầu huỷ) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
+| `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
+
+Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4)
+— **chưa có trong tài liệu này** (chờ Hiếu). Mục này chỉ chốt phần thông báo của chúng.
+
+> ⚠️ **Không có sự kiện nào khi khách GỬI yêu cầu.** Gửi yêu cầu là việc của khách, không phải kết
+> quả cần báo cho khách. Thông báo chỉ đi ở bước **duyệt hoặc từ chối**.
+>
+> ⚠️ **Gọi lại lượt duyệt không phát lại sự kiện.** Một quyết định = một thông báo: nếu đã có dòng
+> thông báo cho đúng yêu cầu đó thì lượt gọi sau bị bỏ qua hoàn toàn (không ghi, không đẩy). Nhờ vậy
+> client retry cũng không làm khách thấy hai thông báo giống nhau.
+
+### Bốn loại thông báo
+
+| `type` | `title` |
+|---|---|
+| `CancellationApproved` | Đã duyệt yêu cầu huỷ vé |
+| `CancellationRejected` | Từ chối yêu cầu huỷ vé |
+| `TicketChangeApproved` | Đã duyệt yêu cầu đổi chuyến |
+| `TicketChangeRejected` | Từ chối yêu cầu đổi chuyến |
+
+Hai loại `…Rejected` có lý do từ chối của quản lý **chép nguyên văn** vào cuối `body`; quản lý không
+nêu lý do thì body ghi rõ *"Người duyệt không nêu lý do."* chứ không để cụt.
+
+> 🔴 **Nội dung thông báo KHÔNG chứa số tiền** — không có khoản hoàn nào, không phí huỷ. Việc hoàn
+> tiền do bảng `Refunds` (US 8, sprint khác) thực hiện và có thể thất bại rồi thử lại, nên nêu một
+> con số ở đây là hứa trước một việc hệ thống chưa làm; định dạng tiền cũng là việc của frontend.
+> Frontend cần hiển thị số tiền thì lấy từ chính dòng yêu cầu. Có test ghim điều này (body không
+> được chứa chữ số nào) — chi tiết: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §6.1.
+
+### Ví dụ client (frontend)
+
+Client **phải** truyền `accessTokenFactory`, nếu không hub trả 401 và không có thông báo nào tới:
+
+```ts
+const connection = new HubConnectionBuilder()
+  .withUrl(`${API_BASE_URL}/hubs/notifications`, {
+    accessTokenFactory: () => accessToken,   // ⚠️ bắt buộc — xem "Vì sao token đi bằng query string"
+  })
+  .withAutomaticReconnect()
+  .build();
+
+// Không có JoinUser/LeaveUser: nhóm do server tự thêm khi kết nối.
+connection.on("NotificationReceived", ({ notificationId }) => {
+  // Gọi lại API danh sách thông báo (dòng 19 Sprint 5) rồi cập nhật badge.
+});
+```
+
+> **Vì sao không cần gọi lại lệnh vào nhóm sau khi tự kết nối lại?** Khác `SeatMapHub`, ở đây nhóm
+> được thêm trong `OnConnectedAsync` — mỗi lần kết nối lại là một lượt `OnConnectedAsync` mới, nên
+> server tự thêm lại. `withAutomaticReconnect()` là đủ.
+
+> **Vì sao token đi bằng query string?** Trình duyệt **không đặt được header `Authorization` cho
+> WebSocket** — API WebSocket của trình duyệt không có chỗ truyền header. Đây là cách duy nhất, và là
+> mặc định của client SignalR JS (`accessTokenFactory`). Phía server, một ngoại lệ duy nhất trong
+> `JwtMiddleware` đọc `?access_token=` **chỉ cho đường dẫn `/hubs`**; token vẫn được kiểm tra đầy đủ
+> (chữ ký, hạn, issuer, audience) như mọi lượt khác — đổi chỗ đọc chứ không nới lỏng kiểm tra.
+>
+> ⚠️ **Đánh đổi đã biết:** token nằm trong URL nên log truy cập của hạ tầng (IIS/Nginx/Render) có
+> thể ghi lại nó. Giảm nhẹ: `AuditLogMiddleware` đã loại cả tiền tố `/hubs` khỏi nhật ký nên URL
+> mang token **không** đi vào bảng `AuditLogs`. Người vận hành phải bảo vệ log truy cập. Cách xử lý
+> triệt để (token riêng ngắn hạn cho hub, hoặc xác thực bằng cookie) ngoài phạm vi đồ án.
+
+> ⚠️ **Chưa có backplane — cùng giới hạn như `/hubs/seat-map`.** SignalR không backplane chỉ chạm
+> được client nối vào CHÍNH máy chủ đã phát sự kiện. Dự án đang chạy hai bản triển khai (Render + máy
+> thành viên) chung một CSDL Supabase: quản lý duyệt yêu cầu ở Render sẽ **không** đẩy được thông
+> báo tới trình duyệt đang nối vào bản chạy ở máy. Trong phạm vi đồ án điều này **không làm mất
+> thông báo** — dòng `Notifications` đã ghi vào CSDL dùng chung, nên khách vẫn thấy khi mở màn danh
+> sách; chỉ mất đúng lời nhắc tức thời. Muốn xuyên máy chủ thì thêm backplane (Azure SignalR /
+> `AddStackExchangeRedis`) — ngoài phạm vi.
+
 ## Xe buýt — `/buses`
 
 > ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi
@@ -1792,7 +1927,9 @@ Lỗi thường gặp: trùng biển số → **400** `errors.licensePlate` · `
 > Ràng buộc unique ở CSDL là lớp chặn cuối cho hai request song song cùng biển số.
 
 Xe mới luôn bắt đầu ở `Active`. Dàn ghế (`Seats`) không do API này quản lý — `capacity` phải
-khớp với số dòng `Seat` của xe, và API tạo dàn ghế sẽ đến ở sprint làm story 2 (chọn vị trí ghế).
+khớp với số ghế của xe, và ghế được sinh từ sơ đồ ghế của **loại xe** (mục
+"Sơ đồ ghế — `/seat-layouts`" ngay dưới). Xe thêm mới vào đội chỉ có ghế sau khi sơ đồ của loại
+xe đó được lưu lại một lần.
 
 #### `PUT /buses/{id}`
 
@@ -1819,6 +1956,177 @@ thêm cột `IsDeleted`, nên dùng đúng cột trạng thái sẵn có.
 
 Trả **200** kèm `Bus` đã ngừng khai thác. Xe đã `Inactive` gọi lại → **200** không báo lỗi
 (idempotent — cùng lối `DELETE /routes/{id}`).
+
+## Sơ đồ ghế — `/seat-layouts`
+
+> ✅ Backend đã có (`SeatLayoutsController` — Phùng Duy Hoàng, story 2). Frontend gọi qua
+> `frontend/src/api/seatLayoutApi.ts`, màn cấu hình là `SeatLayoutConfigPage`.
+>
+> **Toàn bộ endpoint dưới đây yêu cầu vai trò `Admin` hoặc `Manager`.** Người đã đăng nhập
+> nhưng không đủ quyền nhận **403** kèm body `{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+### Sơ đồ ghế thuộc LOẠI XE, còn ghế thuộc XE
+
+Đây là chỗ dễ hiểu nhầm nhất của mô hình, nên nói trước:
+
+- Một `SeatLayout` gắn với **loại xe** (`busType`), không gắn với từng xe — hai xe cùng loại dùng
+  chung một sơ đồ.
+- Ghế thật (`Seats`, bảng riêng — không thuộc hợp đồng này) gắn với **từng xe** và được *sinh ra từ*
+  sơ đồ. Xe ↔ sơ đồ nối bằng **so khớp chuỗi** `Buses.busType == SeatLayouts.busType`.
+- Vì vậy response ở đây **không có mảng `seats`**: sơ đồ là hình học, không phải danh sách ghế.
+  Muốn xem ghế thật của một chuyến → `GET /trips/{tripId}/seats` (ghế chưa sinh thì endpoint đó
+  trả `floors: 0, seats: []`).
+
+### Entity `SeatLayout`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `busType` | `string` | Loại xe — "Xe buýt 45 chỗ". Duy nhất toàn hệ thống (khoá nghiệp vụ). **Không sửa được sau khi tạo** |
+| `numberOfFloors` | `number` | Số tầng: 1 hoặc 2 |
+| `rowsPerFloor` | `number` | Số hàng ghế mỗi tầng |
+| `columnsPerRow` | `number` | Số ghế mỗi hàng |
+| `totalSeats` | `number` | Tổng số ghế = `numberOfFloors × rowsPerFloor × columnsPerRow` — server tự tính, client **không** gửi |
+| `vipSeatPositions` | `string[]` | Toạ độ các ghế VIP, dạng `"tầng-hàng-cột"` |
+| `busesSeated` | `number` | **Chỉ có nghĩa ở response của POST/PUT** — số xe vừa được sinh ghế trong lượt lưu này (0 nếu không xe nào cần). GET luôn trả `0` |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
+| `updatedAt` | `string \| null` | `null` khi sơ đồ chưa được sửa lần nào |
+
+```json
+// Ví dụ SeatLayout
+{
+  "id": "0f3d2b7a-0000-0000-0000-000000000000",
+  "busType": "Xe buýt 45 chỗ",
+  "numberOfFloors": 1,
+  "rowsPerFloor": 9,
+  "columnsPerRow": 5,
+  "totalSeats": 45,
+  "vipSeatPositions": ["1-1-1", "1-1-2"],
+  "busesSeated": 0,
+  "createdAt": "2026-10-12T08:00:00Z",
+  "updatedAt": null
+}
+```
+
+### Quy ước toạ độ và mã ghế — chốt tại đây
+
+`docs/26-csdl-so-do-ghe.md` mục "Việc còn lại" để ngỏ hai điểm này; hợp đồng chốt:
+
+- **Đếm từ 1.** `floor`, `rowIndex`, `columnIndex` đều bắt đầu từ **1**, cả khi hiển thị lẫn khi
+  gửi lên. Màn hình vẽ mảng 0-based thì phải `+1` trước khi so với `vipSeatPositions`.
+- **Toạ độ VIP** là chuỗi `"tầng-hàng-cột"` — ví dụ `"1-1-1"`, `"2-9-5"`.
+- **Mã ghế** (`seatNumber` trong bảng `Seats`) đánh theo hàng: hàng 1 = chữ `A`, cột 1 = số `1`
+  → `A1`, `A2`, … Ghế hàng 9 cột 5 là `I5`.
+- **Xe hai tầng** thêm tiền tố `T{floor}-`: tầng 1 ra `T1-A1`, tầng 2 ra `T2-A1`. Xe một tầng
+  **không** có tiền tố. Bắt buộc phải vậy vì `(busId, seatNumber)` là unique — thiếu tiền tố thì
+  hai tầng trùng mã nhau ngay từ ghế đầu tiên.
+
+### Lưu sơ đồ là ghế có ngay (tự sinh)
+
+Không có endpoint riêng để "sinh ghế", và không có nút riêng trên màn hình. **Lưu sơ đồ là sinh
+ghế** — vì một sơ đồ không có ghế thật thì hành khách vẫn mở ra màn chọn ghế trống, đúng cái lỗi
+mà tính năng này sinh ra để chặn.
+
+Khi `POST`:
+
+1. Tạo `SeatLayout`.
+2. Tìm mọi xe có `busType` **đúng bằng** loại xe của sơ đồ.
+3. Xe nào **chưa có ghế nào** → sinh đủ `totalSeats` dòng `Seat` cho xe đó.
+4. Xe đã có ghế → **không đụng tới** (ghế đang phục vụ giữ chỗ/bán vé).
+
+`busesSeated` trong response cho biết bước 3 đã sinh cho bao nhiêu xe.
+
+Khi `PUT` (sửa sơ đồ):
+
+| Tình huống | Kết quả |
+|---|---|
+| Hình học và VIP **không đổi** | Chỉ sinh bù cho xe còn thiếu ghế (đúng lối POST bước 3) — đây là cách "gắn" xe mới thêm vào đội |
+| Hình học/VIP **có đổi**, chưa ghế nào của loại xe đó bị giữ chỗ hoặc bán | Xoá ghế cũ của các xe đó rồi sinh lại theo lưới mới |
+| Hình học/VIP **có đổi**, đã có ghế bị giữ chỗ hoặc bán | **409** — xem bên dưới |
+
+> **Vì sao 409 chứ không sinh đè?** Ghế là thứ phiên giữ chỗ và vé trỏ tới bằng khoá ngoại
+> `Restrict` (`SeatHolds.SeatId`, `Tickets.SeatId` — quy ước A5). Xoá một ghế đã có vé là làm vé
+> mất chỗ ngồi, và CSDL sẽ chặn ngay ở tầng dưới. Nên API từ chối trước khi chạm vào dữ liệu:
+> `{ "message": "Sơ đồ đang được dùng để giữ chỗ hoặc bán vé — không sửa hình học được nữa." }`.
+
+> ⚠️ **Sức chứa xe phải khớp lưới ghế.** Trước khi lưu, server kiểm tra mọi xe cùng `busType` có
+> `capacity == totalSeats`; lệch thì **400** với `message` nói rõ phép tính (*"Xe 20B123789 có sức
+> chứa 45 nhưng lưới ghế cho ra 24 ghế"*). Lỗi này **không gắn vào ô nhập nào** (`errors` rỗng) vì
+> cả hai phía đều sửa được: sức chứa ở màn Quản lý xe, hoặc lưới ghế ở đây. Thiếu phép kiểm này
+> thì một xe 45 chỗ có thể mang lưới 4 ghế, và màn chọn ghế sẽ hiện đúng 4 ghế cho khách.
+>
+> Đổi `busType` của xe ở `PUT /buses/{id}` **không** tự xoá ghế đã sinh của xe đó — ghế vẫn thuộc
+> xe, và vẫn trỏ về sơ đồ cũ.
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/seat-layouts` | Danh sách sơ đồ (lọc theo loại xe) | — | `SeatLayout[]` |
+| GET | `/seat-layouts/{id}` | Chi tiết một sơ đồ | — | `SeatLayout` |
+| POST | `/seat-layouts` | Thêm sơ đồ **+ sinh ghế cho xe cùng loại** | `CreateSeatLayout` | `SeatLayout` (201) |
+| PUT | `/seat-layouts/{id}` | Sửa sơ đồ **+ đồng bộ lại ghế** | `UpdateSeatLayout` | `SeatLayout` |
+| DELETE | `/seat-layouts/{id}` | Xoá sơ đồ (chỉ khi chưa xe nào có ghế) | — | 204 No Content |
+
+#### `GET /seat-layouts`
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `search` | `string` | — | Tìm theo loại xe — **không phân biệt hoa thường** |
+
+Trả mảng `SeatLayout[]` sắp theo `busType` tăng dần, **không phân trang**: số sơ đồ bằng số loại
+xe trong đội, chỉ vài dòng.
+
+#### `POST /seat-layouts`
+
+```json
+// CreateSeatLayout — body
+{
+  "busType": "Xe buýt 45 chỗ",
+  "numberOfFloors": 1,
+  "rowsPerFloor": 9,
+  "columnsPerRow": 5,
+  "vipSeatPositions": ["1-1-1", "1-1-2"]
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busType` | ✅ | 2–50 ký tự, duy nhất toàn hệ thống |
+| `numberOfFloors` | ✅ | 1 hoặc 2 |
+| `rowsPerFloor` | ✅ | 1–26 (26 = số chữ cái `A`–`Z` dùng đánh mã ghế). Màn hình giới hạn chặt hơn: 13 |
+| `columnsPerRow` | ✅ | 1–10. Màn hình giới hạn 6 |
+| `vipSeatPositions` | — | Mảng toạ độ `"tầng-hàng-cột"` nằm trong lưới và không trùng nhau. Bỏ trống = không có ghế VIP |
+
+`totalSeats` vượt 200 (trần sức chứa xe của `/buses`) → **400**. Toạ độ VIP ngoài lưới →
+**400** `errors.vipSeatPositions`.
+
+Lỗi thường gặp: trùng loại xe → **400** `errors.busType` · lưới ghế lệch sức chứa xe → **400**
+`message` (xem khối ⚠️ bên trên).
+
+> **Vì sao trùng loại xe trả 400 mà không phải 409?** Cùng lý do trùng biển số ở `/buses` và trùng
+> mã tuyến ở `/routes`: `busType` do quản lý nhập tay vào ô form, frontend gắn thẳng lỗi vào ô
+> input. Ràng buộc unique ở CSDL là lớp chặn cuối cho hai request song song cùng loại xe.
+
+Trả **201** kèm header `Location` tới `GET /seat-layouts/{id}`, body là `SeatLayout` vừa tạo với
+`busesSeated` = số xe vừa được sinh ghế.
+
+#### `PUT /seat-layouts/{id}`
+
+Body **không có `busType`** — đó là khoá nghiệp vụ, đổi nó là xoá-rồi-tạo:
+
+```json
+{ "numberOfFloors": 1, "rowsPerFloor": 9, "columnsPerRow": 5, "vipSeatPositions": [] }
+```
+
+Ràng buộc từng trường như POST. `updatedAt` được cập nhật. Trả **200** kèm `SeatLayout` với
+`busesSeated` = số xe vừa được sinh (hoặc sinh lại) ghế. Sơ đồ không tồn tại → **404**.
+
+#### `DELETE /seat-layouts/{id}`
+
+Xoá cứng, trả **204**. **409** khi còn ghế nào trỏ về sơ đồ này (ghế là dữ liệu nghiệp vụ — cùng
+tinh thần `Restrict` của quy ước A5), `message` nêu rõ còn bao nhiêu ghế. Muốn xoá thì phải xử lý
+ghế trước. Sơ đồ không tồn tại → **404**.
 
 ## Hồ sơ tài xế — `/drivers`
 

@@ -1,99 +1,145 @@
-import type { TagProps } from 'antd';
+import dayjs from 'dayjs';
+import type { TicketRequestStatus, TicketRequestType } from './ticketRequestApi';
 
 // -----------------------------------------------------------------------------
-// API gửi yêu cầu huỷ / đổi vé — nối với story 5 "Hủy & đổi vé" (Sprint 4), màn hình
-// "Gửi yêu cầu huỷ / đổi vé" (task của Dương Thị Hạnh).
+// API GỬI yêu cầu huỷ / đổi vé — màn hình "Gửi yêu cầu huỷ / đổi vé" (US 5 "Hủy & Đổi vé",
+// Sprint 4, task của Dương Thị Hạnh).
 //
-// Backend CHƯA có endpoint nào cho yêu cầu huỷ/đổi vé — docs/api-contract.md mới chỉ có
-// GET /tickets/me và GET /tickets/{id} (tra cứu vé). Vì vậy file này chạy dữ liệu giả
-// (USE_MOCK_DATA = true) — cùng lối màn "Vé của tôi" (ticketApi.ts) và màn cấu hình sơ đồ
-// ghế (seatLayoutApi.ts) đã làm khi backend chưa sẵn sàng. Khi backend + contract có, chỉ
-// cần viết thật nhánh `api` rồi lật cờ.
+// Đây là nửa GỬI của story, nửa ĐỌC đã có ở ticketRequestApi.ts (màn "Hủy/đổi vé của tôi",
+// task của Nguyễn Đình Băng). Hai bảng đã chốt trong CSDL là `CancellationRequests` (huỷ) và
+// `TicketChanges` (đổi chuyến) — hai nghiệp vụ TÁCH BIỆT:
+//   • Huỷ vé  → `POST /cancellation-requests`  { ticketId, reason }
+//   • Đổi chuyến → `POST /ticket-changes`      { ticketId, newTripId, newSeatId, reason }
+// (hình dạng endpoint dự kiến, xem docs/32-csdl-huy-doi-ve.md — chờ Hiếu/Kiên chốt vào
+// api-contract.md rồi mới nối axiosClient).
 //
-// Hình dạng endpoint DỰ KIẾN (để Hiếu chốt vào api-contract.md — CHƯA cam kết):
-//   POST /ticket-change-requests → hành khách gửi yêu cầu huỷ hoặc đổi một vé → 201
-//   (status khởi tạo `Pending`; body { ticketId, type, reason }).
+// Backend chưa có hai endpoint đó nên file này chạy dữ liệu giả (USE_MOCK_DATA = true), cùng
+// lối ticketRequestApi.ts đã làm. Khi backend + contract có, chỉ cần viết thật nhánh `api` rồi
+// lật cờ. Mọi type/trạng thái/meta dùng CHUNG với ticketRequestApi.ts — không khai báo lại
+// một bản thứ hai để khỏi lệch nhãn/màu với màn theo dõi.
 // -----------------------------------------------------------------------------
 
-/** Loại yêu cầu — hành khách muốn huỷ vé (hoàn tiền) hay đổi sang chuyến khác. */
-export type TicketChangeType = 'Cancel' | 'Change';
+/** Body khi gửi một yêu cầu huỷ/đổi vé — hai hình dạng tuỳ loại, khớp hai bảng trong CSDL. */
+export type SubmitTicketChangePayload =
+  | { type: 'Cancel'; ticketId: string; reason: string }
+  | {
+      type: 'Change';
+      ticketId: string;
+      /** Chuyến mới muốn đổi sang — `TicketChanges.NewTripId`. */
+      newTripId: string;
+      /** Ghế muốn ngồi ở chuyến mới — `TicketChanges.NewSeatId`. */
+      newSeatId: string;
+      reason: string;
+    };
 
-/** Trạng thái xử lý — vòng đời từ lúc gửi tới khi nhà xe duyệt hoặc từ chối. */
-export type TicketChangeStatus = 'Pending' | 'Approved' | 'Rejected';
-
-/** Body khi gửi một yêu cầu huỷ/đổi vé — POST /ticket-change-requests (dự kiến). */
-export interface SubmitTicketChangePayload {
-  /** Vé muốn huỷ/đổi — khoá vé trong danh sách "Vé của tôi". */
-  ticketId: string;
-
-  type: TicketChangeType;
-
-  /** Lý do — text tự do, bắt buộc. */
-  reason: string;
-}
-
-/** Yêu cầu vừa gửi, trả về bởi POST /ticket-change-requests — chỉ cần đủ để hiện màn thành công. */
+/** Yêu cầu vừa gửi, trả về bởi POST /cancellation-requests hoặc /ticket-changes. */
 export interface SubmittedTicketChange {
   id: string;
 
-  ticketId: string;
-
-  type: TicketChangeType;
-
-  reason: string;
+  type: TicketRequestType;
 
   /** Luôn là `Pending` ngay sau khi gửi — nhà xe duyệt sau. */
-  status: TicketChangeStatus;
+  status: TicketRequestStatus;
 
   createdAt: string;
 }
 
-interface TicketChangeMeta {
-  label: string;
-  /** Tên màu preset của Tag AntD. */
-  color: TagProps['color'];
+/** Một chuyến mới trong ô chọn "đổi sang chuyến" — dữ liệu giả cho bước chọn của luồng đổi. */
+export interface TicketChangeNewTripOption {
+  /** Khoá chuyến — đóng vai `TicketChanges.NewTripId`. */
+  id: string;
+
+  routeCode: string;
+
+  routeName: string;
+
+  /** Giờ khởi hành (ISO 8601). */
+  departureTime: string;
+
+  /** Giá vé chuyến mới (VND) — để tính chênh lệch với vé cũ. */
+  price: number;
+
+  /** Khoá ghế — đóng vai `TicketChanges.NewSeatId`. */
+  seatId: string;
+
+  /** Số ghế hiển thị — "A03". */
+  seatNumber: string;
 }
 
-/** Nhãn + màu cho hai loại yêu cầu — cùng lối FEEDBACK_TYPE_META của màn "Gửi phản ánh". */
-export const TICKET_CHANGE_TYPE_META: Record<TicketChangeType, TicketChangeMeta> = {
-  Cancel: { label: 'Huỷ vé', color: 'red' },
-  Change: { label: 'Đổi vé', color: 'geekblue' },
-};
+/**
+ * Phí huỷ (VND) theo quy định thời gian — bản GIẢ của service tính phí của Kiên
+ * (docs/32-csdl-huy-doi-ve.md §6): trước ≥24h miễn phí, 12–24h phí 30%, dưới 12h phí 50%.
+ * Màn hình dùng hàm này để hiện phí/hoàn TRƯỚC khi gửi; khi nối API thật thì thay bằng giá trị
+ * backend trả về, không tự tính lại.
+ */
+export function mockCancellationFee(departureTime: string, price: number): number {
+  const hoursUntil = dayjs(departureTime).diff(dayjs(), 'hour', true);
 
-/** Danh sách loại yêu cầu cho ô chọn, theo đúng thứ tự khai báo ở TICKET_CHANGE_TYPE_META. */
-export const TICKET_CHANGE_TYPE_OPTIONS: { value: TicketChangeType; label: string }[] = (
-  Object.keys(TICKET_CHANGE_TYPE_META) as TicketChangeType[]
-).map((value) => ({ value, label: TICKET_CHANGE_TYPE_META[value].label }));
-
-/** Nhãn + màu trạng thái — chỉ cần `Pending` để vẽ thẻ "Chờ duyệt" trên màn hình thành công. */
-export const TICKET_CHANGE_STATUS_META: Record<TicketChangeStatus, TicketChangeMeta> = {
-  Pending: { label: 'Chờ duyệt', color: 'processing' },
-  Approved: { label: 'Đã duyệt', color: 'success' },
-  Rejected: { label: 'Từ chối', color: 'error' },
-};
-
-/** Lấy nhãn + màu cho một mã loại yêu cầu; mã lạ vẫn hiển thị được thay vì crash. */
-export function getTicketChangeTypeMeta(type: string): TicketChangeMeta {
-  return TICKET_CHANGE_TYPE_META[type as TicketChangeType] ?? { label: type, color: 'default' };
+  if (hoursUntil >= 24) return 0;
+  if (hoursUntil >= 12) return Math.round(price * 0.3);
+  return Math.round(price * 0.5);
 }
+
+/** Mốc giờ khởi hành giả cho các chuyến mới — `offsetDays` dương là tương lai. */
+function mockDeparture(offsetDays: number, hourOfDay: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  date.setHours(hourOfDay, 30, 0, 0);
+  return date.toISOString();
+}
+
+/**
+ * Kho chuyến mới giả cho luồng "đổi chuyến" — đứng tạm chỗ cho component "chọn chuyến mới"
+ * của Thịnh (dòng 9 Sprint 4). Khi component đó có, thay ô chọn ở màn hình bằng component,
+ * không sửa hợp đồng submit (vẫn gửi `newTripId` + `newSeatId`).
+ */
+export const MOCK_NEW_TRIPS: TicketChangeNewTripOption[] = [
+  {
+    id: 'newtrip-01-late',
+    routeCode: '01',
+    routeName: 'Bến xe Mỹ Đình — Bến xe Gia Lâm',
+    departureTime: mockDeparture(2, 9),
+    price: 12_000,
+    seatId: 'seat-new-01-A03',
+    seatNumber: 'A03',
+  },
+  {
+    id: 'newtrip-08-morning',
+    routeCode: '08',
+    routeName: 'Cầu Giấy — Bờ Hồ Hoàn Kiếm',
+    departureTime: mockDeparture(2, 7),
+    price: 9_000,
+    seatId: 'seat-new-08-B01',
+    seatNumber: 'B01',
+  },
+  {
+    id: 'newtrip-02-noon',
+    routeCode: '02',
+    routeName: 'Bến xe Mỹ Đình — Bến xe Nước Ngầm',
+    departureTime: mockDeparture(2, 12),
+    price: 10_000,
+    seatId: 'seat-new-02-C05',
+    seatNumber: 'C05',
+  },
+];
 
 export interface TicketChangeRequestApi {
-  /** Gửi một yêu cầu huỷ/đổi vé mới. */
+  /** Gửi một yêu cầu huỷ hoặc đổi chuyến mới. */
   submit: (payload: SubmitTicketChangePayload) => Promise<SubmittedTicketChange>;
 }
 
 // ---------------------------------------------------------------------------
-// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` — backend yêu cầu huỷ/đổi chưa có.
+// Cờ chuyển giữa dữ liệu giả và API thật. Đang để `true` — backend huỷ/đổi chưa có.
 const USE_MOCK_DATA = true;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // -------- Gọi API thật (dùng khi USE_MOCK_DATA = false) --------
-// Backend chưa có endpoint yêu cầu huỷ/đổi vé nên nhánh này tạm chưa viết: nối axiosClient vào
-// endpoint dự kiến ở đầu file khi api-contract.md đã chốt.
+// Backend chưa có POST /cancellation-requests và POST /ticket-changes nên nhánh này tạm chưa
+// viết: nối axiosClient vào hai endpoint dự kiến ở đầu file khi api-contract.md đã chốt.
 const api: TicketChangeRequestApi = {
   async submit() {
-    throw new Error('Backend yêu cầu huỷ/đổi vé chưa có — chưa thể gửi yêu cầu thật.');
+    throw new Error('Backend huỷ/đổi vé chưa có — chưa thể gửi yêu cầu thật.');
   },
 };
 
@@ -102,18 +148,16 @@ const mock: TicketChangeRequestApi = {
   async submit(payload) {
     await delay(600);
 
-    // Giả lập lỗi "không tìm thấy vé" như backend sẽ trả khi ticketId không có thật.
-    // Màn hình luôn gửi id lấy từ ticketApi.get nên nhánh này gần như không chạy — chỉ để
-    // giữ hợp đồng lỗi rõ ràng khi sau này nối API thật.
+    // Giả lập lỗi "không tìm thấy vé" như backend sẽ trả khi ticketId không có thật. Màn hình
+    // luôn gửi id lấy từ ticketApi.get nên nhánh này gần như không chạy — chỉ để giữ hợp đồng
+    // lỗi rõ ràng khi sau này nối API thật.
     if (!payload.ticketId) {
       throw new Error('Không tìm thấy vé đã chọn.');
     }
 
     return {
       id: `tcr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      ticketId: payload.ticketId,
       type: payload.type,
-      reason: payload.reason,
       status: 'Pending',
       createdAt: new Date().toISOString(),
     };

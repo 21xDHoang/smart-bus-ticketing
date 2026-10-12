@@ -23,6 +23,7 @@ import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
+import MyTicketRequestsPage from './pages/MyTicketRequestsPage';
 import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
 import TicketChangeRequestPage from './pages/TicketChangeRequestPage';
@@ -205,11 +206,18 @@ function App() {
                   "Vé của tôi", mọi người đã đăng nhập đều dùng được. Backend Tickets chưa có
                   nên màn hình đang chạy dữ liệu giả (xem ticketApi.ts). */}
               <Route path="/my-tickets/:ticketId/qr" element={<TicketQrPage />} />
+              {/* /my-ticket-requests là màn hình theo dõi trạng thái yêu cầu hủy/đổi vé
+                  (US 5, Sprint 4, task của Nguyễn Đình Băng) — danh sách yêu cầu hủy vé /
+                  đổi chuyến của chính người dùng kèm trạng thái xử lý của nhà xe. Mọi người
+                  đã đăng nhập đều dùng được, mỗi người chỉ thấy yêu cầu của chính mình.
+                  Backend TicketChanges / CancellationRequests chưa có nên màn hình đang chạy
+                  dữ liệu giả (ticketRequestApi.ts). */}
+              <Route path="/my-ticket-requests" element={<MyTicketRequestsPage />} />
               {/* /my-tickets/:ticketId/request là màn hình gửi yêu cầu huỷ/đổi vé (US 5, Sprint 4 —
-                  task của Dương Thị Hạnh): hành khách chọn huỷ vé hay đổi vé, viết lý do rồi gửi
-                  yêu cầu để nhà xe xem xét. Vào từ nút "Huỷ / Đổi vé" trên màn "Vé của tôi", mọi
-                  người đã đăng nhập đều dùng được. Backend yêu cầu huỷ/đổi chưa có nên màn hình
-                  đang chạy dữ liệu giả (xem ticketChangeRequestApi.ts). Dòng route này do Dương
+                  task của Dương Thị Hạnh): hành khách chọn huỷ vé hay đổi chuyến, viết lý do rồi
+                  gửi yêu cầu để nhà xe xem xét. Vào từ nút "Huỷ / Đổi vé" trên màn "Vé của tôi",
+                  mọi người đã đăng nhập đều dùng được. Backend yêu cầu huỷ/đổi chưa có nên màn
+                  hình đang chạy dữ liệu giả (xem ticketChangeRequestApi.ts). Dòng route này do Dương
                   Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung §E1
                   (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
               <Route path="/my-tickets/:ticketId/request" element={<TicketChangeRequestPage />} />

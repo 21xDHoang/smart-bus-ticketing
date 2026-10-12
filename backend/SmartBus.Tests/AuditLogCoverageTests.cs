@@ -95,6 +95,13 @@ public class AuditLogCoverageTests
         ("PUT",    "/api/buses/{id:guid}",                       CachGhi.Middleware),
         ("DELETE", "/api/buses/{id:guid}",                       CachGhi.Middleware),
 
+        // Sơ đồ ghế — story 2, Phùng Duy Hoàng. Ba endpoint đều do AuditLogMiddleware tự ghi
+        // (verb → hành động, tên bảng suy ra là "SeatLayouts"). POST trả body có id nên Target
+        // là id sơ đồ vừa tạo; PUT/DELETE lấy id từ đường dẫn.
+        ("POST",   "/api/seat-layouts",           CachGhi.Middleware),
+        ("PUT",    "/api/seat-layouts/{id:guid}", CachGhi.Middleware),
+        ("DELETE", "/api/seat-layouts/{id:guid}", CachGhi.Middleware),
+
         // Hồ sơ tài xế — story 14, Trần Trung Hiếu. Ba endpoint đều do AuditLogMiddleware
         // tự ghi (verb → hành động). Tên bảng suy ra là "Drivers" dù bản ghi nằm ở bảng
         // Users — đánh đổi đã biết, ghi chú ở docs/api-contract.md mục "Hồ sơ tài xế".
@@ -829,6 +836,49 @@ public class AuditLogCoverageTests
         await AssertMotBanGhiAsync(factory, AuditAction.Create, $"Feedbacks:{phanAnh.Id}", quanLy);
     }
 
+    // ------------------------------------------------------------------------------- Sơ đồ ghế
+
+    [Fact]
+    public async Task Post_seat_layouts_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+
+        var response = await client.PostAsJsonAsync(SeatLayoutsUrl, SeatLayoutBody("Xe buýt 45 chỗ"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"SeatLayouts:{await IdOfAsync(response)}", admin);
+    }
+
+    [Fact]
+    public async Task Put_seat_layouts_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var layout = await SeedSeatLayoutAsync(factory, "Xe buýt 45 chỗ");
+
+        var response = await client.PutAsJsonAsync($"{SeatLayoutsUrl}/{layout.Id}", SeatLayoutUpdateBody("1-1-1"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"SeatLayouts:{layout.Id}", admin);
+    }
+
+    [Fact]
+    public async Task Delete_seat_layouts_ghi_Delete_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var layout = await SeedSeatLayoutAsync(factory, "Xe buýt 45 chỗ");
+
+        var response = await client.DeleteAsync($"{SeatLayoutsUrl}/{layout.Id}");
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"SeatLayouts:{layout.Id}", admin);
+    }
+
     // ------------------------------------------------------------------------------------ Auth
 
     [Fact]
@@ -1049,6 +1099,14 @@ public class AuditLogCoverageTests
     private static object StopBody(string name)
         => new { name, address = $"Địa chỉ {name}", latitude = 21.0307, longitude = 105.8034 };
 
+    private static object SeatLayoutBody(string busType)
+        => new { busType, numberOfFloors = 1, rowsPerFloor = 2, columnsPerRow = 2, vipSeatPositions = Array.Empty<string>() };
+
+    // PUT cố ý KHÔNG có busType — loại xe là khoá nghiệp vụ, đổi khoá là xoá-rồi-tạo
+    // (UpdateSeatLayoutRequest của docs/api-contract.md).
+    private static object SeatLayoutUpdateBody(params string[] vipSeatPositions)
+        => new { numberOfFloors = 1, rowsPerFloor = 2, columnsPerRow = 2, vipSeatPositions };
+
     private static async Task<string> RefreshTokenAsync(TestAppFactory factory)
     {
         var response = await factory.CreateClient()
@@ -1208,6 +1266,25 @@ public class AuditLogCoverageTests
         await factory.SeedAsync(db => db.Stops.Add(stop));
 
         return stop;
+    }
+
+    private static async Task<SeatLayout> SeedSeatLayoutAsync(TestAppFactory factory, string busType)
+    {
+        var layout = new SeatLayout
+        {
+            Id = Guid.NewGuid(),
+            BusType = busType,
+            NumberOfFloors = 1,
+            RowsPerFloor = 2,
+            ColumnsPerRow = 2,
+            TotalSeats = 4,
+            VipSeatPositions = string.Empty,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        await factory.SeedAsync(db => db.SeatLayouts.Add(layout));
+
+        return layout;
     }
 
     private static async Task<RouteStop> SeedRouteStopAsync(
@@ -1385,6 +1462,8 @@ public class AuditLogCoverageTests
     private const string RoutesUrl = "/api/routes";
 
     private const string StopsUrl = "/api/stops";
+
+    private const string SeatLayoutsUrl = "/api/seat-layouts";
 
     private const string UsersUrl = "/api/admin/users";
 
