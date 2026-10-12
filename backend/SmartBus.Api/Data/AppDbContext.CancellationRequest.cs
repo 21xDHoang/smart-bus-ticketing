@@ -50,7 +50,7 @@ public partial class AppDbContext
             //
             // ⚠️ Ràng buộc này CHỈ áp trong bảng này. Luật "một vé không thể vừa có yêu cầu huỷ vừa
             // có yêu cầu đổi đang chờ" (hai bảng khác nhau) không diễn đạt được bằng chỉ mục — việc
-            // của service, xem docs/29 §5.
+            // của service, xem docs/32-csdl-huy-doi-ve.md §4.4.
             e.HasIndex(c => c.TicketId, "IX_CancellationRequests_TicketId_Pending")
              .IsUnique()
              .HasFilter("\"Status\" = 'Pending'");

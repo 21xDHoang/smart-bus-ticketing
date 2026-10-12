@@ -35,6 +35,13 @@ public static class JwtMiddleware
     /// <summary>HMAC-SHA256 đòi khoá tối thiểu 256 bit.</summary>
     private const int MinimumSigningKeyBytes = 32;
 
+    /// <summary>
+    /// Tiền tố đường dẫn của mọi hub SignalR — cũng là tiền tố mà <c>AuditLogMiddleware.IgnoredPaths</c>
+    /// đang loại khỏi nhật ký, và là phạm vi duy nhất mà <c>ReadAccessTokenFromHubQueryAsync</c> chịu
+    /// đọc token từ query string. Đổi một trong hai chỗ mà quên chỗ kia là hub mất xác thực trong im lặng.
+    /// </summary>
+    private const string HubPathPrefix = "/hubs";
+
     private const string MissingToken = "Chưa đăng nhập. Vui lòng gửi kèm access token trong header Authorization.";
 
     private const string ExpiredToken = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
@@ -86,6 +93,7 @@ public static class JwtMiddleware
 
                 options.Events = new JwtBearerEvents
                 {
+                    OnMessageReceived = ReadAccessTokenFromHubQueryAsync,
                     OnTokenValidated = AttachCurrentUserAsync,
                     OnChallenge = WriteUnauthorizedAsync,
                 };
@@ -114,6 +122,46 @@ public static class JwtMiddleware
             throw new InvalidOperationException(
                 $"\"Jwt:Key\" quá ngắn ({keyBytes} byte). HMAC-SHA256 cần tối thiểu {MinimumSigningKeyBytes} byte.");
         }
+    }
+
+    /// <summary>
+    /// Ngoại lệ DUY NHẤT của quy tắc "token đi trong header Authorization": đường dẫn <c>/hubs</c>.
+    ///
+    /// Vì sao cần: <c>NotificationHub</c> (thông báo kết quả xử lý cho hành khách — Sprint 4, Vàng Thị
+    /// Dăm) có <c>[Authorize]</c> vì thông báo là dữ liệu riêng của một người. Nhưng trình duyệt KHÔNG
+    /// đặt được header <c>Authorization</c> cho WebSocket — API WebSocket của trình duyệt không có chỗ
+    /// truyền header — nên client SignalR gửi token qua query string <c>?access_token=…</c> (mặc định
+    /// của client JS). Không đọc query string thì mọi kết nối hub đều là ẩn danh: <c>[Authorize]</c>
+    /// trả 401, và tệ hơn nữa là nếu bỏ <c>[Authorize]</c> thì connection vẫn mở nhưng không có người
+    /// dùng, nên thông báo rơi vào khoảng không mà không có lỗi nào.
+    ///
+    /// <para>
+    /// Vì sao CHỈ áp cho <c>/hubs</c>: token nằm trong URL là thứ bị ghi vào log truy cập của máy chủ
+    /// và của proxy — trên đường dẫn API thường thì đó là rò rỉ không có lý do chính đáng, vì ở đó
+    /// header vẫn dùng được. Ở đường dẫn hub thì đây là cách duy nhất, và <see cref="AuditLogMiddleware"/>
+    /// đã loại cả tiền tố <c>/hubs</c> khỏi nhật ký nên ít nhất URL mang token cũng không đi vào bảng
+    /// <c>AuditLogs</c>. Token vẫn được kiểm tra đầy đủ (chữ ký, hạn, issuer, audience) như mọi lượt
+    /// khác — đổi chỗ đọc chứ không nới lỏng kiểm tra.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ Đánh đổi còn lại, đã biết: log của hạ tầng (IIS/Nginx/Render) vẫn có thể ghi lại URL kèm
+    /// token. Cách xử lý triệt để là cấp một token riêng, ngắn hạn cho hub hoặc chuyển sang xác thực
+    /// bằng cookie — cả hai đều vượt phạm vi đồ án, và đây là giới hạn chung của mọi app SignalR dùng
+    /// JWT với WebSocket. Ghi ở đây để người vận hành biết mình phải bảo vệ log truy cập.
+    /// </para>
+    /// </summary>
+    private static Task ReadAccessTokenFromHubQueryAsync(MessageReceivedContext context)
+    {
+        var accessToken = context.Request.Query["access_token"];
+
+        if (!string.IsNullOrEmpty(accessToken)
+            && context.HttpContext.Request.Path.StartsWithSegments(HubPathPrefix))
+        {
+            context.Token = accessToken;
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

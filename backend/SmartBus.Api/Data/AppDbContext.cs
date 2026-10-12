@@ -29,6 +29,7 @@ public partial class AppDbContext : DbContext
         ConfigureVoucher(modelBuilder);
         ConfigureCancellationRequest(modelBuilder);
         ConfigureTicketChange(modelBuilder);
+        ConfigureNotification(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -80,4 +81,12 @@ public partial class AppDbContext : DbContext
     // duyệt một yêu cầu đổi thì HUỶ vé cũ rồi phát hành vé MỚI, không sửa vé cũ — lý do ở
     // docs/32-csdl-huy-doi-ve.md §2. Xem AppDbContext.TicketChange.cs.
     partial void ConfigureTicketChange(ModelBuilder modelBuilder);
+
+    // US 10 (Notifications — A9 #15, Vàng Thị Dăm): dựng SỚM theo task Sprint 4 dòng 7 *"Ghi log và
+    // thông báo kết quả xử lý cho hành khách"* — A8.5 chốt thông báo đi in-app qua SignalR + lưu bảng
+    // này, nên task dòng 7 không chạy được nếu thiếu nó. Bảng này là việc của Sprint 5 theo bảng phân
+    // công (dòng 14 *"Migrate bảng Notifications, NotificationTemplates, Subscriptions"*): nhánh này
+    // kéo trước ĐÚNG MỘT bảng, hai bảng còn lại vẫn để nguyên ở Sprint 5.
+    // Xem docs/33-thong-bao-ket-qua-huy-doi-ve.md §1. Xem AppDbContext.Notification.cs.
+    partial void ConfigureNotification(ModelBuilder modelBuilder);
 }
