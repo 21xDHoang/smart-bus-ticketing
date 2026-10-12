@@ -402,10 +402,13 @@ public class VoucherBlockingConditionsApiTests
     ///
     /// <para>
     /// Đây là chỗ duy nhất lộ được một cái bẫy culture của DTO: <c>[Range(typeof(decimal), "0",
-    /// "9999999999.99")]</c> nhận tham số dạng <b>CHUỖI</b>, nên nếu chuỗi trần được phân tích bằng
-    /// một culture coi dấu phẩy là dấu thập phân thì trần bị hiểu sai. <b>Đo được: không xảy ra</b> —
-    /// biên dưới (<c>"0"</c>) không có dấu thập phân nên không lộ được, còn biên trên thì chính ca này
-    /// đi qua bình thường. Ghi lại đây để lần sau ai đọc code không phải đo lại.
+    /// "9999999999.99")]</c> nhận tham số dạng <b>CHUỖI</b> và <c>RangeAttribute.SetupConversion()</c>
+    /// parse chúng bằng culture của MÁY chạy. Trên máy vi-VN ("." là phân cách nghìn) việc parse NÉM
+    /// <c>FormatException</c> ngay trong model binding → 500 cho MỌI request chạm DTO, kể cả chính ca
+    /// này (đo 12/10/2026: 38/112 test voucher đỏ cùng một lỗi trên máy vi-VN; CI ubuntu culture bất
+    /// biến nên xanh — vì vậy bẫy lọt qua review). Đã chữa 12/10/2026 bằng
+    /// <c>ParseLimitsInInvariantCulture = true</c> trên cả 7 attribute Range của 3 DTO voucher. Ghi
+    /// lại đây để lần sau ai đọc code không phải đo lại.
     /// </para>
     /// </summary>
     [Fact]

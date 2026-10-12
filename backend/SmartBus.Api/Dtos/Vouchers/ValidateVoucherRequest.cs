@@ -56,8 +56,12 @@ public class ValidateVoucherRequest
     ///
     /// Trần 9.999.999.999,99 khớp <c>numeric(12,2)</c> của cột tiền: nhận số lớn hơn là để nó tràn
     /// ở tầng CSDL với một lỗi khó lần theo.
+    ///
+    /// Hai mốc trần dạng CHUỖI phải parse bằng culture bất biến — máy vi-VN coi "." là phân cách
+    /// nghìn nên thiếu cờ là FormatException → 500 cho MỌI request (đo được 12/10/2026), vì vậy
+    /// attribute dưới bật <c>ParseLimitsInInvariantCulture</c>.
     /// </summary>
     [Required(ErrorMessage = "Giá trị đơn hàng không được để trống")]
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Giá trị đơn hàng không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Giá trị đơn hàng không hợp lệ")]
     public decimal? OrderAmount { get; set; }
 }

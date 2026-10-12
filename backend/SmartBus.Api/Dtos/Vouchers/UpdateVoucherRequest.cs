@@ -31,14 +31,18 @@ public class UpdateVoucherRequest
     [StringLength(20, ErrorMessage = "Loại giảm giá không hợp lệ")]
     public string? DiscountType { get; set; }
 
+    // Trần dạng CHUỖI của [Range(typeof(decimal), …)] phải parse bằng culture bất biến: máy vi-VN
+    // coi "." là phân cách nghìn → FormatException → 500 cho MỌI request bind DTO này (đo được
+    // 12/10/2026, CI ubuntu không lộ). Cả ba attribute Range bên dưới đều bật cờ — xem giải thích
+    // đầy đủ ở CreateVoucherRequest.DiscountValue.
     [Required(ErrorMessage = "Giá trị giảm không được để trống")]
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Giá trị giảm không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Giá trị giảm không hợp lệ")]
     public decimal? DiscountValue { get; set; }
 
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Giá trị đơn tối thiểu không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Giá trị đơn tối thiểu không hợp lệ")]
     public decimal? MinOrderValue { get; set; }
 
-    [Range(typeof(decimal), "0", "9999999999.99", ErrorMessage = "Trần giảm không hợp lệ")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true, ErrorMessage = "Trần giảm không hợp lệ")]
     public decimal? MaxDiscount { get; set; }
 
     /// <summary>Điều kiện tuyến — null = áp dụng cho mọi tuyến. Tuyến không tồn tại → 404 ở tầng service.</summary>
