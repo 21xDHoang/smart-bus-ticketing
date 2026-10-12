@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Form, Input, InputNumber, Modal, Select, Typography, theme } from 'antd';
+import { AutoComplete, Form, InputNumber, Modal, Select, Typography, theme } from 'antd';
 import type { AppError } from '../api/axiosClient';
-import { SEAT_LAYOUT_LIMITS, buildSeats, layoutGridConfig, seatKeysOf } from '../api/seatLayoutApi';
+import { fetchBuses } from '../api/busApi';
+import { SEAT_LAYOUT_LIMITS, layoutGridConfig, seatKeysOf } from '../api/seatLayoutApi';
 import type { SeatLayout, SeatLayoutPayload } from '../api/seatLayoutApi';
 import SeatMap from './SeatMap';
 
@@ -47,6 +48,28 @@ export default function SeatLayoutFormModal({
 
   // Ghế VIP do Admin bấm chọn trực tiếp trên sơ đồ, giữ ngoài Form (Form chỉ chứa các ô nhập).
   const [vipKeys, setVipKeys] = useState<string[]>([]);
+
+  // Gợi ý cho ô "Loại xe" — lấy từ đội xe thật, khử trùng theo busType.
+  const [busTypeOptions, setBusTypeOptions] = useState<{ value: string }[]>([]);
+
+  // Nạp gợi ý mỗi lần mở modal. Sơ đồ nối với xe bằng SO CHUỖI NGUYÊN VĂN
+  // (Buses.BusType ↔ SeatLayouts.BusType) nên gõ lệch một ký tự là sơ đồ không áp vào xe nào.
+  useEffect(() => {
+    if (!open) return;
+
+    // Chỉ lấy trang đầu: 100 là trần pageSize của GET /buses. Đây chỉ là gợi ý gõ nhanh —
+    // loại xe không nằm trong 100 dòng đầu vẫn gõ tay được, ô nhập không bị khoá vào gợi ý.
+    fetchBuses({ page: 1, pageSize: 100 })
+      .then(({ items }) => {
+        const loaiXe = [...new Set(items.map((bus) => bus.busType))].sort((a, b) =>
+          a.localeCompare(b, 'vi'),
+        );
+        setBusTypeOptions(loaiXe.map((value) => ({ value })));
+      })
+      .catch(() => {
+        // Không lấy được gợi ý thì vẫn gõ tay bình thường — không cần làm ồn.
+      });
+  }, [open]);
 
   // Xem trước số tầng/hàng/cột theo giá trị form đang nhập — dùng để vẽ sơ đồ trực tiếp.
   const numberOfFloors = Form.useWatch('numberOfFloors', form) ?? DEFAULT_VALUES.numberOfFloors;
@@ -100,7 +123,11 @@ export default function SeatLayoutFormModal({
     const payload: SeatLayoutPayload = {
       busType: values.busType,
       numberOfFloors: floors,
-      seats: buildSeats(floors, rows, cols, activeVipKeys),
+      rowsPerFloor: rows,
+      columnsPerRow: cols,
+      // Chỉ gửi toạ độ VIP; danh sách ghế do backend sinh từ lưới + tập VIP (giao diện
+      // không còn tự dựng ghế — ghế thuộc về XE, xem seatLayoutApi.ts).
+      vipSeatPositions: activeVipKeys,
     };
 
     try {
@@ -139,8 +166,22 @@ export default function SeatLayoutFormModal({
             { required: true, message: 'Vui lòng nhập loại xe' },
             { min: 2, max: 50, message: 'Loại xe từ 2 đến 50 ký tự' },
           ]}
+          extra={
+            isEdit
+              ? 'Loại xe là khoá của sơ đồ — muốn đổi thì xoá sơ đồ này và thêm sơ đồ mới.'
+              : undefined
+          }
         >
-          <Input placeholder="VD: Xe buýt 45 chỗ, Xe buýt điện" maxLength={50} />
+          <AutoComplete
+            options={busTypeOptions}
+            placeholder="VD: Xe buýt 45 chỗ, Xe buýt điện"
+            disabled={isEdit}
+            filterOption={(input, option) =>
+              String(option?.value ?? '')
+                .toLowerCase()
+                .includes(input.toLowerCase())
+            }
+          />
         </Form.Item>
 
         <div style={{ display: 'flex', gap: 16 }}>

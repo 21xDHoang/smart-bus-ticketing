@@ -13,8 +13,13 @@ import { formatDateTime } from '../components/ui/format';
 
 // Màn hình Admin cấu hình sơ đồ ghế theo loại xe (US 2, Sprint 3, task của Dương Thị Hạnh):
 // danh sách các sơ đồ ghế theo loại xe + thêm/sửa/xoá. Mỗi sơ đồ là một "khuôn" gồm số tầng,
-// số ghế và ghế VIP — chưa gắn vào từng xe cụ thể (bảng SeatLayouts thuộc migration Sprint 3
-// của Dăm, backend chưa có nên màn hình chạy dữ liệu giả).
+// số ghế và ghế VIP. Lưu sơ đồ là backend sinh luôn ghế thật cho mọi xe cùng loại đang thiếu
+// ghế (mục "Lưu sơ đồ là ghế có ngay" của docs/api-contract.md) — nên thông báo thành công
+// đọc `busesSeated` để nói rõ đã sinh ghế cho mấy xe.
+
+/** Câu thông báo kèm số xe vừa được sinh ghế — `busesSeated` chỉ có nghĩa ở response POST/PUT. */
+const successMessage = (dongTu: string, busesSeated: number) =>
+  busesSeated > 0 ? `${dongTu} và sinh ghế cho ${busesSeated} xe.` : `${dongTu}.`;
 const BASE_COLUMNS: TableProps<SeatLayout>['columns'] = [
   {
     title: 'Loại xe',
@@ -108,16 +113,30 @@ const SeatLayoutConfigPage = () => {
     setSubmitting(true);
     try {
       if (id) {
-        await seatLayoutApi.update(id, payload);
-        message.success('Đã cập nhật sơ đồ ghế.');
+        // Body sửa cố ý KHÔNG gửi busType: loại xe là khoá nghiệp vụ của sơ đồ, backend bỏ
+        // qua trường này khi sửa (đổi khoá là xoá-rồi-tạo) — xem seatLayoutApi.update.
+        const saved = await seatLayoutApi.update(id, {
+          numberOfFloors: payload.numberOfFloors,
+          rowsPerFloor: payload.rowsPerFloor,
+          columnsPerRow: payload.columnsPerRow,
+          vipSeatPositions: payload.vipSeatPositions,
+        });
+        message.success(successMessage('Đã cập nhật sơ đồ ghế', saved.busesSeated));
       } else {
-        await seatLayoutApi.create(payload);
-        message.success('Đã thêm sơ đồ ghế.');
+        const saved = await seatLayoutApi.create(payload);
+        message.success(successMessage('Đã thêm sơ đồ ghế', saved.busesSeated));
       }
       setModalOpen(false);
       setReloadKey((key) => key + 1);
     } catch (error) {
-      message.error((error as AppError).customMessage || 'Thao tác thất bại.');
+      const appError = error as AppError;
+      // Có lỗi theo từng trường thì để modal gắn vào ô input; ngược lại mới hiện toast.
+      if (!appError.errors) {
+        message.error(appError.customMessage || 'Thao tác thất bại.');
+      }
+      // Ném lại để modal biết lượt lưu thất bại — không thì nó đóng như thành công và lỗi
+      // errors.busType (trùng loại xe) của backend biến mất. Cùng lối BusManagePage.
+      throw error;
     } finally {
       setSubmitting(false);
     }
