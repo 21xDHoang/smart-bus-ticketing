@@ -71,8 +71,9 @@ function viewOf(state: LoadState): VoucherView {
 // bật + trong khoảng hiệu lực + còn lượt), kèm giá trị giảm và điều kiện áp dụng để khách chủ
 // động chọn mã trước khi vào bước thanh toán.
 //
-// Backend chưa có endpoint danh sách voucher khả dụng (dòng 51 CRUD chưa làm) nên màn hình chạy
-// dữ liệu giả qua voucherApi.listAvailable() — cùng cờ USE_MOCK_DATA với màn quản lý voucher.
+// Hợp đồng chưa có endpoint công khai "voucher đang khả dụng" (mọi endpoint voucher đều là quản
+// trị ManagerOrAbove hoặc kiểm-tra-mã), nên voucherApi.listAvailable() trả mảng rỗng ĐÚNG SỰ THẬT
+// và màn hình hiện trạng thái "chưa có mã khả dụng" — nợ hợp đồng: bổ sung endpoint trước.
 // Khách không tự dùng mã ở đây: nhập mã là việc của ô nhập mã ở màn thanh toán (component của
 // Hoàng Văn Thịnh); màn này chỉ GIỚI THIỆU mã đang có.
 export default function VoucherAvailablePage() {
