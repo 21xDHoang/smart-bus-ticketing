@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AutoComplete, Space, Typography } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
-import stopApi from '../api/stopApi';
+import stopSearchApi from '../api/stopSearchApi';
 import type { Stop } from '../api/stopApi';
-import { suggestStops } from './stopSuggest';
 
 const { Text } = Typography;
 
@@ -12,42 +11,38 @@ const { Text } = Typography;
 // (Sprint 2 dòng 33, US 1.0 "Tra cứu tuyến xe", Hoàng Văn Thịnh).
 //
 // Dùng cho hai ô "Điểm đi" / "Điểm đến" của màn Tra cứu tuyến
-// (pages/RouteLookupPage.tsx — màn đó hiện dùng Input thường và ghi chú sẵn rằng component
-// này là task riêng, xem chú thích tại dòng 38 của file đó).
+// (pages/RouteLookupPage.tsx — đã nối vào ngày 2026-10-12).
 //
 // GIÁ TRỊ PHÁT RA LÀ TÊN TRẠM (chuỗi), không phải id: endpoint tra cứu tuyến nhận điểm đi/điểm
 // đến là chuỗi tự do rồi tự giải từ khoá ra trạm theo TÊN (xem RouteSearchService của backend).
 // Trả về id sẽ buộc phải đổi hình dạng API — việc mà quy ước cấm tự làm.
 //
 // KHÔNG CHẶN NGƯỜI DÙNG: đây là AutoComplete chứ không phải Select, nên gõ tay giá trị bất kỳ
-// vẫn gửi được như trước. Gợi ý chỉ là lớp cộng thêm. Điều này là bắt buộc chứ không phải cho
-// đẹp: GET /stops gắn [Authorize(Policy = ManagerOrAbove)], nên khách chưa đăng nhập sẽ nhận
-// 403 và không có gợi ý nào — nếu là Select thì ô nhập thành không điền được và cả form chết.
+// vẫn gửi được như trước. Gợi ý chỉ là lớp cộng thêm.
 //
-// Nạp trọn danh sách trạm MỘT lần rồi lọc tại chỗ (lý do ở đầu components/stopSuggest.ts).
+// VÌ SAO LẤY DỮ LIỆU THEO TỪNG TỪ KHOÁ (không nạp trọn danh sách rồi lọc tại chỗ như bản đầu):
+//  1. Bản đầu gọi GET /stops — endpoint của màn quản lý trạm, [Authorize(ManagerOrAbove)]. Hành
+//     khách gọi vào là 403, tức ô gợi ý câm đúng với người cần nó nhất. GET /stops/search mới là
+//     đường công khai (mục "Tra cứu trạm dừng — /stops/search" của docs/api-contract.md).
+//  2. Endpoint đó đã khớp sẵn KHÔNG PHÂN BIỆT DẤU ("ben thanh" ra "Bến Thành") — đúng thứ hành
+//     khách gõ trên điện thoại. Nó cũng xếp hạng sẵn (tên-đầu → tên-chứa → địa-chỉ), nên giữ
+//     thêm một lớp lọc phía client chỉ tạo ra hai định nghĩa "bỏ dấu" dễ lệch nhau.
+//  3. Nạp trọn danh sách có trần: endpoint trả tối đa `limit` dòng (mặc định 10), nên "nạp hết
+//     rồi lọc" sẽ âm thầm chỉ lọc được 10 trạm đầu khi bảng trạm lớn lên.
+// Đổi lại: mỗi cụm gõ tốn một request — đã chặn bằng debounce bên dưới.
+//
+// Khớp cả ĐỊA CHỈ là chủ ý của endpoint, và ở màn này nó đặc biệt đắt: hành khách nhớ khu vực dễ
+// hơn nhớ tên trạm. Gõ "quan 5" ra "Chợ Lớn" và "Đại học Y Dược", gõ "quan 1" ra "Bến Thành" và
+// "Công viên 23/9" — mà GET /routes/search chỉ khớp theo TÊN trạm. Chọn xong thì giá trị gửi đi
+// là tên trạm, đúng thứ endpoint kia cần.
+//
+// (Ghi chú dữ liệu, không phải lỗi của ô này: hiện 10 trạm trong CSDL mới có 4 trạm nằm trong
+// tuyến — Bến Thành, Công viên 23/9, Đại học Y Dược, Chợ Lớn. Chọn 6 trạm còn lại vẫn ra "không
+// tìm thấy tuyến", vì chưa seeder nào xếp chúng vào tuyến.)
 // -----------------------------------------------------------------------------
 
-/**
- * Promise dùng chung cho cả phiên, ở mức module.
- *
- * Giữ Promise chứ không giữ mảng: màn Tra cứu tuyến có tới hai ô cùng cần danh sách này, và cả
- * hai mount gần như cùng lúc — giữ Promise thì lượt gọi thứ hai bám vào lượt đang bay, chỉ tốn
- * một request. Danh sách trạm là dữ liệu gần như không đổi trong một phiên làm việc.
- */
-let stopsPromise: Promise<Stop[]> | null = null;
-
-function loadStops(): Promise<Stop[]> {
-  if (!stopsPromise) {
-    stopsPromise = stopApi.list().catch((error: unknown) => {
-      // Xoá Promise hỏng để lần gõ sau còn thử lại. Giữ lại nó là khoá tính năng gợi ý cho tới
-      // khi tải lại cả trang — hỏng mạng một nhịp mà mất luôn tính năng thì quá đắt.
-      stopsPromise = null;
-      throw error;
-    });
-  }
-
-  return stopsPromise;
-}
+/** Chờ người dùng ngừng gõ rồi mới hỏi backend — một request cho một cụm gõ, không phải mỗi ký tự. */
+const DEBOUNCE_MS = 300;
 
 interface StopAutocompleteProps {
   /** Tên trạm đã chọn. Khớp hợp đồng value/onChange để cắm thẳng vào Form.Item. */
@@ -69,6 +64,8 @@ export default function StopAutocomplete({
   id,
 }: StopAutocompleteProps) {
   const [stops, setStops] = useState<Stop[]>([]);
+  // Khởi tạo `true`: lượt hỏi đầu tiên nằm trong cửa sổ debounce, chưa có kết quả nào — lúc đó
+  // "đang tải" mới đúng sự thật, còn "không có trạm nào khớp" là nói sai.
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   // Từ khoá đang gõ. Cố ý KHÔNG suy từ `value`: người dùng gõ dở dang thì `value` đã đổi theo
@@ -78,39 +75,50 @@ export default function StopAutocomplete({
 
   useEffect(() => {
     let cancelled = false;
+    const trimmed = keyword.trim();
 
-    loadStops()
-      .then((list) => {
-        if (!cancelled) setStops(list);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const timer = setTimeout(() => {
+      // Đổi trạng thái bên trong hẹn giờ chứ không ở thân effect: cửa sổ debounce giữ nguyên
+      // danh sách cũ trên màn hình (không nhấp nháy), và effect không setState đồng bộ.
+      setLoading(true);
+      setFailed(false);
+
+      stopSearchApi
+        .search(trimmed)
+        .then((list) => {
+          if (!cancelled) setStops(list);
+        })
+        .catch(() => {
+          // Gợi ý hỏng không được chặn gõ tay — im lặng bỏ gợi ý, chỉ đổi lời nhắn trong dropdown.
+          if (!cancelled) {
+            setStops([]);
+            setFailed(true);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, []);
+  }, [keyword]);
 
-  const options = useMemo(
-    () =>
-      suggestStops(stops, keyword).map((stop) => ({
-        // value chính là thứ AutoComplete đổ vào ô nhập khi chọn, và cũng là thứ phát ra ngoài.
-        value: stop.name,
-        label: (
-          <Space direction="vertical" size={0}>
-            <Text>{stop.name}</Text>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {stop.address}
-            </Text>
-          </Space>
-        ),
-      })),
-    [stops, keyword],
-  );
+  // Backend đã xếp hạng sẵn (tên-đầu → tên-chứa → địa-chỉ) nên ở đây chỉ còn việc bày ra.
+  const options = stops.map((stop) => ({
+    // value chính là thứ AutoComplete đổ vào ô nhập khi chọn, và cũng là thứ phát ra ngoài.
+    value: stop.name,
+    label: (
+      <Space direction="vertical" size={0}>
+        <Text>{stop.name}</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {stop.address}
+        </Text>
+      </Space>
+    ),
+  }));
 
   const notFoundContent = (() => {
     if (loading) return 'Đang tải danh sách trạm…';
@@ -124,7 +132,7 @@ export default function StopAutocomplete({
       value={value}
       options={options}
       // BẮT BUỘC: mặc định AutoComplete tự lọc lại theo `value` của từng option (tức tên trạm),
-      // nên các gợi ý khớp qua ĐỊA CHỈ do suggestStops tìm ra sẽ bị chính nó loại mất.
+      // nên các gợi ý mà backend tìm ra nhờ ĐỊA CHỈ sẽ bị chính nó loại mất.
       filterOption={false}
       onSearch={setKeyword}
       onChange={(next: string) => onChange?.(next)}
