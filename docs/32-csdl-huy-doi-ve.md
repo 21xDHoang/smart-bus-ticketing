@@ -9,8 +9,8 @@
 >
 > 🟡 **Trạng thái 12/10/2026:** entity `CancellationRequest` + `TicketChange` và cấu hình
 > `AppDbContext.CancellationRequest.cs` / `AppDbContext.TicketChange.cs` **đã xong**, model đã dựng
-> thử và SQL sinh ra đã soát (§7). **Migration CHƯA sinh** — `dotnet ef migrations add` là lệnh bị
-> chặn với trợ lý, Dăm chạy tay theo đúng lệnh ở §7. **Chưa merge, chưa áp lên CSDL chung**: hai
+> thử và SQL sinh ra đã soát (§8). **Migration CHƯA sinh** — `dotnet ef migrations add` là lệnh bị
+> chặn với trợ lý, Dăm chạy tay theo đúng lệnh ở §8. **Chưa merge, chưa áp lên CSDL chung**: hai
 > bảng chỉ có thật sau khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp
 > vẫn chạy được trên EF InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem §4.
 
@@ -23,12 +23,12 @@ lẫn `TicketChanges`. Cả hai vẫn được dựng trong nhánh này, vì có
 |---|---|
 | **Bảng phân công Sprint 4, dòng 2** | *"Migrate bảng TicketChanges, CancellationRequests"* — Vàng Thị Dăm, ưu tiên **Cao** |
 | **A9** | **Không có** hai bảng này |
-| **`docs/02-sprint-roadmap.md`** §2 | Cũng **không** nhắc hai bảng này (và còn xếp US 5 ở Sprint 5 — xem §6.3) |
+| **`docs/02-sprint-roadmap.md`** §2 | Cũng **không** nhắc hai bảng này (và còn xếp US 5 ở Sprint 5 — xem §7.3) |
 | Code | Trước nhánh này, repo **không** có entity/cấu hình/endpoint nào nhắc tới hai bảng |
 
 Đây đúng tình huống đã gặp ở Sprint 3 với `Payments`/`Transactions`/`PaymentLogs`
 (`docs/28` §7.4): tên task có thật, A9 không có. Cách xử lý giữ nguyên — **dựng theo phân công,
-rồi báo nhóm bổ sung A9** (§6.1). Chủ CSDL không tự thêm bảng ngoài A9 mà im lặng.
+rồi báo nhóm bổ sung A9** (§7.1). Chủ CSDL không tự thêm bảng ngoài A9 mà im lặng.
 
 ## 2. Bảng `CancellationRequests` — một yêu cầu HUỶ VÉ
 
@@ -182,7 +182,7 @@ Duyệt trên một yêu cầu `Pending`, cả hai đều đọc thấy `Pending
 
 **Vì sao `Tickets` cố ý không có mà hai bảng này có:** `docs/28` §1 đã ghi — thêm sau **không tốn
 migration cột**, vì `xmin` là **cột hệ thống của PostgreSQL**. Đã kiểm: `grep -c xmin` trên SQL sinh
-ra = **0** (§7).
+ra = **0** (§8).
 
 ### 4.4 ⚠️ Hai ràng buộc KHÔNG diễn đạt được bằng chỉ mục — việc của service
 
@@ -195,7 +195,7 @@ ra = **0** (§7).
 
 ⚠️ **Bộ test chạy trên provider InMemory, mà InMemory KHÔNG cưỡng chế unique index lẫn FK.** Nên bộ
 test xanh **không** nói gì về việc các chỉ mục ở §4.1 có tồn tại hay không. Chốt chống trùng chỉ tồn
-tại thật ở PostgreSQL — đây là lý do §7 đáng đọc.
+tại thật ở PostgreSQL — đây là lý do §8 đáng đọc.
 
 ## 5. Chỉ mục đã đánh — dùng đúng cái có sẵn
 
@@ -220,14 +220,14 @@ duyệt gộp đọc được cả ba bảng bằng một câu truy vấn.
   có tồn tại, cùng lối `docs/28` §6).
 - **Kiên** (dòng 4 + dòng 6) — service tính phí huỷ theo quy định 24h/12h/2h: ghi thẳng con số vào
   `CancellationFee` (không để null, `0` = miễn phí). API đổi chuyến: `NewPrice` chụp lại từ `Fares`.
-  **Chênh lệch KHÔNG ghi vào CSDL** — nó là `NewPrice - Ticket.Price`, xem §6 dưới. Quy ước **dấu**:
+  **Chênh lệch KHÔNG ghi vào CSDL** — nó là `NewPrice - Ticket.Price`, xem §3. Quy ước **dấu**:
   **dương = khách trả thêm, âm = nhà xe hoàn lại**, `0` = đổi ngang giá.
 - **Hoàng** (dòng 5) — `PATCH /cancellation-requests/{id}` và `PATCH /ticket-changes/{id}`: **kiểm lại
   ghế còn trống ngay lúc duyệt** (§3.3), lật trạng thái, và ở `TicketChanges` thì huỷ vé cũ + phát
   hành vé mới + ghi `NewTicketId` (§3.1). Bắt `DbUpdateConcurrencyException` của §4.3 và trả về "yêu
   cầu đã được người khác xử lý" — **đừng** để nó thành 500.
 - **Hạnh** (dòng 8, 11) — màn gửi yêu cầu huỷ/đổi và màn Admin duyệt. Bảng trường của hợp đồng API
-  chưa có (§7) — chờ chốt với Hiếu/Kiên/Hoàng trước khi cứng hoá cột.
+  chưa có (§7.4) — chờ chốt với Hiếu/Kiên/Hoàng trước khi cứng hoá cột.
 - **Thịnh** (dòng 9) — component chọn chuyến mới + so sánh giờ và giá. Con số chênh lệch để hiển thị
   chỉ cần `NewPrice - Ticket.Price`, không cần trường mới từ API.
 - **Băng** (dòng 10) — màn theo dõi trạng thái. Tập giá trị để vẽ là **đúng ba** ở mỗi enum
@@ -281,7 +281,7 @@ dotnet ef migrations add Sprint4_CancellationRequests_TicketChanges --project ba
 ```
 
 **Đã soát trước khi sinh migration** — bằng `dotnet ef dbcontext script --no-build` (lệnh này không bị
-chặn) với hai biến môi trường giả ở trên. SQL sinh ra **khớp** §2, §3, §4 và §5:
+chặn) với các biến môi trường giả ở trên. SQL sinh ra **khớp** §2, §3, §4 và §5:
 
 | Phép kiểm | Kết quả |
 |---|---|
