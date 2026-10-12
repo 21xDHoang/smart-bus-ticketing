@@ -21,6 +21,7 @@ import {
   PartitionOutlined,
   PlusCircleOutlined,
   QrcodeOutlined,
+  ScanOutlined,
   ScheduleOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -36,7 +37,8 @@ import {
 //
 // Quy ước nhóm: mỗi vai trò nhiều nhất 5 mục cấp cao nhất, mục nào có nhiều màn con thì gom
 // thành nhóm thả xuống. Khách: Trang chủ · Tra cứu tuyến · Vé · Khuyến mãi · Hỗ trợ.
-// Quản trị/Quản lý: Quản lý dữ liệu · Điều hành chuyến · Hệ thống. Tài xế chỉ có 2 mục chung.
+// Quản trị/Quản lý: Quản lý dữ liệu · Điều hành chuyến · Hệ thống. Tài xế: Trang chủ · Tra
+// cứu tuyến · Soát vé.
 
 /** Một mục mở thẳng một màn hình. `icon` bắt buộc — rail thu gọn (80px) và thẻ lối vào cần icon. */
 export interface NavLeaf {
@@ -76,6 +78,7 @@ export interface NavCrumb {
 const ADMIN_MANAGER = ['Admin', 'Manager'];
 const ADMIN = ['Admin'];
 const PASSENGER = ['Passenger'];
+const DRIVER = ['Driver'];
 /** Mọi vai trò — Trang chủ và Tra cứu tuyến là màn chung, tài xế cũng cần. */
 const ALL: string[] = [];
 
@@ -91,6 +94,12 @@ const NAV: NavEntry[] = [
     label: 'Tra cứu tuyến',
     roles: ALL,
     icon: <SearchOutlined />,
+  },
+  {
+    to: '/ticket-scan',
+    label: 'Soát vé',
+    roles: DRIVER,
+    icon: <ScanOutlined />,
   },
 
   // ── Khách: gom 3 màn liên quan tới vé vào một nhóm để cấp cao nhất chỉ còn 5 mục.
