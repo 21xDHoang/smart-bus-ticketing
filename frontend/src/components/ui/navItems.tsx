@@ -338,6 +338,9 @@ export function navKeyOf(pathname: string): string {
 
 /** Tiêu đề trang (dùng cho document.title) — lấy từ menu trước, màn ngoài menu tra bảng riêng. */
 export function pageTitleOf(pathname: string): string {
+  if (pathname.endsWith('/request')) {
+    return 'Huỷ / Đổi vé';
+  }
   if (pathname.startsWith('/my-tickets/')) {
     return 'Mã QR vé';
   }
@@ -364,6 +367,9 @@ export function navTrail(pathname: string): NavCrumb[] {
     pathname === '/payment-waiting'
   ) {
     return [{ label: 'Tra cứu tuyến', to: '/route-lookup' }, { label: pageTitleOf(pathname) }];
+  }
+  if (pathname.endsWith('/request')) {
+    return [{ label: 'Vé của tôi', to: '/my-tickets' }, { label: 'Huỷ / Đổi vé' }];
   }
   if (pathname.startsWith('/my-tickets/')) {
     return [{ label: 'Vé của tôi', to: '/my-tickets' }, { label: 'Mã QR vé' }];

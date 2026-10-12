@@ -235,14 +235,26 @@ export default function MyTicketsPage() {
                         mã QR phóng to + tăng sáng — chỉ vé còn hiệu lực mới quét được nên chỉ vé
                         đó mới có nút. */}
                     {isTicketUsable(status) && (
-                      <Button
-                        size="small"
-                        type="link"
-                        style={{ paddingInline: 0 }}
-                        onClick={() => navigate(`/my-tickets/${ticket.id}/qr`)}
-                      >
-                        Xem mã QR
-                      </Button>
+                      <>
+                        <Button
+                          size="small"
+                          type="link"
+                          style={{ paddingInline: 0 }}
+                          onClick={() => navigate(`/my-tickets/${ticket.id}/qr`)}
+                        >
+                          Xem mã QR
+                        </Button>
+                        {/* Nút "Huỷ / Đổi vé" (US 5, task của Dương Thị Hạnh) nối từ danh sách sang
+                            màn gửi yêu cầu huỷ/đổi — chỉ vé còn hiệu lực mới gửi được yêu cầu. */}
+                        <Button
+                          size="small"
+                          type="link"
+                          style={{ paddingInline: 0 }}
+                          onClick={() => navigate(`/my-tickets/${ticket.id}/request`)}
+                        >
+                          Huỷ / Đổi vé
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
