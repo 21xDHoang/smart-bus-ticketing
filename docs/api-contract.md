@@ -1697,6 +1697,141 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 > tải nên dữ liệu không bao giờ cũ quá một lần tải trang. Muốn xuyên máy chủ thì thêm backplane
 > (Azure SignalR / `AddStackExchangeRedis`) — ngoài phạm vi Sprint 3.
 
+## Thông báo kết quả xử lý — `/hubs/notifications`
+
+> ⏳ Backend đã có code (`NotificationHub` + `TicketRequestResultNotifier` — task *"Ghi log và thông
+> báo kết quả xử lý cho hành khách"*, dòng 7 Sprint 4, phân công bảng tính: Vàng Thị Dăm) nhưng
+> **chưa nối vào `Program.cs`**: còn thiếu `AddScoped<ITicketRequestResultNotifier, …>` và
+> `MapHub<NotificationHub>("/hubs/notifications")` — hai dòng thuộc file của Phùng Duy Hoàng. Chi
+> tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
+>
+> Hub KHÔNG phải nguồn dữ liệu: nó chỉ báo "bạn vừa có thông báo mới", còn **danh sách** thông báo
+> sẽ đến từ một endpoint REST (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19
+> Sprint 5 — cùng người làm, **chưa có trong tài liệu này**). Mục này chỉ mô tả kênh đẩy.
+
+### Kết nối
+
+| Thuộc tính | Giá trị |
+|---|---|
+| URL | `/hubs/notifications` |
+| Giao thức | SignalR JSON (mặc định) |
+| Yêu cầu đăng nhập | **Có** — `[Authorize]`. Không có token hợp lệ thì lượt negotiate trả **401** |
+| Token gửi kèm | Query string `?access_token=<JWT>` — xem "Vì sao token đi bằng query string" |
+| Nhóm (group) | Mỗi người một nhóm: `user:{userId}` — **server tự thêm khi kết nối**, client không xin được |
+| Thư viện client | `@microsoft/signalr` (frontend) |
+
+> **Vì sao hub này bắt đăng nhập, khác `/hubs/seat-map`?** Sơ đồ ghế là thông tin công khai (khách
+> tra cứu được trước khi có tài khoản), còn thông báo là **dữ liệu riêng của một người**: kết quả
+> duyệt/từ chối yêu cầu huỷ vé của họ. Không xác thực thì không có cách nào biết ai là ai để gửi
+> riêng cho đúng người.
+
+### Method client gọi (invoke)
+
+**Không có.** Khác `/hubs/seat-map` (client gọi `JoinTrip`), ở đây **không có method nào để client
+gọi** — client chỉ kết nối và lắng nghe.
+
+> **Vì sao không có `JoinUser`?** Nếu để client tự gửi id người dùng lên thì bất kỳ ai cũng xin được
+> vào nhóm của người khác và đọc thông báo của họ. Server tự suy nhóm từ chính token đã xác thực
+> (`Context.UserIdentifier`), nên **không tồn tại đường nào để đọc nhóm của người khác**. Đây là lý
+> do duy nhất khiến hub này khác hình dạng với `SeatMapHub` — không phải để cho gọn.
+
+### Sự kiện server đẩy (event)
+
+| Sự kiện | Payload | Mô tả |
+|---|---|---|
+| `NotificationReceived` | `{ "notificationId": "<GUID>" }` | Khách vừa có một thông báo mới — client gọi lại API danh sách thông báo |
+
+```json
+// Ví dụ payload sự kiện NotificationReceived
+{ "notificationId": "8f2b1d64-0000-0000-0000-000000000000" }
+```
+
+> **Vì sao payload chỉ có mỗi id, không gửi kèm `title`/`body`?** Gửi kèm thì nội dung thông báo
+> tồn tại ở hai nơi (bảng `Notifications` và payload) và hai nơi đó có thể lệch nhau — client phải
+> tin cái nào? Cùng lý do `/hubs/seat-map` chỉ báo "đã đổi" thay vì gửi cả sơ đồ ghế: giữ **một
+> nguồn sự thật duy nhất**. Cái giá là một request danh sách mỗi lần có sự kiện.
+>
+> Client **không cần** lấy nội dung từ payload: chúng nằm sẵn trong bảng `Notifications` để khách đọc
+> lại kể cả khi offline (quyết định A8.5), nên kênh đẩy chỉ có một việc là đánh thức màn hình.
+
+### Khi nào sự kiện được phát
+
+Đúng hai nguồn, mỗi nguồn phát **một lần** cho người gửi yêu cầu:
+
+| Nguồn | Phát khi |
+|---|---|
+| `PATCH /cancellation-requests/{id}` (duyệt / từ chối yêu cầu huỷ) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
+| `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
+
+Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4)
+— **chưa có trong tài liệu này** (chờ Hiếu). Mục này chỉ chốt phần thông báo của chúng.
+
+> ⚠️ **Không có sự kiện nào khi khách GỬI yêu cầu.** Gửi yêu cầu là việc của khách, không phải kết
+> quả cần báo cho khách. Thông báo chỉ đi ở bước **duyệt hoặc từ chối**.
+>
+> ⚠️ **Gọi lại lượt duyệt không phát lại sự kiện.** Một quyết định = một thông báo: nếu đã có dòng
+> thông báo cho đúng yêu cầu đó thì lượt gọi sau bị bỏ qua hoàn toàn (không ghi, không đẩy). Nhờ vậy
+> client retry cũng không làm khách thấy hai thông báo giống nhau.
+
+### Bốn loại thông báo
+
+| `type` | `title` |
+|---|---|
+| `CancellationApproved` | Đã duyệt yêu cầu huỷ vé |
+| `CancellationRejected` | Từ chối yêu cầu huỷ vé |
+| `TicketChangeApproved` | Đã duyệt yêu cầu đổi chuyến |
+| `TicketChangeRejected` | Từ chối yêu cầu đổi chuyến |
+
+Hai loại `…Rejected` có lý do từ chối của quản lý **chép nguyên văn** vào cuối `body`; quản lý không
+nêu lý do thì body ghi rõ *"Người duyệt không nêu lý do."* chứ không để cụt.
+
+> 🔴 **Nội dung thông báo KHÔNG chứa số tiền** — không có khoản hoàn nào, không phí huỷ. Việc hoàn
+> tiền do bảng `Refunds` (US 8, sprint khác) thực hiện và có thể thất bại rồi thử lại, nên nêu một
+> con số ở đây là hứa trước một việc hệ thống chưa làm; định dạng tiền cũng là việc của frontend.
+> Frontend cần hiển thị số tiền thì lấy từ chính dòng yêu cầu. Có test ghim điều này (body không
+> được chứa chữ số nào) — chi tiết: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §6.1.
+
+### Ví dụ client (frontend)
+
+Client **phải** truyền `accessTokenFactory`, nếu không hub trả 401 và không có thông báo nào tới:
+
+```ts
+const connection = new HubConnectionBuilder()
+  .withUrl(`${API_BASE_URL}/hubs/notifications`, {
+    accessTokenFactory: () => accessToken,   // ⚠️ bắt buộc — xem "Vì sao token đi bằng query string"
+  })
+  .withAutomaticReconnect()
+  .build();
+
+// Không có JoinUser/LeaveUser: nhóm do server tự thêm khi kết nối.
+connection.on("NotificationReceived", ({ notificationId }) => {
+  // Gọi lại API danh sách thông báo (dòng 19 Sprint 5) rồi cập nhật badge.
+});
+```
+
+> **Vì sao không cần gọi lại lệnh vào nhóm sau khi tự kết nối lại?** Khác `SeatMapHub`, ở đây nhóm
+> được thêm trong `OnConnectedAsync` — mỗi lần kết nối lại là một lượt `OnConnectedAsync` mới, nên
+> server tự thêm lại. `withAutomaticReconnect()` là đủ.
+
+> **Vì sao token đi bằng query string?** Trình duyệt **không đặt được header `Authorization` cho
+> WebSocket** — API WebSocket của trình duyệt không có chỗ truyền header. Đây là cách duy nhất, và là
+> mặc định của client SignalR JS (`accessTokenFactory`). Phía server, một ngoại lệ duy nhất trong
+> `JwtMiddleware` đọc `?access_token=` **chỉ cho đường dẫn `/hubs`**; token vẫn được kiểm tra đầy đủ
+> (chữ ký, hạn, issuer, audience) như mọi lượt khác — đổi chỗ đọc chứ không nới lỏng kiểm tra.
+>
+> ⚠️ **Đánh đổi đã biết:** token nằm trong URL nên log truy cập của hạ tầng (IIS/Nginx/Render) có
+> thể ghi lại nó. Giảm nhẹ: `AuditLogMiddleware` đã loại cả tiền tố `/hubs` khỏi nhật ký nên URL
+> mang token **không** đi vào bảng `AuditLogs`. Người vận hành phải bảo vệ log truy cập. Cách xử lý
+> triệt để (token riêng ngắn hạn cho hub, hoặc xác thực bằng cookie) ngoài phạm vi đồ án.
+
+> ⚠️ **Chưa có backplane — cùng giới hạn như `/hubs/seat-map`.** SignalR không backplane chỉ chạm
+> được client nối vào CHÍNH máy chủ đã phát sự kiện. Dự án đang chạy hai bản triển khai (Render + máy
+> thành viên) chung một CSDL Supabase: quản lý duyệt yêu cầu ở Render sẽ **không** đẩy được thông
+> báo tới trình duyệt đang nối vào bản chạy ở máy. Trong phạm vi đồ án điều này **không làm mất
+> thông báo** — dòng `Notifications` đã ghi vào CSDL dùng chung, nên khách vẫn thấy khi mở màn danh
+> sách; chỉ mất đúng lời nhắc tức thời. Muốn xuyên máy chủ thì thêm backplane (Azure SignalR /
+> `AddStackExchangeRedis`) — ngoài phạm vi.
+
 ## Xe buýt — `/buses`
 
 > ✅ Backend đã có (`BusesController` — Trần Trung Hiếu, story 14). Frontend chưa có module gọi
