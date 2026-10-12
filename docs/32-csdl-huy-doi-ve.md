@@ -245,7 +245,7 @@ duyệt gộp đọc được cả ba bảng bằng một câu truy vấn.
    **nhóm chốt bổ sung A9** cho khớp — nếu không thì mọi tài liệu còn nói "20 bảng" trong khi CSDL có
    22. Đây là lần thứ hai việc "A9 lệch thực tế" được nhắc (lần đầu: `docs/28` §7.4).
 2. **`docs/03-quy-uoc.md` vẫn không tồn tại trong repo.** Mọi tham chiếu A1–A9 ở đây chỉ còn là trích
-   dẫn trong code và tài liệu. Đây là lần thứ **tư** việc này được nhắc — nhóm nên đưa file vào repo.
+   dẫn trong code và tài liệu. Đây là lần thứ **năm** việc này được nhắc — nhóm nên đưa file vào repo.
 3. **Xung đột lịch sprint: US 5 nằm ở hai sprint khác nhau.** `docs/02-sprint-roadmap.md` §2 xếp US 5
    (*Hủy/Đổi vé*) ở **Sprint 5**, còn bảng phân công Sprint 4 giao **toàn bộ** story này — kể cả
    migration — ở **Sprint 4** (dòng 2–13). Bản này làm theo **bảng phân công Sprint 4**, đúng luật
@@ -261,6 +261,14 @@ duyệt gộp đọc được cả ba bảng bằng một câu truy vấn.
 5. **A7 "mỗi sprint một migration" đã lệch thực tế từ lâu** (đã nhắc ở `docs/28` §7.3). Sprint 4 này
    sẽ có ít nhất 5 migration, mỗi task migrate một cái. Nhóm sửa A7 cho khớp, **đừng gộp migration** —
    gộp 5 bảng của 5 story khác nhau vào một file là chặn nhau giữa các nhánh.
+6. **Bảng `Notifications` được kéo trước từ Sprint 5 sang Sprint 4.** Task dòng 7 Sprint 4 (*"Ghi log
+   và thông báo kết quả xử lý cho hành khách"*) không chạy được nếu thiếu bảng đó — A8.5 chốt thông
+   báo phải **lưu vào bảng** để khách đọc lại khi offline, không chỉ một sự kiện SignalR. Khác hai
+   bảng của tài liệu này, `Notifications` **có** trong A9 (mục #15) nên không cần bổ sung A9. Hệ quả
+   cho nhóm: bảng phân công **Sprint 5 dòng 14** (*"Migrate bảng Notifications, NotificationTemplates,
+   Subscriptions"* — cùng người làm) coi như **bớt một bảng**, còn lại `NotificationTemplates` +
+   `Subscriptions`. Nhóm chốt lại để dòng 14 không làm trùng. Chi tiết đầy đủ:
+   **`docs/33-thong-bao-ket-qua-huy-doi-ve.md`** — tài liệu anh em của tài liệu này, cùng US 5.
 
 ## 8. Migration đã sinh và đã soát — 12/10/2026
 

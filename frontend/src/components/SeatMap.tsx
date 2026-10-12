@@ -1,6 +1,6 @@
 import { theme } from 'antd';
 import type { CSSProperties, ReactNode } from 'react';
-import { seatKey, seatNumber } from '../api/seatLayoutApi';
+import { seatKey, seatLabel } from '../api/seatLayoutApi';
 
 // Sơ đồ ghế trực quan — dùng chung cho màn cấu hình (xem nhanh trong bảng) và modal (bấm
 // chọn ghế VIP). Chỉ là khung vẽ, không gọi API: nhận số tầng / hàng / cột và tập ghế VIP từ
@@ -38,7 +38,10 @@ export default function SeatMap({
 
   const renderSeat = (floor: number, row: number, col: number) => {
     const key = seatKey(floor, row, col);
-    const number = seatNumber(row - 1, col - 1);
+    // Nhãn đếm từ 1, xe hai tầng thêm tiền tố tầng (T1-A1) — chép đúng cách backend đánh mã
+    // ghế, xem seatLabel ở seatLayoutApi.ts. Số tầng phải truyền vào vì nó quyết định có
+    // tiền tố hay không; thiếu nó thì tầng 1 và tầng 2 cùng ra "A1".
+    const number = seatLabel(floor, row, col, floors);
     const isVip = vipSet.has(key);
 
     const style: CSSProperties = {

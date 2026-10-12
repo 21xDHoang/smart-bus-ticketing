@@ -138,6 +138,11 @@ builder.Services.AddScoped<ITripAssignmentService, TripAssignmentService>();
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();
 
+// Sơ đồ ghế theo loại xe: CRUD /seat-layouts — lưu sơ đồ là SINH GHẾ luôn cho mọi xe cùng loại
+// đang chưa có ghế (không có nút "sinh ghế" riêng); nhờ đó hành khách mới chọn được ghế.
+// Task story 2 — Phùng Duy Hoàng (file này cũng của Hoàng).
+builder.Services.AddScoped<ISeatLayoutService, SeatLayoutService>();
+
 // Hồ sơ tài xế: CRUD /drivers + ca làm việc /drivers/{id}/trips.
 // Tài xế là Users mang vai trò Driver (quy ước A8.4) — không có bảng Drivers riêng.
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
