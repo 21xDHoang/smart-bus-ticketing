@@ -30,6 +30,7 @@ public partial class AppDbContext : DbContext
         ConfigureCancellationRequest(modelBuilder);
         ConfigureTicketChange(modelBuilder);
         ConfigureNotification(modelBuilder);
+        ConfigureTicketValidation(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -89,4 +90,12 @@ public partial class AppDbContext : DbContext
     // kéo trước ĐÚNG MỘT bảng, hai bảng còn lại vẫn để nguyên ở Sprint 5.
     // Xem docs/33-thong-bao-ket-qua-huy-doi-ve.md §1. Xem AppDbContext.Notification.cs.
     partial void ConfigureNotification(ModelBuilder modelBuilder);
+
+    // US 15 (TicketValidations — Sprint 4, Vàng Thị Dăm): task "Migrate bảng TicketValidations" của
+    // bảng phân công Sprint 4 (dòng 14). NHẬT KÝ SOÁT VÉ — một dòng cho mỗi lượt quét QR, kể cả lượt
+    // bị từ chối; là chỗ duy nhất trả lời được "chống soát trùng" (dòng 16), "lượt lên xe theo trạm"
+    // (dòng 17), "đồng bộ ngoại tuyến" (dòng 18) và "thống kê lượt soát theo chuyến" (dòng 24).
+    // A9 KHÔNG có bảng này — lần thứ ba việc "A9 lệch thực tế" được nhắc, xem
+    // docs/34-csdl-soat-ve-qr.md §1. Xem AppDbContext.TicketValidation.cs.
+    partial void ConfigureTicketValidation(ModelBuilder modelBuilder);
 }
