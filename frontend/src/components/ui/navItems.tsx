@@ -13,6 +13,7 @@ import {
   EditOutlined,
   EnvironmentOutlined,
   FieldTimeOutlined,
+  FileDoneOutlined,
   GiftOutlined,
   HistoryOutlined,
   HomeOutlined,
@@ -242,6 +243,12 @@ const NAV: NavEntry[] = [
         label: 'Xử lý phản ánh',
         roles: ADMIN_MANAGER,
         icon: <CommentOutlined />,
+      },
+      {
+        to: '/admin-ticket-requests',
+        label: 'Duyệt huỷ/đổi vé',
+        roles: ADMIN_MANAGER,
+        icon: <FileDoneOutlined />,
       },
       {
         to: '/admin-users',
