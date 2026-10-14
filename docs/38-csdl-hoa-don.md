@@ -284,6 +284,12 @@ giờ** — sau khi có dữ liệu thì đắt hơn hẳn. A2 chốt entity s�
 |---|---|
 | `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` | ✅ 0 warning, 0 error |
 | `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1287/1287**, 0 failed, 0 skipped (7 phút 7 giây) |
+| 🔴 `has-pending-model-changes` (KHÔNG `--no-build`) | ✅ *"No changes have been made to the model since the last migration."* |
+| 🔴 `migrations script <TicketValidations> <Invoices> --no-build` | ✅ **đúng một** `CREATE TABLE` + 2 `CREATE INDEX` + 1 `INSERT` lịch sử. **Không** `ALTER`, **không** `DROP`, **không** `UPDATE` |
+| SQL: `IX_Invoices_PaymentId` | ✅ **`CREATE UNIQUE INDEX`** — có chữ `UNIQUE` |
+| SQL: hai khoá ngoại | ✅ cả hai `ON DELETE RESTRICT`, không `CASCADE` nào |
+| SQL: `Amount` / `PdfUrl` / `xmin` | ✅ `numeric(12,2)` · `text` · **không** có cột `xmin` |
+| `AppDbContextModelSnapshot.cs` | ✅ **57 dòng thêm, 0 dòng xoá** — thuần thêm, không đụng bảng nào khác |
 | `git grep "class Invoice"` trên `--all` | ✅ **không có kết quả** ở bất kỳ nhánh nào — không có caller nào để vỡ, và không có thiết kế cũ nào để đụng |
 | `docs/32` §3.1 đọc lại | ✅ giả định *"hoá đơn xuất theo `Payments.TicketId`"* khớp với §3.1 của tài liệu này |
 | Điều tra PDF/email toàn repo | ✅ §5 — có sẵn, 0 caller sản phẩm |
@@ -310,11 +316,7 @@ cùng máy, cùng lỗi. Bù bằng đúng những gì làm được:
 
 **Ai có máy chạy được GitNexus nên chạy `impact` cho `AppDbContext`** — file dùng chung duy nhất bị sửa.
 
-## 10. Migration — lệnh cần chạy (việc của Dăm)
-
-🔴 A7 — **chỉ Vàng Thị Dăm được chạy `dotnet ef migrations add`**, và lệnh này còn bị **deny rule**
-chặn thẳng trong `.claude/settings.json` của repo. Nên phần entity + cấu hình do phiên làm việc này
-viết, còn migration **do chính Dăm chạy tay** — đúng quy trình, không phải lách.
+## 10. Migration — ✅ ĐÃ SINH VÀ ĐÃ KIỂM
 
 ```bash
 ConnectionStrings__Default="<chuoi-ket-noi-gia — chi can dung dinh dang>" \
@@ -324,6 +326,10 @@ Jwt__Audience="SmartBusClient" \
 dotnet ef migrations add Sprint4_Invoices --project backend/SmartBus.Api
 ```
 
+✅ **Đã chạy ngày 14/10/2026** (Vàng Thị Dăm) → `20261014171948_Sprint4_Invoices.cs` +
+`.Designer.cs`. Tên `Sprint4_Invoices` theo đúng khuôn ba migration gần nhất của cùng sprint
+(`Sprint4_Notifications`, `Sprint4_TicketValidations`).
+
 ⚠️ **Đừng tạo file `appsettings.Development.json` thật** — `scripts/setup-csdl.sh` bỏ qua file đã tồn
 tại nên nó sẽ chặn luôn phần cài đặt thật về sau (cùng cảnh báo ở `docs/32` §8, `docs/33` §10,
 `docs/37` §9).
@@ -331,26 +337,55 @@ tại nên nó sẽ chặn luôn phần cài đặt thật về sau (cùng cản
 Nhánh đang đứng trên `20261013144302_Sprint4_TicketValidations` (bản mới nhất của `main`), nên migration
 mới **chỉ chứa một bảng** — không chạm bảng nào khác.
 
-### Hai phép kiểm, không cần CSDL thật
+### Hai phép kiểm, không cần CSDL thật — ✅ cả hai xanh
 
-| Phép kiểm | Kỳ vọng |
+| Phép kiểm | Kết quả thật |
 |---|---|
 | `dotnet ef migrations has-pending-model-changes --project backend/SmartBus.Api` | ✅ *"No changes have been made to the model since the last migration."* |
-| `dotnet ef migrations script 20261013144302_Sprint4_TicketValidations <migration-moi> --project backend/SmartBus.Api --no-build` | **CHỈ** có 1 `CREATE TABLE` + 2 `CREATE INDEX` + 1 `INSERT` vào `__EFMigrationsHistory`. **Không** `ALTER TABLE`, **không** `DROP`, **không** `UPDATE` |
+| `dotnet ef migrations script 20261013144302_Sprint4_TicketValidations 20261014171948_Sprint4_Invoices --project backend/SmartBus.Api --no-build` | ✅ **CHỈ** 1 `CREATE TABLE` + 2 `CREATE INDEX` + 1 `INSERT` vào `__EFMigrationsHistory`. Không `ALTER TABLE`, không `DROP`, không `UPDATE` |
 
 ⚠️ ⚠️ **`has-pending-model-changes` phải chạy KHÔNG có `--no-build`.** `AppDbContextModelSnapshot` nằm
 trong assembly, mà `migrations add` build **trước** khi sinh file — nên assembly cũ chưa chứa migration
 vừa sinh, và `--no-build` sẽ báo *"còn thay đổi"* một cách **sai**. (Bài học này đã ghi ở `docs/37` §9;
 lặp lại ở đây vì nó làm mất thời gian của người chạy.)
 
-Đối chiếu SQL với §2 — **phải nhìn bằng mắt**, không suy ra được từ việc build xanh:
+### SQL sinh ra — đã đọc bằng mắt, khớp từng dòng với §2
 
-- `Amount` = `numeric(12,2)` — **không** `double precision`/`real`;
-- `PdfUrl` = **`text`** — không phải `character varying(n)`;
-- `SentAt`, `UpdatedAt` = `timestamp with time zone` **nullable**; `CreatedAt` **NOT NULL**;
-- 🔴 **`IX_Invoices_PaymentId` phải là `CREATE UNIQUE INDEX`** — thiếu chữ `UNIQUE` nghĩa là ràng buộc
-  một-hoá-đơn-một-giao-dịch **không tồn tại**, và đây là ràng buộc quan trọng nhất của bảng (§3.2).
-  Ca hỏng nó chỉ lộ ra khi cổng thanh toán gửi callback lần thứ hai — rất khó lần;
-- **hai khoá ngoại đều `ON DELETE RESTRICT`** — không có `CASCADE` nào trong file SQL;
-- **không** được có cột `xmin` (nhánh này cố ý không khai khoá phiên bản dòng — §5 của
-  `AppDbContext.Invoice.cs`).
+```sql
+CREATE TABLE "Invoices" (
+    "Id" uuid NOT NULL,
+    "PaymentId" uuid NOT NULL,
+    "UserId" uuid NOT NULL,
+    "Amount" numeric(12,2) NOT NULL,
+    "PdfUrl" text,
+    "SentAt" timestamp with time zone,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone,
+    CONSTRAINT "PK_Invoices" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_Invoices_Payments_PaymentId" FOREIGN KEY ("PaymentId") REFERENCES "Payments" ("Id") ON DELETE RESTRICT,
+    CONSTRAINT "FK_Invoices_Users_UserId" FOREIGN KEY ("UserId") REFERENCES "Users" ("Id") ON DELETE RESTRICT
+);
+
+CREATE UNIQUE INDEX "IX_Invoices_PaymentId" ON "Invoices" ("PaymentId");
+
+CREATE INDEX "IX_Invoices_UserId_CreatedAt" ON "Invoices" ("UserId", "CreatedAt");
+
+INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+VALUES ('20261014171948_Sprint4_Invoices', '10.0.12');
+```
+
+Đối chiếu từng điểm đã dặn ở bản trước của mục này — **tất cả đều đạt**:
+
+- ✅ `Amount` = `numeric(12,2)` — **không** `double precision`/`real`;
+- ✅ `PdfUrl` = **`text`** — không phải `character varying(n)`;
+- ✅ `SentAt`, `UpdatedAt` = `timestamp with time zone` **nullable**; `CreatedAt` **NOT NULL**;
+- 🔴 ✅ **`IX_Invoices_PaymentId` là `CREATE UNIQUE INDEX`** — ràng buộc một-hoá-đơn-một-giao-dịch
+  **có thật trong CSDL** (§3.2), không phải chỉ nằm trong cấu hình EF;
+- ✅ **cả hai khoá ngoại đều `ON DELETE RESTRICT`** — không có `CASCADE` nào;
+- ✅ **không** có cột `xmin`;
+- ✅ `AppDbContextModelSnapshot.cs` **57 dòng thêm, 0 dòng xoá**.
+
+⚠️ Vẫn còn một thứ **chưa** kiểm được ở đây: SQL đúng **trên giấy**, nhưng chưa chạy lên PostgreSQL
+thật (việc của người triển khai migration). Và như §9 đã nói, test InMemory **không** cưỡng chế được
+chỉ mục duy nhất — nên ca kiểm chứng thật sự cho `IX_Invoices_PaymentId` là **một test chạy trên
+PostgreSQL**, tức là dòng 36 (Giàng A Vàng).
