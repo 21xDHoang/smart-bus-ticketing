@@ -10,9 +10,9 @@
 > lý yêu cầu hoàn tiền, dòng 46; component lọc và xuất danh sách, dòng 47) · **Giàng A Vàng** (test
 > API hoàn tiền + retry, dòng 48–49).
 >
-> 🟡 **Trạng thái:** entity `Refund` + `RefundLog`, bốn enum (`RefundSource`, `RefundStatus`,
-> `RefundLogResult`, `RefundLogTrigger`), cấu hình `AppDbContext.Refund.cs`, và `dotnet build` 0
-> warning / 0 error — **đã xong**. Migration `Sprint4_Refunds_RefundLogs` — **chưa sinh, xem §8**.
+> 🟢 **Trạng thái:** entity `Refund` + `RefundLog`, bốn enum (`RefundSource`, `RefundStatus`,
+> `RefundLogResult`, `RefundLogTrigger`), cấu hình `AppDbContext.Refund.cs`, và migration
+> `Sprint4_Refunds_RefundLogs` (Vàng Thị Dăm, task Sprint 4 dòng 38) — **đã sinh và đã soát, xem §8**.
 > **Chưa merge, chưa áp lên CSDL chung**: bảng chỉ có thật sau khi PR được merge rồi chạy
 > `database update` (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4). Trước bước đó, endpoint nào chạm
 > chúng sẽ lỗi `relation "Refunds" does not exist`.
@@ -487,15 +487,30 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
    46, và nhân đôi bước đối soát dòng 43 — để đổi lấy việc hai cột nullable thành NOT NULL. **Nhóm
    biết để khỏi thắc mắc**, không cần chốt lại.
 
-## 8. Migration — 🟡 CHƯA SINH
+## 8. Migration đã sinh và đã soát — 14/10/2026
 
-> ⚠️ **Mục này còn trống có lý do:** `dotnet ef migrations add` bị `.claude/settings.json` của repo
-> **CHẶN** bằng deny rule (cùng `migrations remove`, `database drop`) — chốt cố ý, khớp luật nhóm
-> *"chỉ Dăm chạy migrations"*. Nhánh này dựng xong **entity + cấu hình** và **đã build 0 warning /
-> 0 error**, nhưng **file migration chưa được sinh**. Dưới đây là lệnh đã soạn sẵn và bảng kiểm sẽ
-> điền vào sau khi sinh.
+MỘT file, chứa **đúng hai** bảng của nhánh này:
 
-### 8.1 Lệnh đã soạn sẵn — cần biến môi trường GIẢ
+| File | Nội dung |
+|---|---|
+| `Migrations/20261014153025_Sprint4_Refunds_RefundLogs.cs` (+ `.Designer.cs`) | `CREATE TABLE "Refunds"` + `CREATE TABLE "RefundLogs"` + 9 chỉ mục |
+
+`AppDbContextModelSnapshot.cs` bị sửa — **thuần thêm 168 dòng, 0 dòng xoá** (`git diff --numstat` ra
+`168 0`), nên không bảng nào khác bị đụng. Tên theo A7 (`<Sprint><Nội dung>`).
+
+### 8.1 Vì sao chỉ MỘT file — khác `docs/34` §8.1
+
+`main` @ `274b6f7` **không** có nợ migration: `has-pending-model-changes --no-build` chạy **trước** khi
+nhánh này thêm entity đã trả về *"No changes have been made to the model since the last migration"*.
+Nên `migrations add` sinh **đúng một** file chứa **đúng hai** bảng của nhánh này — **không** cần thủ
+thuật ẩn/hiện khai báo như `docs/34` §8.1 (ở đó `main` còn nợ bảng `Notifications` nên phải sinh hai
+lần).
+
+Hai bảng **cố ý** đi chung một migration: chúng thuộc **cùng một** task (dòng 38) và **cùng một** user
+story, khác `Notifications` / `TicketValidations` (hai story khác nhau nên phải tách). Lối
+một-migration-một-story của `docs/28` §8 và `docs/32` §8 vẫn được giữ.
+
+### 8.2 Lệnh đã chạy — cần biến môi trường GIẢ
 
 Cùng lối `docs/32` §8 và `docs/34` §8.2: máy chưa có `appsettings.Development.json` (file bị
 `.gitignore`, repo public) thì host design-time không dựng được model. `migrations add`,
@@ -510,68 +525,72 @@ Jwt__Issuer="SmartBus" Jwt__Audience="SmartBusClient" \
 dotnet ef migrations add Sprint4_Refunds_RefundLogs --project backend/SmartBus.Api
 ```
 
-Đã đo trước khi sinh, trên `main` @ `274b6f7` cộng nhánh này:
-
-| Phép kiểm | Kết quả |
-|---|---|
-| `git status` lúc bắt đầu nhánh | ✅ sạch — `main` **không** có nợ migration nào khác |
-| `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` | ✅ 0 warning, 0 error |
-| `dotnet ef migrations has-pending-model-changes --no-build` **trước** khi thêm entity | ✅ *"No changes have been made to the model since the last migration"* |
-| `dotnet ef migrations has-pending-model-changes --no-build` **sau** khi thêm entity | ✅ *"Changes have been made to the model since the last migration"* — đúng phần thay đổi của nhánh này |
-
-🔴 **Hệ quả của dòng thứ ba:** vì `main` **không** có nợ migration, `migrations add` sẽ sinh **ĐÚNG
-MỘT** file chứa **ĐÚNG HAI** bảng của nhánh này. Đây là điều **khác** `docs/34` §8.1 (ở đó `main` có
-nợ `Notifications` nên phải sinh hai lần) — **không** cần thủ thuật ẩn/hiện khai báo lần này.
+⚠️ **Lệnh này do Dăm chạy, không phải do công cụ AI chạy:** `.claude/settings.json` của repo **CHẶN**
+`dotnet ef migrations add` bằng deny rule (cùng `migrations remove`, `database drop`) — chốt cố ý,
+khớp luật nhóm *"chỉ Dăm chạy migrations"*. Nhánh này dựng entity + cấu hình, **Dăm chạy lệnh trên**,
+rồi cả hai phép kiểm ở §8.3 được chạy lại trên file vừa sinh.
 
 ⚠️ **`dotnet ef migrations add` build project TRƯỚC khi ghi `ModelSnapshot.cs`**, nên DLL còn lại trên
 đĩa giữ snapshot đời cũ. Chạy ngay `has-pending-model-changes --no-build` sau đó sẽ báo **sai** là
 *"Changes have been made to the model since the last migration"*. Chạy `dotnet build` một lần rồi đo
-lại là hết. Đã sập đúng bẫy này ở nhánh `docs/34`.
+lại là hết. Đã sập đúng bẫy này ở nhánh `docs/34` — lần này `dotnet build` được chạy **trước** khi đo.
 
 ⚠️ **Đừng để migration rỗng lọt qua:** nếu `Up()` không có gì thì bảng **không bao giờ** được tạo, mà
-lệnh **không** báo lỗi — nó chỉ lặng lẽ ghi một dòng vào `__EFMigrationsHistory`. Luôn mở file vừa
-sinh ra đọc `Up()`.
+lệnh **không** báo lỗi — nó chỉ lặng lẽ ghi một dòng vào `__EFMigrationsHistory`. `Up()` của file này
+đã được mở đọc: có **2** `CreateTable` và **9** `CreateIndex`.
 
-### 8.2 Bảng kiểm sau khi sinh — còn trống
-
-| Hạng mục | Kết quả |
-|---|---|
-| Tên file / tên migration theo A7 (`<Sprint><Nội dung>`) | ⏳ chưa sinh |
-| `CREATE TABLE "Refunds"` — **15 cột** đúng bảng §2 | ⏳ |
-| `CREATE TABLE "RefundLogs"` — **7 cột** đúng bảng §3 | ⏳ |
-| `Source` · `Status` · `Result` · `Trigger` | ⏳ phải là `character varying(n)` — lưu **chuỗi** (A3), **không** `integer` |
-| `Amount` | ⏳ phải là `numeric(12,2)` — **không** `double precision` / `real` |
-| Năm cột thời gian (`NextRetryAt`, `ProcessedAt`, `CreatedAt`, `UpdatedAt`, `RefundLogs.CreatedAt`) | ⏳ phải là **`timestamp with time zone`** (không `timestamp` thiếu múi giờ) |
-| Khoá ngoại | ⏳ phải là **5 FK** — `Refunds`→ `Payments`, `CancellationRequests`, `Tickets`, `Users` (4) và `RefundLogs`→ `Refunds` (1) — **tất cả `ON DELETE RESTRICT`** (A5) |
-| Chống hoàn hai lần (§4.1) | ⏳ `CREATE UNIQUE INDEX "IX_Refunds_PaymentId_Active" … WHERE "Status" IN ('Pending', 'Succeeded')` |
-| Chỉ mục thường cho `PaymentId` (§5.1) | ⏳ `IX_Refunds_PaymentId` — **phải có đủ CẢ HAI** chỉ mục này và chỉ mục điều kiện ở trên |
-| `RefundCode` | ⏳ `CREATE UNIQUE INDEX "IX_Refunds_RefundCode"` |
-| Chỉ mục còn lại | ⏳ `IX_Refunds_UserId`, `IX_Refunds_Status_CreatedAt`, `IX_Refunds_Status_NextRetryAt`, `IX_RefundLogs_RefundId_CreatedAt` + 2 chỉ mục FK do EF tự sinh |
-| `xmin` | ⏳ **KHÔNG** được có dòng nào trong SQL — `xmin` là cột hệ thống của PostgreSQL |
-| `IsDeleted` | ⏳ **KHÔNG** có ở cả hai bảng (A4) |
-| `UpdatedAt` trên `RefundLogs` | ⏳ **KHÔNG** có — bảng chỉ ghi thêm (A4) |
-| SQL có `ALTER TABLE` / `DROP` / `UPDATE` / `DELETE` nào không | ⏳ phải là **không** — chỉ `CREATE TABLE` ×2 + `CREATE INDEX` ×9 + 1 dòng `INSERT` vào `__EFMigrationsHistory` |
-| `AppDbContextModelSnapshot.cs` | ⏳ phải **thuần thêm** dòng, **0 dòng xoá** |
-| `dotnet ef migrations has-pending-model-changes --no-build` (sau `dotnet build`) | ⏳ phải là *"No changes have been made…"* |
-| `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ⏳ xem §8.3 |
-
-### 8.3 Bằng chứng hồi quy đã có (chưa cần migration)
+### 8.3 Bốn phép kiểm, không cần CSDL thật
 
 | Phép kiểm | Kết quả |
 |---|---|
-| `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` | ✅ **0 warning, 0 error** |
-| `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1286/1287** lượt chạy đầu — 1 lỗi ở `SeatHoldRaceFlowApiTests.Nam_muoi_khach_cung_giu_mot_ghe_thi_dung_mot_nguoi_thang`; chạy lại **một mình** thì ✅ pass. Đây là test **đua** dùng SQLite (nhánh `NhaMaySqlite`), vốn phụ thuộc thời điểm — **không** liên quan tới hai bảng của nhánh này (nhánh này chỉ **thêm** bảng, không sửa `SeatHolds` / `SeatHoldLogs`) |
+| `dotnet ef migrations has-pending-model-changes --no-build` (sau khi `dotnet build`) | ✅ *"No changes have been made to the model since the last migration"* |
+| `dotnet ef migrations script 20261013144302_Sprint4_TicketValidations 20261014153025_Sprint4_Refunds_RefundLogs --no-build` rồi `grep -ic xmin` | ✅ **0** dòng — không cột `xmin` nào lọt vào SQL |
+| SQL đó có `ALTER TABLE` / `^DROP` / `^UPDATE` / `^DELETE` nào không | ✅ **0 / 0 / 0 / 0** — **chỉ** `CREATE TABLE` ×2 + `CREATE INDEX` ×9 + 1 dòng `INSERT` vào `__EFMigrationsHistory` |
+| `git diff --numstat AppDbContextModelSnapshot.cs` | ✅ `168 0` — **thuần thêm**, 0 dòng xoá |
+| `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` | ✅ 0 warning, 0 error |
+| `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1287/1287** passed, 0 failed, 0 skipped |
 
-⚠️ **Bộ test xanh KHÔNG chứng minh chỉ mục UNIQUE ở §4.1 tồn tại** — InMemory không cưỡng chế unique
-index lẫn FK (§4.4). Con số đó là **hồi quy** (không làm vỡ thứ đang chạy), không phải bằng chứng cho
-chốt chống hoàn hai lần. Chốt đó chỉ có thật ở PostgreSQL.
+SQL sinh ra khớp §2, §3, §4 và §5:
+
+| Hạng mục | Kết quả |
+|---|---|
+| `CREATE TABLE "Refunds"` | ✅ **15 cột** đúng bảng ở §2 |
+| `CREATE TABLE "RefundLogs"` | ✅ **7 cột** đúng bảng ở §3 |
+| `Id` · `PaymentId` · `UserId` · `RefundLogs.Id` · `RefundLogs.RefundId` | ✅ `uuid` NOT NULL |
+| `CancellationRequestId` · `TicketId` | ✅ `uuid` **nullable** — đúng cột "NULL" ở §2 (nhánh `PaymentFailure` không có hai giá trị này) |
+| `RefundCode` | ✅ `character varying(64)` NOT NULL |
+| `Source` | ✅ `character varying(30)` — lưu **chuỗi** (A3), không phải `integer` |
+| `Status` · `Result` · `Trigger` | ✅ đều `character varying(20)` — lưu **chuỗi** (A3) |
+| `Amount` | ✅ `numeric(12,2)` — **không** `double precision` / `real` (A3) |
+| `GatewayTransactionId` (cả hai bảng) · `FailReason` · `Message` | ✅ `character varying(50)` / `(500)` |
+| Năm cột thời gian | ✅ `NextRetryAt`, `ProcessedAt`, `CreatedAt`, `UpdatedAt`, `RefundLogs.CreatedAt` — **tất cả** `timestamp with time zone` (không `timestamp` thiếu múi giờ) |
+| Khoá ngoại | ✅ **5 FK** — `Refunds`→`Payments`/`CancellationRequests`/`Tickets`/`Users` (4) và `RefundLogs`→`Refunds` (1) — **tất cả `ON DELETE RESTRICT`** (A5) |
+| Chống hoàn hai lần (§4.1) | ✅ `CREATE UNIQUE INDEX "IX_Refunds_PaymentId_Active" ON "Refunds" ("PaymentId") WHERE "Status" IN ('Pending', 'Succeeded')` — **nguyên văn** câu ở §4.1 |
+| 🔴 Chỉ mục thường cho `PaymentId` (§5.1) | ✅ `CREATE INDEX "IX_Refunds_PaymentId"` — **có đủ CẢ HAI** chỉ mục này và chỉ mục điều kiện ở trên. Đây là chốt của cái bẫy "EF nhận diện chỉ mục theo danh sách cột": hai dòng `HasIndex` cho cùng cột `PaymentId` đã **không** nuốt nhau, đúng nhờ tên đặt tay |
+| `RefundCode` | ✅ `CREATE UNIQUE INDEX "IX_Refunds_RefundCode"` |
+| Chỉ mục còn lại | ✅ `IX_Refunds_UserId`, `IX_Refunds_Status_CreatedAt`, `IX_Refunds_Status_NextRetryAt`, `IX_RefundLogs_RefundId_CreatedAt` — tổng cộng **7 khai tay + 2 do EF tự sinh = 9**, đúng danh sách §5 |
+| Chỉ mục khoá ngoài do EF tự sinh | ✅ `IX_Refunds_CancellationRequestId`, `IX_Refunds_TicketId` — đúng như §5.1 đã ghi trước |
+| `xmin` | ✅ **0 dòng** trong SQL — `xmin` là cột **hệ thống** của PostgreSQL, có mặt trong `Designer.cs` (dòng `b.Property<uint>("xmin")`) nhưng **không** sinh DDL |
+| `xmin` trên `RefundLogs` | ✅ **KHÔNG có** — đúng §3.3, bảng chỉ ghi thêm |
+| `IsDeleted` | ✅ **không** có ở cả hai bảng (A4) |
+| `UpdatedAt` trên `RefundLogs` | ✅ **không** có — bảng chỉ ghi thêm (A4) |
+
+⚠️ **Bộ test 1287/1287 xanh KHÔNG chứng minh chỉ mục UNIQUE ở §4.1 tồn tại** — InMemory không cưỡng
+chế unique index lẫn FK (§4.4). Con số đó là **hồi quy** (không làm vỡ thứ đang chạy), không phải
+bằng chứng cho chốt chống hoàn hai lần, và **cũng** không phải bằng chứng cho `RESTRICT` của 5 khoá
+ngoại. Các chốt đó chỉ có thật ở PostgreSQL.
+
+ℹ️ **Ghi chú về một lần chạy đỏ, để người sau không hoang mang:** lượt `dotnet test` **đầu tiên** của
+nhánh ra **1286/1287** — đỏ ở
+`SeatHoldRaceFlowApiTests.Nam_muoi_khach_cung_giu_mot_ghe_thi_dung_mot_nguoi_thang`. Chạy lại **một
+mình** test đó thì ✅ pass, và **lượt chạy lại toàn bộ** ra ✅ 1287/1287. Đây là test **đua** thật
+(nhánh `NhaMaySqlite`, 50 khách cùng giữ một ghế) nên phụ thuộc thời điểm; nhánh này chỉ **thêm**
+bảng, **không** sửa `SeatHolds` / `SeatHoldLogs` / `SeatHoldRaceFlowApiTests`, nên không liên quan.
 
 ### 8.4 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
 
-1. **Sinh migration** — lệnh ở §8.1 (**Dăm** chạy; bị deny rule với mọi người khác), rồi soát theo
-   bảng kiểm §8.2.
-2. PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge** vào `main`.
-3. **Sau khi merge** mới áp lên CSDL chung:
+1. PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge** vào `main`.
+2. **Sau khi merge** mới áp lên CSDL chung:
    `dotnet ef database update --project backend/SmartBus.Api`.
    Trước bước đó, endpoint nào chạm hai bảng này sẽ lỗi `relation "Refunds" does not exist`.
 
@@ -582,7 +601,7 @@ nhánh này, **cả hai không chạy được**: repo không có `.gitnexus/`, 
 file trong npm-cache của chính nó. Nên **không có** kết quả `impact`/`detect_changes` cho nhánh này —
 thay bằng: đọc trực tiếp `Entities/Payment.cs`, `CancellationRequest.cs`, `TicketValidation.cs`,
 `SeatHoldLog.cs` và các file `AppDbContext.*.cs` để đối chiếu lối đặt tên, lối comment và `Restrict`;
-cộng với `dotnet build` (0/0) và `dotnet test` (1286–1287/1287) ở §8.3.
+cộng với `dotnet build` (0/0) và `dotnet test` (1287/1287) ở §8.3.
 
 **Ai có máy chạy được GitNexus nên chạy `impact` cho `Refund`, `RefundLog` và `AppDbContext` trước khi
 merge** — `AppDbContext.cs` là **file dùng chung**, và nhánh này **có** sửa nó (thêm một dòng
