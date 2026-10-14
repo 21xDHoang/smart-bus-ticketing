@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { MenuProps } from 'antd';
 import {
   ApartmentOutlined,
+  BarChartOutlined,
   CalendarOutlined,
   CarOutlined,
   ClockCircleOutlined,
@@ -13,6 +14,7 @@ import {
   EditOutlined,
   EnvironmentOutlined,
   FieldTimeOutlined,
+  FundOutlined,
   GiftOutlined,
   HistoryOutlined,
   HomeOutlined,
@@ -269,6 +271,19 @@ const NAV: NavEntry[] = [
         label: 'Nhật ký hoạt động',
         roles: ADMIN,
         icon: <HistoryOutlined />,
+      },
+    ],
+  },
+  {
+    key: 'group-reports',
+    label: 'Báo cáo',
+    icon: <BarChartOutlined />,
+    children: [
+      {
+        to: '/revenue-dashboard',
+        label: 'Dashboard doanh thu',
+        roles: ADMIN_MANAGER,
+        icon: <FundOutlined />,
       },
     ],
   },

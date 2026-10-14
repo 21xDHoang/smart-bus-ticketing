@@ -36,6 +36,7 @@ import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AdminRefundPage from './pages/AdminRefundPage';
+import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -328,6 +329,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <AdminRefundPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /revenue-dashboard là màn hình dashboard doanh thu (US 19 "Doanh thu", Sprint 5,
+                  task của Dương Thị Hạnh): tổng quan doanh thu theo khoảng thời gian — dải thẻ
+                  số liệu + biểu đồ theo ngày và theo tuyến. Báo cáo tài chính nên chỉ Admin và
+                  Manager vào được. Backend thống kê doanh thu chưa có nên màn hình đang chạy dữ
+                  liệu giả (revenueDashboardApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ:
+                  màn hình cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình
+                  Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/revenue-dashboard"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <RevenueDashboardPage />
                   </RouteGuard>
                 }
               />
