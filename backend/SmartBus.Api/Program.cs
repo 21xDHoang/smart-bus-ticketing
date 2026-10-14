@@ -194,6 +194,14 @@ builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
 // nhau nên hai đường dẫn không đụng nhau (đoạn literal "export" thắng đoạn tham số).
 builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 
+// Service xuất PDF báo cáo (US 21 "Xuất dữ liệu", Sprint 4): báo cáo A4 có tiêu đề, logo, ngày
+// xuất — viên gạch chung cho mọi báo cáo xuất PDF (doanh thu / lấp đầy / nhật ký).
+// Task dòng 77 "Service xuất PDF có tiêu đề, logo, ngày xuất" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service thuần (không CSDL, không mạng): ngày xuất do bên gọi truyền vào qua ReportPdfModel.
+// Đặt cạnh khối xuất nhật ký ra Excel ở trên vì cùng chủ đề "xuất file" của Sprint 4.
+builder.Services.AddScoped<IReportPdfService, ReportPdfService>();
+
 
 // Xử lý phản ánh phía quản trị: GET/PATCH /api/admin/feedbacks, GET /api/admin/feedbacks/{id},
 // POST /api/admin/feedbacks/{id}/replies (US 24).
