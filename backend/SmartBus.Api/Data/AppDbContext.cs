@@ -30,6 +30,8 @@ public partial class AppDbContext : DbContext
         ConfigureCancellationRequest(modelBuilder);
         ConfigureTicketChange(modelBuilder);
         ConfigureNotification(modelBuilder);
+        ConfigureNotificationTemplate(modelBuilder);
+        ConfigureSubscription(modelBuilder);
         ConfigureTicketValidation(modelBuilder);
     }
 
@@ -90,6 +92,23 @@ public partial class AppDbContext : DbContext
     // kéo trước ĐÚNG MỘT bảng, hai bảng còn lại vẫn để nguyên ở Sprint 5.
     // Xem docs/33-thong-bao-ket-qua-huy-doi-ve.md §1. Xem AppDbContext.Notification.cs.
     partial void ConfigureNotification(ModelBuilder modelBuilder);
+
+    // US 10 (NotificationTemplates — không có trong A9, Vàng Thị Dăm): task "Migrate bảng
+    // Notifications, NotificationTemplates, Subscriptions" của bảng phân công **Sprint 5, dòng 14**
+    // (ưu tiên Cao, 4 điểm). MẪU nội dung thông báo do quản trị viên sửa — dòng 24 là màn quản lý mẫu.
+    // Bảng Notifications đã kéo trước ở Sprint 4 (dòng 7 không chạy được nếu thiếu nó) nên dòng 14
+    // còn lại ĐÚNG HAI bảng, không làm lại bảng thứ ba — docs/33 §9.1.
+    // A9 KHÔNG có bảng này — lần thứ năm việc "A9 lệch thực tế" được nhắc, xem
+    // docs/37-csdl-mau-thong-bao-va-theo-doi.md §1. Xem AppDbContext.NotificationTemplate.cs.
+    partial void ConfigureNotificationTemplate(ModelBuilder modelBuilder);
+
+    // US 10 (Subscriptions — không có trong A9, Vàng Thị Dăm): cùng task Sprint 5 dòng 14. LƯỢT ĐĂNG
+    // KÝ THEO DÕI thông báo theo tuyến / theo trạm — trả lời "ai muốn nhận thông báo về tuyến nào",
+    // câu mà docs/33 §1 đã dùng để hoãn bảng này. Người tiêu thụ: dòng 15 (service bắn thông báo khi
+    // xe cách trạm dưới 500m), dòng 17 (API đăng ký/huỷ), dòng 20 (component bật/tắt theo trạm) và
+    // dòng 29 (đẩy sự cố đến khách theo dõi tuyến) — tất cả đều CHƯA viết.
+    // Xem docs/37-csdl-mau-thong-bao-va-theo-doi.md. Xem AppDbContext.Subscription.cs.
+    partial void ConfigureSubscription(ModelBuilder modelBuilder);
 
     // US 15 (TicketValidations — Sprint 4, Vàng Thị Dăm): task "Migrate bảng TicketValidations" của
     // bảng phân công Sprint 4 (dòng 14). NHẬT KÝ SOÁT VÉ — một dòng cho mỗi lượt quét QR, kể cả lượt
