@@ -244,6 +244,12 @@ const NAV: NavEntry[] = [
         icon: <CommentOutlined />,
       },
       {
+        to: '/admin-refunds',
+        label: 'Quản lý hoàn tiền',
+        roles: ADMIN_MANAGER,
+        icon: <DollarOutlined />,
+      },
+      {
         to: '/admin-users',
         label: 'Người dùng',
         roles: ADMIN,

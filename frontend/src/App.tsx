@@ -34,6 +34,7 @@ import VoucherAvailablePage from './pages/VoucherAvailablePage';
 import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
+import AdminRefundPage from './pages/AdminRefundPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -299,6 +300,20 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <AdminFeedbackPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /admin-refunds là màn hình Admin quản lý yêu cầu hoàn tiền (US 8 "Hoàn tiền tự
+                  động", Sprint 4 — task của Nguyễn Đình Băng): theo dõi mọi khoản hoàn tiền của
+                  hệ thống, thử lại lượt thất bại và xuất danh sách để đối soát. Nhóm endpoint
+                  /admin/refunds dự kiến yêu cầu vai trò Manager hoặc Admin (chưa chốt trong
+                  api-contract.md); vai trò khác nhận 403. Backend Refunds chưa có nên màn hình
+                  đang chạy dữ liệu giả (refundAdminApi.ts). */}
+              <Route
+                path="/admin-refunds"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <AdminRefundPage />
                   </RouteGuard>
                 }
               />
