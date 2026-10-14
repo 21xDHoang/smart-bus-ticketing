@@ -27,6 +27,7 @@ import MyTicketRequestsPage from './pages/MyTicketRequestsPage';
 import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
 import TicketChangeRequestPage from './pages/TicketChangeRequestPage';
+import TicketScanPage from './pages/TicketScanPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import VoucherManagePage from './pages/VoucherManagePage';
@@ -214,6 +215,19 @@ function App() {
                   Backend TicketChanges / CancellationRequests chưa có nên màn hình đang chạy
                   dữ liệu giả (ticketRequestApi.ts). */}
               <Route path="/my-ticket-requests" element={<MyTicketRequestsPage />} />
+              {/* /ticket-scan là màn hình soát vé bằng camera (US 15, Sprint 4 — task "Màn hình
+                  quét QR bằng camera thiết bị di động" của Nguyễn Đình Băng): dành cho TÀI XẾ,
+                  bật camera sau quét mã QR trên vé để kiểm tra hợp lệ. Vai trò khác nhận 403.
+                  Backend soát vé chưa có nên phần kiểm tra chạy dữ liệu giả (ticketValidationApi.ts),
+                  phần quét camera là thật (useQrScanner + jsQR). */}
+              <Route
+                path="/ticket-scan"
+                element={
+                  <RouteGuard allowedRoles={['Driver']}>
+                    <TicketScanPage />
+                  </RouteGuard>
+                }
+              />
               {/* /my-tickets/:ticketId/request là màn hình gửi yêu cầu huỷ/đổi vé (US 5, Sprint 4 —
                   task của Dương Thị Hạnh): hành khách chọn huỷ vé hay đổi chuyến, viết lý do rồi
                   gửi yêu cầu để nhà xe xem xét. Vào từ nút "Huỷ / Đổi vé" trên màn "Vé của tôi",
