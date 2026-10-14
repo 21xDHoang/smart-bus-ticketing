@@ -344,17 +344,12 @@ Nhóm thấy sai thì nói; đổi tên một migration **chưa merge** thì r�
    lúc merge, mọi tham chiếu tới `docs/35`/`docs/36` **từ `main` là tham chiếu chết**. Tài liệu này
    vì vậy chỉ trỏ tới những gì đọc được từ `main`.
 
-## 9. Migration — lệnh cần chạy (việc của Dăm)
+## 9. Migration — ✅ **đã sinh** và đã kiểm
 
 🔴 A7 — **chỉ Vàng Thị Dăm được chạy `dotnet ef migrations add`**. Trong `.claude/settings.json` của
 repo, lệnh này còn bị **deny rule** chặn thẳng (`dotnet ef migrations add`, `migrations remove`,
-`database drop`) — chốt cố ý, khớp luật nhóm. Nên nhánh này dừng ở entity + cấu hình, và **model đang
-lệch snapshot** — đó là trạng thái đúng của một nhánh chờ sinh migration, không phải lỗi.
-
-Máy chưa có `appsettings.Development.json` (file bị gitignore, repo public) thì mọi lệnh `dotnet ef`
-cần các biến môi trường **giá trị giả** để host design-time dựng được model. ⚠️ **Đừng tạo file
-`appsettings.Development.json` thật** — `scripts/setup-csdl.sh` bỏ qua file đã tồn tại nên nó sẽ chặn
-luôn phần cài đặt thật về sau (cùng cảnh báo đã ghi ở `docs/32` §8 và `docs/33` §10):
+`database drop`) — chốt cố ý, khớp luật nhóm. Nên phần entity + cấu hình do phiên làm việc này viết,
+còn migration **do chính Dăm chạy tay** — đúng quy trình, không phải lách.
 
 ```bash
 ConnectionStrings__Default="<chuoi-ket-noi-gia — chi can dung dinh dang>" \
@@ -364,29 +359,48 @@ Jwt__Audience="SmartBusClient" \
 dotnet ef migrations add Sprint4_NotificationTemplates_Subscriptions --project backend/SmartBus.Api
 ```
 
-Nhánh đang đứng trên migration `20261013144302_Sprint4_TicketValidations` (bản mới nhất của `main`),
-nên migration mới **chỉ chứa hai bảng** — không sinh lại `Notifications`, không chạm bảng nào khác.
+Máy chưa có `appsettings.Development.json` (file bị gitignore, repo public) nên mọi lệnh `dotnet ef`
+cần các biến môi trường **giá trị giả** như trên để host design-time dựng được model. ⚠️ **Đừng tạo
+file `appsettings.Development.json` thật** — `scripts/setup-csdl.sh` bỏ qua file đã tồn tại nên nó sẽ
+chặn luôn phần cài đặt thật về sau (cùng cảnh báo đã ghi ở `docs/32` §8 và `docs/33` §10).
 
-### Hai phép kiểm sau khi sinh, không cần CSDL thật
+**Kết quả:** `20261014164805_Sprint4_NotificationTemplates_Subscriptions` — sinh trên nền
+`20261013144302_Sprint4_TicketValidations` (bản mới nhất của `main`), nên nó **chỉ chứa hai bảng**:
+không sinh lại `Notifications`, không chạm bảng nào khác.
 
-| Phép kiểm | Kỳ vọng |
+`AppDbContextModelSnapshot.cs`: **100 dòng thêm, 0 dòng xoá/sửa** — chỉ hai entity mới, không entity
+nào khác bị viết lại.
+
+⚠️ **Chạy `has-pending-model-changes` thì ĐỪNG dùng `--no-build`.** `AppDbContextModelSnapshot` nằm
+trong assembly, mà `dotnet ef migrations add` build **trước** khi sinh file — nên assembly cũ chưa có
+migration vừa sinh, và `--no-build` sẽ báo "còn thay đổi" một cách sai. Phép kiểm dưới đây chạy **có**
+build.
+
+### Hai phép kiểm, không cần CSDL thật — ✅ cả hai đạt
+
+| Phép kiểm | Kết quả |
 |---|---|
-| `dotnet ef migrations has-pending-model-changes --project backend/SmartBus.Api --no-build` | ✅ *"No changes have been made to the model since the last migration"* |
-| `dotnet ef migrations script <Sprint4_TicketValidations> <Sprint4_NotificationTemplates_Subscriptions> --project backend/SmartBus.Api --no-build` | **CHỈ** có 2 `CREATE TABLE` + 5 `CREATE INDEX` + 2 dòng `INSERT` vào `__EFMigrationsHistory`. **Không** `ALTER TABLE`, **không** `DROP`, **không** `UPDATE` |
+| `dotnet ef migrations has-pending-model-changes --project backend/SmartBus.Api` | ✅ *"No changes have been made to the model since the last migration."* |
+| `dotnet ef migrations script 20261013144302_Sprint4_TicketValidations 20261014164805_Sprint4_NotificationTemplates_Subscriptions --project backend/SmartBus.Api --no-build` | ✅ **CHỈ** 2 `CREATE TABLE` + 5 `CREATE INDEX` + 1 `INSERT` vào `__EFMigrationsHistory` + `START TRANSACTION`/`COMMIT`. **Không** `ALTER TABLE`, **không** `DROP`, **không** `UPDATE` trên bất kỳ bảng nào khác |
 
-Đối chiếu SQL với §2 và §3:
+Đối chiếu SQL thật với §2 và §3 — **đã kiểm bằng mắt trên file SQL sinh ra**:
 
-- `NotificationTemplates`: `Type` = `character varying(30)`, `Title` = `character varying(200)`,
-  **`Body` = `text`** (không phải varchar), `IsActive` = `boolean NOT NULL`,
-  `UpdatedAt` = `timestamp with time zone` **nullable**;
-- `Subscriptions`: `StopId` = `uuid` **nullable**, `CreatedAt` = `timestamp with time zone`;
-- **hai chỉ mục duy nhất phải có mệnh đề `WHERE`**: một cái `WHERE "StopId" IS NULL`, một cái
-  `WHERE "StopId" IS NOT NULL`. ⚠️ Thiếu mệnh đề `WHERE` nghĩa là EF bỏ qua `HasFilter` — và ràng
-  buộc trùng sẽ **không** chặn được ca "theo dõi cả tuyến" (§3.3). Đây là thứ phải nhìn bằng mắt
-  trong file SQL, không suy ra được từ việc build xanh;
-- **ba khoá ngoại đều `ON DELETE RESTRICT`** — không có `CASCADE` nào trong file SQL này;
-- **không** được có cột `xmin` nào (nhánh này không khai khoá phiên bản dòng cho hai bảng — §4 của
-  `AppDbContext.Subscription.cs`).
+- `NotificationTemplates`: `Type` = `character varying(30) NOT NULL` ✅ · `Title` = `character
+  varying(200) NOT NULL` ✅ · **`Body` = `text`** ✅ (không phải varchar) · `IsActive` = `boolean NOT
+  NULL` ✅ · `UpdatedAt` = `timestamp with time zone` **nullable** ✅;
+- `Subscriptions`: `StopId` = `uuid` **nullable** ✅ · `CreatedAt` = `timestamp with time zone` ✅;
+- 🔴 **hai chỉ mục duy nhất ĐỀU CÓ mệnh đề `WHERE`** ✅ — `IX_Subscriptions_UserId_RouteId … WHERE
+  "StopId" IS NULL` và `IX_Subscriptions_UserId_RouteId_StopId … WHERE "StopId" IS NOT NULL`. Thiếu
+  mệnh đề `WHERE` nghĩa là EF bỏ qua `HasFilter` và ràng buộc trùng **không** chặn được ca "theo dõi
+  cả tuyến" (§3.3) — mà build xanh không nói gì về điều đó, nên đây là thứ phải nhìn bằng mắt;
+- **ba khoá ngoại đều `ON DELETE RESTRICT`** ✅ — không có `CASCADE` nào trong file SQL;
+- **không** có cột `xmin` nào ✅ (§4 của `AppDbContext.Subscription.cs`).
+
+### Còn lại — việc của Dăm, sau khi merge
+
+Đây mới là **file migration**, chưa phải CSDL. Chạy `dotnet ef database update` lên CSDL chung là
+bước riêng, và **chỉ sau khi PR này được merge** — không áp migration của một nhánh chưa merge lên
+CSDL chung.
 
 ## 10. Đã kiểm trong nhánh này
 
@@ -394,6 +408,9 @@ nên migration mới **chỉ chứa hai bảng** — không sinh lại `Notifica
 |---|---|
 | `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` | ✅ 0 warning, 0 error |
 | `dotnet test backend/SmartBus.Tests` (toàn bộ) | ✅ **1287/1287 xanh**, 0 fail, 10 phút 58 giây |
+| `dotnet ef migrations has-pending-model-changes` | ✅ *"No changes have been made to the model since the last migration."* — model khớp snapshot |
+| `dotnet ef migrations script` (đối chiếu SQL) | ✅ chỉ 2 `CREATE TABLE` + 5 `CREATE INDEX`; hai chỉ mục duy nhất **đều có** `WHERE`; ba FK đều `RESTRICT`; `Body` = `text` — chi tiết §9 |
+| `AppDbContextModelSnapshot.cs` | ✅ 100 dòng thêm, **0 dòng xoá/sửa** |
 | `git grep` tên hai symbol mới | ✅ `NotificationTemplate`, `Subscription` **chưa từng** tồn tại trong `backend/` — không có caller nào để vỡ |
 | `git grep "Direction"` | ✅ không có cột chiều nào trong `backend/` — cơ sở cho §6.2 |
 
