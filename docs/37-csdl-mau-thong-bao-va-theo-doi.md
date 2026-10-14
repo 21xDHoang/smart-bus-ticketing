@@ -25,9 +25,11 @@ thêm task, không sửa story, không đổi thứ tự task nào của Sprint 
 được dựng trước. Nhưng nhóm cần biết, vì hai lý do có thật:
 
 1. **Nghiệm thu của Sprint 5 đã bớt việc**: dòng 14 coi như xong phần CSDL, không làm lại.
-2. **Sprint 4 vẫn còn hai dòng migrate chưa ai làm** — dòng 27 (*"Migrate bảng Invoices"*) và dòng 50
-   (*"Migrate bảng PriorityGroups, PriorityApprovals"*), cả hai đều giao Vàng Thị Dăm và đều đang
-   `Chưa làm`. Nếu ai đó đọc tài liệu này để tìm việc Sprint 4 còn nợ thì hai dòng đó mới là câu trả lời.
+2. **Sprint 4 còn đúng MỘT dòng migrate chưa ai làm** — dòng 27 (*"Migrate bảng Invoices"*), cũng giao
+   Vàng Thị Dăm. Nếu ai đó đọc tài liệu này để tìm việc Sprint 4 còn nợ thì dòng 27 là câu trả lời.
+   ⚠️ Bản đầu của tài liệu này kể thêm **dòng 50** (`PriorityGroups`, `PriorityApprovals`) vào danh
+   sách còn nợ — **sai**, dòng đó đã xong từ Sprint 2 dưới tên `DiscountRequests`. Cách tra sai và
+   cách tra đúng ở **§8.1**: tra theo **User Story**, không tra theo **tên bảng**.
 
 ### 0.2 Dòng 14 còn **hai** bảng, không phải ba
 
@@ -318,19 +320,48 @@ Nhóm thấy sai thì nói; đổi tên một migration **chưa merge** thì r�
    dòng migrate của sheet Sprint 4 đều giao Vàng Thị Dăm (dòng 2, 14, 27, 38, 50 — sheet có **đúng
    60 dòng**, đã tra cả 60 và **không** có dòng nào tên *"Notifications, NotificationTemplates,
    Subscriptions"*). Bốn dòng còn lại tra theo code:
-   - **dòng 27 — `Invoices`**: 🔴 **chưa ai làm.** `class Invoice` **không tồn tại ở bất kỳ nhánh nào**
-     (đã `git grep` trên `--all`).
-   - **dòng 50 — `PriorityGroups`, `PriorityApprovals`**: 🔴 **chưa ai làm.** Cũng không có entity
-     trên nhánh nào.
+   - **dòng 50 — `PriorityGroups`, `PriorityApprovals`**: ✅ **ĐÃ XONG từ Sprint 2**, dưới tên
+     **`DiscountRequests`** — *không phải* việc còn nợ. Xem §8.1 dưới.
+   - **dòng 27 — `Invoices`**: 🔴 **chưa ai làm thật.** `class Invoice` không tồn tại ở bất kỳ nhánh
+     nào (đã `git grep` trên `--all`). Nhưng ⚠️ *"không có entity"* **chưa đủ** để kết luận một dòng
+     còn nợ — xem bài học ở §8.1.
    - **dòng 38 — `Refunds`, `RefundLogs`**: code **đã có** nhưng chỉ trên nhánh
      `feature/8-api-tra-cuu-hoan-tien`, **chưa merge**. Không phải việc còn nợ, mà là **thứ tự merge**
      — xem mục 6 dưới.
    - dòng 2 (`TicketChanges`, `CancellationRequests`) và dòng 14 (`TicketValidations`): đã xong trên
      `main` (`docs/32`, `docs/34`).
 
-   ⚠️ Cột `Status` trong file `.xlsx` ghi **"Chưa làm" cho cả năm dòng**, kể cả hai dòng đã xong từ
-   Sprint 4 — nghĩa là cột đó **không được cập nhật** và không dùng được để biết việc nào còn nợ. Tra
-   theo code là cách duy nhất đáng tin.
+   ⚠️ Cột `Status` trong file `.xlsx` ghi **"Chưa làm" cho cả năm dòng**, kể cả ba dòng đã xong — nghĩa
+   là cột đó **không được cập nhật** và không dùng được để biết việc nào còn nợ.
+
+   ### 8.1 🔴 Bài học: cách tra "dòng này còn nợ không" ở bản sửa trước đã SAI
+
+   Bản đầu của tài liệu này kết luận *"dòng 50 chưa ai làm"* chỉ vì `git grep "class PriorityGroup"`
+   không ra kết quả. **Kết luận đó sai**, và cách tra thì sai ở chỗ đáng ghi lại: repo này **cố ý
+   không đặt tên bảng theo bảng phân công** khi tên đó trùng nghiệp vụ với một bảng A9 đã có. Tra
+   theo *tên bảng trong bảng phân công* vì vậy **không** trả lời được câu hỏi — phải tra theo **User
+   Story**.
+
+   Chuỗi bằng chứng cho dòng 50:
+   - Dòng 50 sheet Sprint 4 mang story *"Là HR/Quản lý, tôi muốn duyệt tài khoản học sinh/sinh viên/
+     người cao tuổi để họ được hưởng giá vé ưu đãi."* — **trùng nguyên văn** với **US 17** trong sheet
+     User Story.
+   - `docs/02-sprint-roadmap.md` §111 ghi quyết định của nhóm: *"Chấp nhận lộ trình bổ sung (**US
+     17→S2**, US 10+11→S3, US 24→S5)"*. US 17 được **dời sang Sprint 2**.
+   - US 17 được dựng ở Sprint 2 thật: `AppDbContext.DiscountRequest.cs` §đầu ghi thẳng *"Task migrate
+     của story 17 trong Product_Backlog ghi 'Migrate bảng PriorityGroups, PriorityApprovals' — HAI
+     bảng"*, và giải thích vì sao gộp còn **một** bảng `DiscountRequests` (A9 #13).
+   - Migration có thật trên `main`: `20260930095511_Sprint2_TripDriver_DiscountRequests.cs`
+     (commit `6003f02`).
+
+   **Kết luận đúng: dòng 50 không còn việc gì để làm.** Cái còn thiếu là **bảng phân công chưa được
+   cập nhật** — và không chỉ một dòng: US 17 có **sáu** task (dòng 50–55) vẫn nằm nguyên ở sheet
+   Sprint 4, trong khi sheet Sprint 2 **không có** dòng nào của US 17 (đã tra). Sáu dòng đó là **dòng
+   ma**: đọc bảng phân công thì thấy 6 việc, tra code thì thấy đã xong.
+
+   ⚠️ **Hệ quả cho người đọc sau:** đừng bao giờ kết luận "còn nợ" từ tên bảng. Cách đúng là lấy
+   **story text** của dòng đó, dò sang sheet User Story để ra **số US**, rồi tra số US đó ở
+   `docs/02-sprint-roadmap.md` (sprint nào) và trong code. Ba bước, không tắt được bước nào.
 4. **Bốn câu hỏi ở §6** — quy ước chỗ trống, chiều đi của tuyến, tên bảng, tên migration. Câu §6.1 là
    câu **chặn đường** cho cả ba service Sprint 5.
 5. **`docs/03-quy-uoc.md` vẫn không tồn tại trong repo** — mọi tham chiếu A1–A9 chỉ còn là trích dẫn
