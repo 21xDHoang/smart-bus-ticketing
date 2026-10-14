@@ -283,7 +283,7 @@ giờ** — sau khi có dữ liệu thì đắt hơn hẳn. A2 chốt entity s�
 | Phép kiểm | Kết quả |
 |---|---|
 | `dotnet build backend/SmartBus.Api/SmartBus.Api.csproj` | ✅ 0 warning, 0 error |
-| `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1287/1287**, 0 failed, 0 skipped (7 phút 7 giây) |
+| `dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj` | ✅ **1287/1287**, 0 failed, 0 skipped — chạy **hai lần**: trước migration (7p07s) và **sau migration** (7p16s), cùng xanh |
 | 🔴 `has-pending-model-changes` (KHÔNG `--no-build`) | ✅ *"No changes have been made to the model since the last migration."* |
 | 🔴 `migrations script <TicketValidations> <Invoices> --no-build` | ✅ **đúng một** `CREATE TABLE` + 2 `CREATE INDEX` + 1 `INSERT` lịch sử. **Không** `ALTER`, **không** `DROP`, **không** `UPDATE` |
 | SQL: `IX_Invoices_PaymentId` | ✅ **`CREATE UNIQUE INDEX`** — có chữ `UNIQUE` |
