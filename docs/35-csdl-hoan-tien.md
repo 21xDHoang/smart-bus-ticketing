@@ -428,7 +428,9 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
   lịch thì để `null`, **đừng** thêm giá trị enum mới. ⚠️ **Đừng** xếp lịch cho khoản có lượt cuối là
   `Unresolved` (§3.2).
 - **Dăm** (dòng 42) — API tra cứu trạng thái hoàn tiền của giao dịch. Đường tra là `RefundCode` hoặc
-  `PaymentId` (§2.3), **không** phải `TicketId`.
+  `PaymentId` (§2.3), **không** phải `TicketId`. ✅ **Đã làm** — nhánh `feature/8-api-tra-cuu-hoan-tien`,
+  viết đầy đủ ở **`docs/36-api-tra-cuu-hoan-tien.md`**; mục hoàn tiền của `docs/api-contract.md` cũng
+  do nhánh đó bổ sung, nên câu *"hợp đồng chưa có mục hoàn tiền"* ở §7.3 dưới đây **đã hết đúng**.
 - **Kiên** (dòng 43) — đối soát hoàn tiền hằng ngày. 🔴 Đây là **nơi duy nhất** xử lý được các khoản
   kẹt ở `Pending` vì lượt gọi `Unresolved` (§3.2), và là nơi phát hiện *"mã giao dịch của lượt cuối"
   khác *"mã của lượt đã trả tiền"* — xem doc-comment `Refund.GatewayTransactionId`. So **đúng con số
@@ -470,6 +472,12 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
    `GET /refunds/mine` (màn Hạnh, dòng 44). Ba tập giá trị `Source`, `Status` và tên trường
    `retryCount` / `failReason` / `gatewayTransactionId` **đã bị frontend chốt cứng** — đổi tên ở CSDL
    là làm hỏng hai màn đã merge, nên hợp đồng nên chép **nguyên văn** chúng.
+
+   > ✅ **Cập nhật 14/10/2026:** mục `## Hoàn tiền — /refunds` **đã được bổ sung** bởi nhánh
+   > `feature/8-api-tra-cuu-hoan-tien` (task dòng 42) — xem `docs/36-api-tra-cuu-hoan-tien.md` §1.
+   > Người viết là **Dăm** chứ không phải Hiếu, vì ⛔ luật 5 buộc sửa hợp đồng trước khi code mà task
+   > dòng 42 không chờ được. **Hiếu và Băng nên đọc lại mục đó** — nội dung chép nguyên văn hình dạng
+   > frontend đã chốt, không phải quyết định mới.
 4. **Xung đột: dòng 45 ghi *"thông báo kết quả hoàn tiền qua **email** và trên web"*, nhưng A8.5 đã
    chốt KHÔNG email.** A8.5 ghi rõ: *"Thông báo — **in-app qua SignalR**, lưu bảng `Notifications`"*
    và *"Không làm email/SMS/Web Push trong phạm vi đồ án"*. Đây là xung đột **y hệt** đã gặp ở dòng 7
