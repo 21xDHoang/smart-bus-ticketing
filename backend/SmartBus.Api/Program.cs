@@ -134,6 +134,15 @@ builder.Services.AddScoped<ITripConflictService, TripConflictService>();
 // gọi ghi log tay.
 builder.Services.AddScoped<ITripAssignmentService, TripAssignmentService>();
 
+// Cập nhật vị trí hiện tại của chuyến: PUT /api/trips/{id}/location (US 10 "Thông báo trạm",
+// Sprint 4). Task "API cập nhật vị trí chuyến (CurrentLat/CurrentLng/CurrentStopId)" — Trần
+// Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Chỉ tài xế được phân công của chuyến ghi được (kiểm theo DriverId ngay trong truy vấn); chuyến
+// Scheduled/Running nhận vị trí, Completed/Cancelled → 409. Thay đổi thành công được
+// AuditLogMiddleware ghi tự động (Update / "Trips:{id}") — cùng lối TripAssignmentService ở trên.
+// Đặt cạnh khối chuyến xe vì cùng bảng Trips.
+builder.Services.AddScoped<ITripLocationService, TripLocationService>();
+
 // Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();

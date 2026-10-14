@@ -82,6 +82,10 @@ public class AuditLogCoverageTests
         // (PATCH → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
         ("PATCH",  "/api/trips/{id:guid}/assignment",            CachGhi.Middleware),
 
+        // Cập nhật vị trí chuyến — story 10, Trần Trung Hiếu. Middleware tự ghi
+        // (PUT → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
+        ("PUT",    "/api/trips/{id:guid}/location",              CachGhi.Middleware),
+
         // Gán tài xế vào chuyến theo lô — story 14, Nguyễn Duy Kiên. Cũng do AuditLogMiddleware tự
         // ghi (PATCH → Update). Tên bảng suy ra là "Trips": route có tham số {routeId} nên tài
         // nguyên là đoạn tĩnh đầu tiên sau tham số cuối, đúng luật AuditLogMiddleware.ResourceSegmentIndex

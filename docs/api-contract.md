@@ -1329,6 +1329,73 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 > `TripAssignment` + `conflicts` thay vì dựng endpoint thứ hai có hình dạng khác, và dùng chung
 > service kiểm tra trùng lịch của story 14 ("cùng một hàm kiểm tra, chỉ khác điểm gọi").
 
+#### `PUT /trips/{id}/location` — tài xế báo vị trí hiện tại của xe
+
+> ✅ Backend đã có (`TripLocationController` — Trần Trung Hiếu, story 10, task *"API cập nhật vị
+> trí chuyến (CurrentLat/CurrentLng/CurrentStopId)"*, Sprint 4). Một lần gọi là MỘT ảnh chụp vị
+> trí của chuyến: toạ độ hiện tại + trạm vừa đi qua. Dữ liệu ghi ở đây là đầu vào của service
+> *"bắn thông báo khi xe cách trạm dưới 500m"* (Kiên, cùng story).
+
+**Endpoint yêu cầu vai trò `Driver`** — và phải đúng tài xế được phân công của chuyến (kiểm theo
+`DriverId` ngay trong truy vấn). Người đã đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Body — `currentLat` và `currentLng` bắt buộc, `currentStopId` bỏ trống được:
+
+```json
+{
+  "currentLat": 21.0285,
+  "currentLng": 105.8542,
+  "currentStopId": "c5d2e1f0-0000-0000-0000-000000000000"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `currentLat` | ✅ | Vĩ độ — số thực, từ `-90` đến `90` |
+| `currentLng` | ✅ | Kinh độ — số thực, từ `-180` đến `180` |
+| `currentStopId` | — | Trạm xe vừa đi qua gần nhất — phải là trạm **thuộc tuyến của chuyến**. Bỏ trống = chỉ cập nhật toạ độ, giữ nguyên trạm hiện tại |
+
+- `positionUpdatedAt` **không nhận từ client** — hệ thống tự ghi giờ server nhận request (UTC),
+  không tin giờ thiết bị gửi lên; `updatedAt` của chuyến cũng được làm mới.
+- Gọi lại y hệt (idempotent): chỉ `positionUpdatedAt` thay đổi, dữ liệu khác giữ nguyên.
+
+```json
+// TripLocation — ví dụ chuyến vừa báo vị trí kèm trạm
+{
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "currentStopId": "c5d2e1f0-0000-0000-0000-000000000000",
+  "currentLat": 21.0285,
+  "currentLng": 105.8542,
+  "positionUpdatedAt": "2026-10-14T03:10:00Z"
+}
+```
+
+- Chuyến không tồn tại **hoặc** không do tài xế này điều khiển → **404** `Không tìm thấy chuyến
+  xe` — một câu cho cả hai để không lộ chuyến nào đang có tài xế khác chạy (cùng lối "vé của
+  người khác trả 404" của `GET /tickets/{id}`).
+- Chuyến đã `Completed` → **409** `Chuyến đã hoàn thành, không thể cập nhật vị trí`; đã
+  `Cancelled` → **409** `Chuyến đã hủy, không thể cập nhật vị trí`. Chuyến `Scheduled` **vẫn
+  nhận** vị trí: chưa có endpoint nào chuyển trạng thái sang `Running`, chặn `Scheduled` thì
+  thiết bị không báo được vị trí trước giờ chạy.
+- Trạm không tồn tại → **404** `Không tìm thấy trạm dừng` · trạm tồn tại nhưng không nằm trong
+  `RouteStops` của tuyến → **400** kèm lỗi ở `errors.currentStopId` `Trạm không thuộc tuyến của
+  chuyến`.
+- Toạ độ thiếu hoặc sai khoảng → **400** kèm lỗi theo trường (`errors.currentLat` /
+  `errors.currentLng`).
+
+> **Vì sao trạm phải thuộc tuyến?** `currentStopId` là mỏ neo cho phép "cách trạm kế tiếp bao xa"
+> của service thông báo (Kiên, cùng story): trạm lạ không có `StopOrder` trên tuyến sẽ làm hỏng
+> phép tính khoảng cách. Chặn từ nguồn (API ghi) rẻ hơn là để service đọc phải tự lọc.
+
+> **Vì sao chưa đẩy SignalR khi vị trí đổi?** Đây là endpoint GHI — nửa "đọc" (hành khách xem xe
+> đang ở đâu theo thời gian thực) là chuyện của US 9 ở Sprint sau. Lúc đó nếu cần đẩy, sẽ bọc
+> service này bằng lớp Notifying* (cùng lối NotifyingSeatHold*) chứ không sửa file này.
+
+> **Ghi log thay đổi (US 23).** Mọi request thành công đi qua middleware nhật ký tự động: một dòng
+> hành động `Update`, đối tượng `Trips:{id}`, kèm người thực hiện + IP + thời điểm. Request lỗi
+> (400/404/409) không sinh dòng nào vì dữ liệu chưa hề đổi.
+
 ## Giữ chỗ — `/seat-holds`
 
 > Hai bảng `SeatHolds` + `SeatHoldLogs` đã migrate (Vàng Thị Dăm — docs/26-csdl-so-do-ghe.md).
