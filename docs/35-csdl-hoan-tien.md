@@ -528,7 +528,7 @@ dotnet ef migrations add Sprint4_Refunds_RefundLogs --project backend/SmartBus.A
 ⚠️ **Lệnh này do Dăm chạy, không phải do công cụ AI chạy:** `.claude/settings.json` của repo **CHẶN**
 `dotnet ef migrations add` bằng deny rule (cùng `migrations remove`, `database drop`) — chốt cố ý,
 khớp luật nhóm *"chỉ Dăm chạy migrations"*. Nhánh này dựng entity + cấu hình, **Dăm chạy lệnh trên**,
-rồi cả hai phép kiểm ở §8.3 được chạy lại trên file vừa sinh.
+rồi cả sáu phép kiểm ở §8.3 được chạy trên file vừa sinh.
 
 ⚠️ **`dotnet ef migrations add` build project TRƯỚC khi ghi `ModelSnapshot.cs`**, nên DLL còn lại trên
 đĩa giữ snapshot đời cũ. Chạy ngay `has-pending-model-changes --no-build` sau đó sẽ báo **sai** là
@@ -539,7 +539,7 @@ lại là hết. Đã sập đúng bẫy này ở nhánh `docs/34` — lần nà
 lệnh **không** báo lỗi — nó chỉ lặng lẽ ghi một dòng vào `__EFMigrationsHistory`. `Up()` của file này
 đã được mở đọc: có **2** `CreateTable` và **9** `CreateIndex`.
 
-### 8.3 Bốn phép kiểm, không cần CSDL thật
+### 8.3 Sáu phép kiểm, không cần CSDL thật
 
 | Phép kiểm | Kết quả |
 |---|---|
