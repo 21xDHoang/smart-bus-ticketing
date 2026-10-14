@@ -378,6 +378,46 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("MonthlyPasses");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RelatedEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelatedEntityType")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("Notifications");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.PassType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1010,6 +1050,59 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("TicketChanges");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.TicketValidation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BoardingStopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClientScanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("ScannedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ScannedCode")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TripId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ValidatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardingStopId");
+
+                    b.HasIndex("ClientScanId")
+                        .IsUnique();
+
+                    b.HasIndex("TicketId");
+
+                    b.HasIndex("ValidatedByUserId");
+
+                    b.HasIndex("TripId", "ScannedAt");
+
+                    b.ToTable("TicketValidations");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.Trip", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1378,6 +1471,17 @@ namespace SmartBus.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.Notification", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.Payment", b =>
                 {
                     b.HasOne("SmartBus.Api.Entities.Ticket", "Ticket")
@@ -1587,6 +1691,38 @@ namespace SmartBus.Api.Migrations
                     b.Navigation("Ticket");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.TicketValidation", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Stop", "BoardingStop")
+                        .WithMany()
+                        .HasForeignKey("BoardingStopId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.Trip", "Trip")
+                        .WithMany()
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.User", "ValidatedBy")
+                        .WithMany()
+                        .HasForeignKey("ValidatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BoardingStop");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("Trip");
+
+                    b.Navigation("ValidatedBy");
                 });
 
             modelBuilder.Entity("SmartBus.Api.Entities.Trip", b =>
