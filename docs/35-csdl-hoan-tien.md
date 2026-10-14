@@ -238,9 +238,10 @@ Với tiền, việc chọn giá trị 0 là một quyết định về **cách 
 | `Failed` | tự nhận là thất bại | job thử lại (dòng 41) gọi cổng lần nữa cho một khoản **có thể đã hoàn** → **hoàn hai lần** |
 | **`Unresolved`** | tự nhận là **chưa rõ** | khoản nằm nguyên ở `Pending`, không lượt gọi tự động nào chạm tới, và nó **lộ ra** ở bước đối soát (dòng 43) |
 
-Đây là enum **duy nhất** của dự án đặt giá trị "chưa biết" ở vị trí 0 — **khác** `TicketValidationResult`
-(ở đó 0 là `NotFound`, chọn kiểu hỏng ồn ào vì đó là bảng nhật ký soát vé, không phải dòng tiền).
-Ghi lại đây để người sau không "sửa cho đều" rồi vô tình tạo ra đường hoàn hai lần.
+Đã soát **cả 25 enum** của dự án: đây là enum **duy nhất** đặt một giá trị **"chưa có câu trả lời"** ở
+vị trí 0. `TicketValidationResult` cũng chọn kiểu hỏng ồn ào (0 = `NotFound`), nhưng ở đó `NotFound`
+là một **lý do từ chối đã biết** — *"vé này không tồn tại"* — chứ không phải một trạng thái **chưa
+biết**. Ghi lại đây để người sau không "sửa cho đều" rồi vô tình tạo ra đường hoàn hai lần.
 
 ⚠️ **`Unresolved` KHÔNG lật `Refunds.Status`.** Khoản hoàn **giữ nguyên `Pending`** và **không** được
 xếp vào lịch thử lại — gọi lại một lượt chưa rõ kết quả là đúng đường dẫn tới hoàn hai lần. Việc tra
