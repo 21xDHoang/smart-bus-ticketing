@@ -3598,6 +3598,7 @@ trả về.
 |---|---|---|---|
 | GET | `/tickets/me` | *"API tra cứu vé của tôi (đã mua / đã dùng / đã huỷ)"* — Trần Trung Hiếu | ✅ mục dưới |
 | GET | `/tickets/{id}` | Một vé của chính người gọi (màn QR mở trực tiếp một vé) | ✅ mục dưới — cùng task tra cứu vé của tôi |
+| POST | `/tickets/validate` | *"API soát vé: nhận mã QR, xác thực chữ ký, trả kết quả hợp lệ/không"* — Trần Trung Hiếu (US 15, Sprint 4, dòng 15 + dòng 19) | ✅ mục "Soát vé QR" dưới |
 | — | *phát hành vé* | *"API phát hành vé điện tử sau khi thanh toán thành công"* — Trần Trung Hiếu | ⚠️ xem luồng dưới |
 
 ⚠️ **Bảng trường Ticket (ở trên) đổi một dòng so với bản đã chốt:** `boardingStopName` và
@@ -3656,6 +3657,105 @@ Màn "Mã QR vé" mở trực tiếp một vé trong danh sách bằng id trên 
 - Ràng buộc `{id:guid}` — cùng lý do các bề mặt có đoạn literal (`validate`, `statistics`): id
   không phải GUID thì routing trả 404 chứ không chui vào endpoint.
 - Response là một đối tượng Ticket đúng bảng trường ở trên.
+
+### Soát vé QR — `POST /tickets/validate`
+
+> Task *"API soát vé: nhận mã QR, xác thực chữ ký, trả kết quả hợp lệ/không"* (dòng 15, US 15,
+> Sprint 4) + *"Phân quyền: chỉ tài xế/phụ xe được soát vé"* (dòng 19) — Trần Trung Hiếu. Hình dạng
+> này là bản chốt của đề xuất ở `docs/29-ban-giao-api-kiem-tra-hieu-luc-qr.md` §3 và `docs/34` §3,
+> đã khớp bảng `TicketValidations` (PR #188) và service ghi nhật ký `ITicketValidationRecorder`
+> (dòng 18). Luồng ba bước — xác thực chữ ký → tra vé → ghi nhật ký — đặc tả ở
+> `docs/41-api-soat-ve-qr.md`.
+
+#### Phân quyền
+
+- `[Authorize(Roles = "Driver,Manager")]` — chỉ Tài xế/Quản lý được soát (docs/34 §6). Không có
+  token → 401; vai trò khác → 403.
+- Không kiểm "đúng tài xế của chuyến này" — mọi Tài xế đều soát được mọi chuyến (phụ xe phụ trách
+  nhiều chuyến là chuyện thường; dòng 19 chỉ chốt vai trò).
+
+#### Request
+
+```
+POST /api/tickets/validate
+Authorization: Bearer <JWT>          ← Driver hoặc Manager
+Body:  { "code": "SBT1:…", "tripId": "…uuid…", "clientScanId": "…uuid…", "scannedAt": "…ISO-8601…" }
+```
+
+| Trường request | Kiểu | Ghi chú |
+|---|---|---|
+| `code` | `string`, bắt buộc | NGUYÊN VĂN chuỗi mã QR quét được, định dạng `SBT1:{ticketId}.{blob}` (106 ký tự, docs/30). Server tự xác thực chữ ký. Thiếu/rỗng → 400 `errors.code`; dài quá 200 ký tự → 400 `errors.scannedCode` |
+| `tripId` | `string` (GUID), tuỳ chọn | Chuyến phụ xe ĐANG CHẠY lúc quét — nguồn duy nhất kết luận được `WrongTrip`. Chuyến không tồn tại → **404**. Thiếu hẳn → bỏ phép đối chiếu chuyến |
+| `clientScanId` | `string` (GUID), tuỳ chọn | Mã lượt soát do MÁY QUÉT sinh NGAY LÚC QUÉT — khoá chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (docs/39 §4.1). Vắng cả hai trường ngoại tuyến = lượt online kiểu cũ |
+| `scannedAt` | `string` (ISO-8601), tuỳ chọn | Giờ máy quét ghi nhận lượt soát. Ngoài cửa sổ hợp lý (nhanh hơn server quá 5 phút / cũ hơn 72 giờ) → 400 `errors.scannedAt` |
+
+#### Response — mọi kết quả soát đều là 200
+
+"Vé không hợp lệ" là **câu trả lời**, không phải lỗi HTTP (cùng lối `POST /vouchers/validate`):
+
+```jsonc
+// 200 — hợp lệ, được lên xe
+{ "valid": true, "reason": null, "ticket": { /* ValidatedTicket */ } }
+
+// 200 — bị từ chối, kèm lý do (năm giá trị, đã chốt với màn quét QR)
+{ "valid": false, "reason": "NotFound",    "ticket": null }
+{ "valid": false, "reason": "AlreadyUsed", "ticket": { /* ValidatedTicket, kèm usedAt */ } }
+```
+
+| `reason` | Nghĩa | `ticket` |
+|---|---|---|
+| `null` | Vé hợp lệ, được lên xe | Có |
+| `NotFound` | Không tra ra vé — **gộp cả** mã rác lẫn mã sai chữ ký lẫn mã ký cho vé không tồn tại (docs/34 §3) | `null` |
+| `Cancelled` | `Status = 'Cancelled'` | Có |
+| `AlreadyUsed` | `Status = 'Used'` — `ticket.usedAt` kèm theo để phụ xe đối chiếu | Có |
+| `WrongTrip` | Vé đúng nhưng của chuyến KHÁC `tripId` đã gửi — chỉ kết luận được khi có `tripId` | Có |
+| `Expired` | Chuyến đã khởi hành (quá `departureTime`), hoặc chuyến `Completed`/`Cancelled` mà vé còn `Paid` | Có |
+
+Thứ tự xét: `NotFound` → `Cancelled` → `AlreadyUsed` → `WrongTrip` → `Expired` → `Valid`.
+
+**Mọi lượt quét đều được ghi** một dòng vào bảng `TicketValidations` — kể cả lượt bị từ chối —
+qua `ITicketValidationRecorder` (docs/34 §2.2). Endpoint **KHÔNG** lật `Ticket.Status = Used` —
+việc của dòng 16 (Kiên); cho tới khi dòng 16 có, hai lượt soát cùng một vé còn `Paid` đều trả
+`Valid` và mỗi lượt ghi một dòng.
+
+**Gửi lại cùng `clientScanId`** (mất mạng, app bị kill, thử lại) → 200 với **kết quả ĐÃ GHI của lần
+đầu**, không tính lại — kể cả khi trạng thái vé đã đổi từ lần đầu (docs/39 §4.2).
+
+| Lỗi thật sự | Mã |
+|---|---|
+| Thiếu/rỗng `code`, sai khuôn body | 400 `{ message, errors }` |
+| `scannedCode` quá dài, `scannedAt` ngoài cửa sổ | 400 `{ message, errors }` (do recorder) |
+| `tripId` trỏ chuyến không tồn tại | 404 |
+| Hết phiên đăng nhập | 401 |
+| Vai trò không phải Tài xế/Quản lý | 403 |
+
+#### Hình dạng `ValidatedTicket` — vé kèm kết quả soát
+
+Khớp interface `ValidatedTicket` đã viết sẵn ở `frontend/src/api/ticketValidationApi.ts` (Băng, dòng
+20) CỘNG thêm `usedAt` (docs/29 §3: lý do `AlreadyUsed` phải kèm giờ đã soát). Khác bảng trường
+Ticket của `/tickets/me` ở hai điểm, đều là chủ ý của màn soát: có `passengerName` (phụ xe đối chiếu
+khách), bỏ `origin`/`destination`/`price`/`createdAt` (không cần lúc soát).
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính vé |
+| `code` | `string` | Mã vé = nội dung mã QR (đúng chuỗi đã lưu trên vé) |
+| `routeCode` / `routeName` | `string` | Tuyến của chuyến |
+| `departureTime` | `string` | Giờ khởi hành (ISO 8601) |
+| `seatNumber` | `string` | Số ghế |
+| `boardingStopName` / `alightingStopName` | `string \| null` | Trạm lên/xuống — null khi vé không có trạm cụ thể |
+| `passengerName` | `string \| null` | Họ tên chủ vé — null khi không tra được tài khoản |
+| `status` | `string` | `"Paid"` / `"Used"` / `"Cancelled"` |
+| `usedAt` | `string \| null` | Giờ đã soát — chỉ khi `status = 'Used'` |
+
+#### Câu hỏi mở — vé tháng
+
+`MonthlyPasses.Code` **cũng** là mã QR soát vé (A6). Endpoint này **chỉ tra bảng `Tickets`** — mã vé
+tháng quét vào trả `NotFound` (vé tháng hiện chưa có định dạng `SBT1:` nên chữ ký không khớp). Đây là
+câu hỏi treo từ `docs/29` §4 câu (4), `docs/34` §7.5 chưa ai chốt — **nhóm cần quyết**: phụ xe quét
+vé tháng thì dùng chung endpoint này (khi đó bảng `TicketValidations` cần thêm cột trỏ
+`MonthlyPasses` — việc của Dăm, và cần thêm lý do mới cho "vé tháng hết hạn/sai tuyến" — đổi hợp đồng
+với màn quét) hay tách endpoint riêng. Ghi rõ ở `docs/41-api-soat-ve-qr.md` §6.
 
 ### Phát hành vé sau khi thanh toán — KHÔNG phải endpoint riêng
 
