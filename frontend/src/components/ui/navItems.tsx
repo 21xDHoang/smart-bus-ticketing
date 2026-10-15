@@ -123,6 +123,12 @@ const NAV: NavEntry[] = [
         icon: <SwapOutlined />,
       },
       {
+        to: '/my-refunds',
+        label: 'Hoàn tiền của tôi',
+        roles: PASSENGER,
+        icon: <DollarOutlined />,
+      },
+      {
         to: '/my-monthly-passes',
         label: 'Vé tháng của tôi',
         roles: PASSENGER,
