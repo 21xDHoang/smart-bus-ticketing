@@ -23,7 +23,7 @@ namespace SmartBus.Api.Services;
 ///    không phải sự cố. Xem doc-comment <see cref="IRefundLookupService.ListMineAsync"/>.
 /// 3. <b><c>retryCount</c> là phép ĐẾM trên bảng nhật ký, không phải cột của <c>Refunds</c></b> —
 ///    xem hợp đồng mục "<c>retryCount</c> — con số này đếm ở đâu ra". Đây là chỗ cài đặt đúng lời
-///    hứa đã ghi ở docs/35-csdl-hoan-tien.md §2.4 khi bảng <c>Refunds</c> cố ý không có cột đếm.
+///    hứa đã ghi ở docs/40-csdl-hoan-tien.md §2.4 khi bảng <c>Refunds</c> cố ý không có cột đếm.
 /// 4. <b>Tên hiển thị nối sẵn ở tầng CSDL</b> (<c>Tickets → Trips → Routes</c>, <c>Seats</c>,
 ///    <c>Users</c>, <c>Payments</c>) để frontend vẽ một dòng khoản hoàn mà không phải gọi thêm
 ///    endpoint nào — cùng lối <see cref="MyTicketsService"/>. Bảy trường suy từ vé là <b>nullable</b>

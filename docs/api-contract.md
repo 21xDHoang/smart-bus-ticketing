@@ -1329,6 +1329,73 @@ trùng lịch của story 14). Chỉ soi tài nguyên **được đổi** trong 
 > `TripAssignment` + `conflicts` thay vì dựng endpoint thứ hai có hình dạng khác, và dùng chung
 > service kiểm tra trùng lịch của story 14 ("cùng một hàm kiểm tra, chỉ khác điểm gọi").
 
+#### `PUT /trips/{id}/location` — tài xế báo vị trí hiện tại của xe
+
+> ✅ Backend đã có (`TripLocationController` — Trần Trung Hiếu, story 10, task *"API cập nhật vị
+> trí chuyến (CurrentLat/CurrentLng/CurrentStopId)"*, Sprint 4). Một lần gọi là MỘT ảnh chụp vị
+> trí của chuyến: toạ độ hiện tại + trạm vừa đi qua. Dữ liệu ghi ở đây là đầu vào của service
+> *"bắn thông báo khi xe cách trạm dưới 500m"* (Kiên, cùng story).
+
+**Endpoint yêu cầu vai trò `Driver`** — và phải đúng tài xế được phân công của chuyến (kiểm theo
+`DriverId` ngay trong truy vấn). Người đã đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+Body — `currentLat` và `currentLng` bắt buộc, `currentStopId` bỏ trống được:
+
+```json
+{
+  "currentLat": 21.0285,
+  "currentLng": 105.8542,
+  "currentStopId": "c5d2e1f0-0000-0000-0000-000000000000"
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `currentLat` | ✅ | Vĩ độ — số thực, từ `-90` đến `90` |
+| `currentLng` | ✅ | Kinh độ — số thực, từ `-180` đến `180` |
+| `currentStopId` | — | Trạm xe vừa đi qua gần nhất — phải là trạm **thuộc tuyến của chuyến**. Bỏ trống = chỉ cập nhật toạ độ, giữ nguyên trạm hiện tại |
+
+- `positionUpdatedAt` **không nhận từ client** — hệ thống tự ghi giờ server nhận request (UTC),
+  không tin giờ thiết bị gửi lên; `updatedAt` của chuyến cũng được làm mới.
+- Gọi lại y hệt (idempotent): chỉ `positionUpdatedAt` thay đổi, dữ liệu khác giữ nguyên.
+
+```json
+// TripLocation — ví dụ chuyến vừa báo vị trí kèm trạm
+{
+  "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+  "currentStopId": "c5d2e1f0-0000-0000-0000-000000000000",
+  "currentLat": 21.0285,
+  "currentLng": 105.8542,
+  "positionUpdatedAt": "2026-10-14T03:10:00Z"
+}
+```
+
+- Chuyến không tồn tại **hoặc** không do tài xế này điều khiển → **404** `Không tìm thấy chuyến
+  xe` — một câu cho cả hai để không lộ chuyến nào đang có tài xế khác chạy (cùng lối "vé của
+  người khác trả 404" của `GET /tickets/{id}`).
+- Chuyến đã `Completed` → **409** `Chuyến đã hoàn thành, không thể cập nhật vị trí`; đã
+  `Cancelled` → **409** `Chuyến đã hủy, không thể cập nhật vị trí`. Chuyến `Scheduled` **vẫn
+  nhận** vị trí: chưa có endpoint nào chuyển trạng thái sang `Running`, chặn `Scheduled` thì
+  thiết bị không báo được vị trí trước giờ chạy.
+- Trạm không tồn tại → **404** `Không tìm thấy trạm dừng` · trạm tồn tại nhưng không nằm trong
+  `RouteStops` của tuyến → **400** kèm lỗi ở `errors.currentStopId` `Trạm không thuộc tuyến của
+  chuyến`.
+- Toạ độ thiếu hoặc sai khoảng → **400** kèm lỗi theo trường (`errors.currentLat` /
+  `errors.currentLng`).
+
+> **Vì sao trạm phải thuộc tuyến?** `currentStopId` là mỏ neo cho phép "cách trạm kế tiếp bao xa"
+> của service thông báo (Kiên, cùng story): trạm lạ không có `StopOrder` trên tuyến sẽ làm hỏng
+> phép tính khoảng cách. Chặn từ nguồn (API ghi) rẻ hơn là để service đọc phải tự lọc.
+
+> **Vì sao chưa đẩy SignalR khi vị trí đổi?** Đây là endpoint GHI — nửa "đọc" (hành khách xem xe
+> đang ở đâu theo thời gian thực) là chuyện của US 9 ở Sprint sau. Lúc đó nếu cần đẩy, sẽ bọc
+> service này bằng lớp Notifying* (cùng lối NotifyingSeatHold*) chứ không sửa file này.
+
+> **Ghi log thay đổi (US 23).** Mọi request thành công đi qua middleware nhật ký tự động: một dòng
+> hành động `Update`, đối tượng `Trips:{id}`, kèm người thực hiện + IP + thời điểm. Request lỗi
+> (400/404/409) không sinh dòng nào vì dữ liệu chưa hề đổi.
+
 ## Giữ chỗ — `/seat-holds`
 
 > Hai bảng `SeatHolds` + `SeatHoldLogs` đã migrate (Vàng Thị Dăm — docs/26-csdl-so-do-ghe.md).
@@ -1699,11 +1766,12 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 
 ## Thông báo kết quả xử lý — `/hubs/notifications`
 
-> ⏳ Backend đã có code (`NotificationHub` + `TicketRequestResultNotifier` — task *"Ghi log và thông
-> báo kết quả xử lý cho hành khách"*, dòng 7 Sprint 4, phân công bảng tính: Vàng Thị Dăm) nhưng
-> **chưa nối vào `Program.cs`**: còn thiếu `AddScoped<ITicketRequestResultNotifier, …>` và
-> `MapHub<NotificationHub>("/hubs/notifications")` — hai dòng thuộc file của Phùng Duy Hoàng. Chi
-> tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
+> ✅ Backend đã nối đủ: `NotificationHub` + `TicketRequestResultNotifier` (task *"Ghi log và thông
+> báo kết quả xử lý cho hành khách"*, dòng 7 Sprint 4, phân công bảng tính: Vàng Thị Dăm) đã có
+> `AddScoped<ITicketRequestResultNotifier, TicketRequestResultNotifier>()` và
+> `MapHub<NotificationHub>("/hubs/notifications")` trong `Program.cs` — hai dòng thuộc file của
+> Phùng Duy Hoàng, thêm ở task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4) vì
+> chính hai endpoint PATCH đó là nguồn phát sự kiện. Chi tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
 >
 > Hub KHÔNG phải nguồn dữ liệu: nó chỉ báo "bạn vừa có thông báo mới", còn **danh sách** thông báo
 > sẽ đến từ một endpoint REST (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19
@@ -1763,8 +1831,10 @@ gọi** — client chỉ kết nối và lắng nghe.
 | `PATCH /cancellation-requests/{id}` (duyệt / từ chối yêu cầu huỷ) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 | `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 
-Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4)
-— **chưa có trong tài liệu này** (chờ Hiếu). Mục này chỉ chốt phần thông báo của chúng.
+Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4,
+Phùng Duy Hoàng) — hình dạng request/response đầy đủ ở mục
+**"Huỷ & Đổi vé — `/cancellation-requests` và `/ticket-changes`"**. Mục này chỉ chốt phần thông báo
+của chúng.
 
 > ⚠️ **Không có sự kiện nào khi khách GỬI yêu cầu.** Gửi yêu cầu là việc của khách, không phải kết
 > quả cần báo cho khách. Thông báo chỉ đi ở bước **duyệt hoặc từ chối**.
@@ -3588,6 +3658,198 @@ phải viết trong `OnModelCreating` (file của Dăm).
 `Paid`/`Used`/`Cancelled` (đúng bảng trường ở trên), vé sinh thẳng ở `Paid` nên không dòng nào mang
 `'Held'`. Giữ nguyên chữ của A6 — ai truy vấn ghế đã bán chỉ cần hỏi `'Paid'`.
 
+## Huỷ & Đổi vé — `/cancellation-requests` và `/ticket-changes`
+
+> Story 5 *"Hủy & Đổi vé"*. ✅ **Hai bảng đã có thật**: migration
+> `Sprint4_CancellationRequests_TicketChanges` (Vàng Thị Dăm, task dòng 2 Sprint 4) đã merge và **đã
+> áp lên CSDL chung**. Thiết kế đầy đủ — vì sao hai bảng, vì sao điều kiện thời gian, vì sao vé cũ
+> bị HUỶ chứ không bị sửa: `docs/32-csdl-huy-doi-ve.md`.
+>
+> Mục này chốt **hai endpoint duyệt** — task *"API duyệt / từ chối yêu cầu huỷ - đổi vé"* (dòng 5
+> Sprint 4, Phùng Duy Hoàng). Hai endpoint **gửi yêu cầu** là việc của người khác và **chưa có trong
+> tài liệu này**: `POST /cancellation-requests` (Trần Trung Hiếu, dòng 3), `POST /ticket-changes`
+> (Nguyễn Duy Kiên, dòng 4). Cả bốn endpoint dùng chung **một hình dạng dòng** ở dưới, nên màn duyệt
+> của Admin và màn theo dõi của khách đọc được cả hai loại yêu cầu bằng một khuôn.
+
+### Hình dạng một dòng yêu cầu — chốt theo bản nháp FE
+
+Hai bảng có tên cột giống nhau ở phần chung (đúng chủ ý của Dăm — xem `docs/32` §3.4), nên hình dạng
+response cũng là một. Trường nào của riêng một loại thì **null ở loại kia**, không lược bỏ khỏi JSON
+(giữ đúng lối `boardingStopName` của mục Vé điện tử).
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `type` | `string` | `"Cancel"` / `"Change"` — **suy từ endpoint, không có cột trong CSDL**: nó là tên bảng, không phải dữ liệu |
+| `ticketId` | `string` (GUID) | Vé gốc — FE mở thẳng `GET /tickets/{ticketId}` từ đây |
+| `ticketCode` | `string` | Mã vé gốc (nội dung QR). Với `"Change"` **đã duyệt** thì vé này đã là `Cancelled` |
+| `status` | `string` | `"Pending"` / `"Approved"` / `"Rejected"` |
+| `price` | `number` | Giá vé GỐC đã thanh toán (VND) — chụp lúc phát hành vé |
+| `reason` | `string \| null` | Lý do khách gửi kèm |
+| `cancellationFee` | `number \| null` | **Chỉ `"Cancel"`** — phí huỷ, chụp lúc khách gửi; `0` = huỷ miễn phí. Có giá trị ngay cả khi còn `Pending` |
+| `refundAmount` | `number \| null` | **Chỉ `"Cancel"` VÀ `status = "Approved"`** — `price - cancellationFee`. Null ở mọi ca còn lại, kể cả `"Rejected"` (từ chối thì không khoản nào di chuyển — trả `price - fee` ở đó là nói dối) |
+| `newTripId` | `string \| null` | **Chỉ `"Change"`** — chuyến khách xin đổi sang |
+| `newSeatId` | `string \| null` | **Chỉ `"Change"`** — ghế khách xin ngồi ở chuyến mới |
+| `newPrice` | `number \| null` | **Chỉ `"Change"`** — giá chuyến mới, chụp lúc khách gửi |
+| `priceDifference` | `number \| null` | **Chỉ `"Change"`** — `newPrice - price`, **có dấu**: dương = khách trả thêm, âm = nhà xe hoàn lại, `0` = ngang giá |
+| `newTicketId` | `string \| null` | **Chỉ `"Change"` ĐÃ DUYỆT** — vé mới phát hành lúc duyệt; null khi `Pending`/`Rejected`. Mở vé mới bằng `GET /tickets/{newTicketId}` |
+| `reviewedByUserId` | `string \| null` | Quản lý đã xử lý |
+| `reviewedAt` | `string \| null` | Mốc bấm duyệt / từ chối |
+| `rejectReason` | `string \| null` | Lý do từ chối do quản lý nhập — chỉ có nghĩa khi `"Rejected"` |
+| `createdAt` | `string` | Thời điểm khách gửi |
+| `updatedAt` | `string \| null` | Lần sửa cuối (null khi còn `Pending`) |
+
+> ⚠️ **Hai trường đổi tên so với bản nháp `frontend/src/api/ticketRequestApi.ts`** (bản nháp tự ghi
+> *"DỰ KIẾN … CHƯA cam kết"*, nên đây là chốt chứ không phải phá hợp đồng): `reviewNote` →
+> **`rejectReason`** (khớp nguyên tên cột `RejectReason` và tên trường mà thông báo đọc — xem mục
+> `/hubs/notifications`), và `fee` tách thành **`cancellationFee`** / **`priceDifference`** (một cái
+> tên mang hai nghĩa khác nhau tuỳ `type` là thứ sẽ cắn người đọc code sau này). Bản nháp cũng
+> **thiếu** `price`, `newPrice`, `ticketId`, `reviewedByUserId`, `reviewedAt`, `newTicketId` — đều là
+> trường màn duyệt của Admin cần (Hạnh, dòng 11).
+
+> **Vì sao `refundAmount` là trường SUY RA, không phải cột:** `docs/32` §3.1 đã chốt số phải hoàn là
+> `Ticket.Price - CancellationRequest.CancellationFee`, và cố ý KHÔNG đặt cột thứ ba — cả hai vế đều
+> bất biến nên phép trừ không bao giờ lệch, còn thêm cột thì có thêm một chỗ để ba con số nói khác
+> nhau. Ở đây nó được tính trong cùng một response với hai vế của nó, nên không có khe thời gian nào
+> để lệch. Số tiền **đã** hoàn thật nằm ở bảng `Refunds` (US 8, sprint khác) — không phải trường này.
+
+### Endpoints
+
+| Method | Endpoint | Task | Trạng thái |
+|---|---|---|---|
+| PATCH | `/cancellation-requests/{id}` | *"API duyệt / từ chối yêu cầu huỷ - đổi vé"* — Phùng Duy Hoàng (dòng 5) | ✅ mục dưới |
+| PATCH | `/ticket-changes/{id}` | cùng task | ✅ mục dưới |
+| POST | `/cancellation-requests` | Trần Trung Hiếu (dòng 3) | ⛔ chưa có trong tài liệu này |
+| POST | `/ticket-changes` | Nguyễn Duy Kiên (dòng 4) | ⛔ chưa có trong tài liệu này |
+
+### Body của cả hai endpoint — giống hệt nhau
+
+```json
+// Duyệt
+{ "status": "Approved" }
+
+// Từ chối, có nêu lý do
+{ "status": "Rejected", "rejectReason": "Chuyến khởi hành dưới 2 giờ nên không đủ điều kiện huỷ." }
+```
+
+| Trường | Bắt buộc | Mô tả |
+|---|---|---|
+| `status` | **Có** | Đúng hai giá trị `"Approved"` / `"Rejected"`. Giá trị khác → 400 kèm `errors.status` |
+| `rejectReason` | Không | Chỉ có nghĩa khi `"Rejected"`; tối đa 2000 ký tự. Bỏ trống vẫn hợp lệ — thông báo ghi rõ *"Người duyệt không nêu lý do."* thay vì để cụt |
+
+⚠️ **Gửi `rejectReason` kèm `"Approved"` KHÔNG phải lỗi 400** — service bỏ qua và **không lưu** (cột
+`RejectReason` chỉ có nghĩa ở nhánh từ chối; lưu rồi để màn hình hiện "lý do từ chối" trên một yêu
+cầu đã duyệt là dữ liệu sai). Cố ý: client đang cầm sẵn một object có cả hai trường (form giữ state
+cũ) mà bị chặn ở một lượt gọi hoàn toàn hợp lệ là cái bẫy không đáng có.
+
+### Duyệt / từ chối yêu cầu HUỶ — `PATCH /cancellation-requests/{id}`
+
+`[Authorize(Policy = RbacPolicies.ManagerOrAbove)]` — Admin và Manager. Người duyệt lấy từ token
+(`ClaimTypes.NameIdentifier`), **không nhận từ body**: để client gửi lên là mở đường cho người này
+ghi danh người khác vào `ReviewedByUserId`.
+
+**Nhánh `Approved`:**
+1. Lật `status` → `Approved`, ghi `reviewedByUserId` + `reviewedAt` + `updatedAt`.
+2. Lật vé gốc `Ticket.Status` → `Cancelled` (kèm `Ticket.UpdatedAt` — A4 buộc, vì đây là sửa dòng).
+   **Ghế trở về chợ**: chỉ mục duy nhất điều kiện của A6 (`WHERE "Status" IN ('Held', 'Paid')`)
+   không còn thấy vé này, nên khách khác đặt lại được chính ghế đó. Xem
+   `CancellationRequestStatus.Approved` để biết vì sao vé CHỈ bị huỷ ở bước này chứ không phải lúc
+   khách gửi.
+3. KHÔNG ghi dòng `Refunds` nào — bảng đó thuộc US 8 và **chưa tồn tại trong repo**. Tiền hoàn là
+   việc của sprint khác; duyệt xong mà lượt hoàn còn chưa chạy là chuyện bình thường.
+
+**Nhánh `Rejected`:** lật `status` + ghi `rejectReason` + `reviewedAt`/`reviewedByUserId`/`updatedAt`.
+**Không đụng dòng vé** — vé giữ `Paid`, ghế vẫn của khách, không khoản tiền nào di chuyển.
+
+### Duyệt / từ chối yêu cầu ĐỔI — `PATCH /ticket-changes/{id}`
+
+Cùng quyền, cùng body, cùng hình dạng response.
+
+**Nhánh `Approved` — ba việc, không phải hai:**
+1. 🔴 **Kiểm lại ghế mới còn trống NGAY LÚC DUYỆT.** Lúc khách gửi, ghế mới **chưa bị giữ** (không có
+   dòng `SeatHolds` nào cho nó — xem `TicketChangeStatus.Pending`), nên giữa hai thời điểm đó người
+   khác hoàn toàn có thể đã mua mất. Tin dữ liệu đã kiểm lúc gửi là **bán trùng ghế**. Ghế đã có
+   người → **409**, màn duyệt nói rõ để quản lý từ chối và mời khách chọn chuyến khác.
+2. **Huỷ vé cũ**: `Ticket.Status` → `Cancelled` + `UpdatedAt` (ghế cũ về chợ).
+3. **Phát hành vé MỚI** cho chuyến mới: `TripId = newTripId`, `SeatId = newSeatId`, `UserId` = chủ vé
+   gốc, `Status = Paid`, `Price = newPrice` (đúng con số khách đã nhìn thấy và đã đồng ý — **không
+   tra lại `Fares`**), `Code = ITicketQrService.GenerateCode(newTicketId)`. Rồi ghi `NewTicketId` vào
+   dòng yêu cầu.
+
+> 🔴 **Vì sao HUỶ vé cũ chứ không SỬA nó** (chốt 12/10/2026, `docs/32` §3.1): sửa thẳng `Trips`/`Seats`
+> trên dòng vé cũ là viết lại lịch sử — chuyến CŨ mất dòng đó khỏi báo cáo doanh thu (US 19) dù tiền
+> đã thực thu, và hoá đơn đã xuất theo `Payments.TicketId` không còn khớp (US 7). Vé cũ phải giữ
+> nguyên con số của nó.
+
+**Nhánh `Rejected`:** không đụng vé, không kiểm ghế, `NewTicketId` vẫn null.
+
+> ⚠️ **Vé mới phát hành ở đây KHÔNG đi qua bảng `Payments`.** Chênh lệch giá (`newPrice - price`) do
+> Kiên tính ở `POST /ticket-changes` (dòng 4), và tiền chênh đi qua `Payments` (thu thêm) hoặc
+> `Refunds` (hoàn lại) — hai bảng đã có, không phải việc của endpoint duyệt. Endpoint này chỉ phát
+> hành vé đúng theo con số đã chốt trong dòng yêu cầu.
+
+### Trạng thái HTTP — giống nhau ở cả hai endpoint
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Xử lý xong — trả dòng yêu cầu đã cập nhật |
+| 400 | `status` thiếu / sai giá trị; `rejectReason` quá dài |
+| 401 | Không có token |
+| 403 | Có token nhưng không phải Admin/Manager |
+| 404 | Không có yêu cầu với `{id}` đó |
+| 409 | Yêu cầu **không còn `Pending`** (đã có người xử lý) — xem dưới |
+| 409 | Vé của yêu cầu **không còn `Paid`** (đã bị huỷ, hoặc đã soát ở cổng) — xem dưới |
+| 409 | *(chỉ `/ticket-changes`)* Chuyến xin đổi sang **đã huỷ hoặc đã chạy xong** |
+| 409 | *(chỉ `/ticket-changes`)* Ghế mới đã có người đặt trong lúc chờ duyệt |
+
+### Hai lớp chống xử lý trùng — cùng lối A6
+
+Hai quản lý cùng mở một yêu cầu `Pending` rồi cùng bấm Duyệt là chuyện xảy ra được. Chỉ mục duy nhất
+điều kiện (`WHERE "Status" = 'Pending'`) **không cứu được** lượt này: lúc cả hai ghi thì cả hai đều
+đã rời khỏi tập `Pending`. Nên có hai lớp:
+
+1. **Kiểm trước**: đọc thấy `status != Pending` → **409** kèm câu nói rõ yêu cầu đã được xử lý.
+2. **Khoá lạc hậu `xmin`**: hai bảng này có concurrency token (khác `Tickets` — bảng vé cố ý không
+   có, xem `AppDbContext.Ticket.cs`). Lượt thua nhận `DbUpdateConcurrencyException`; service bắt và
+   trả **cùng một câu 409** — ⛔ **tuyệt đối không để nó thành 500**. Đây chính là điều `docs/32` §6
+   dặn riêng cho task này.
+
+Cùng lối, lượt duyệt đổi vé đâm vào chỉ mục A6 của bảng `Tickets` sẽ ném `DbUpdateException`; bắt và
+trả **409** "ghế đã có người đặt", không phải 500.
+
+### Hai phép kiểm mà CSDL không làm hộ
+
+Lượt duyệt còn phải tự kiểm hai điều dưới đây — **không chỉ mục nào chặn được chúng**, nên bỏ qua là
+ghi ra dữ liệu sai chứ không phải ném lỗi:
+
+- **Vé gốc còn `Paid` không** (cả hai endpoint). Hai đường dẫn tới cùng chỗ hỏng:
+  1. Một vé có thể có **đồng thời** một yêu cầu huỷ `Pending` và một yêu cầu đổi `Pending` — chỉ mục
+     duy nhất điều kiện nằm *trong từng bảng*, không với được sang bảng kia; luật "một vé chỉ một yêu
+     cầu đang chờ" là việc của service (chú thích ngay tại `AppDbContext.CancellationRequest.cs`).
+     Duyệt cả hai thì vé bị huỷ lần thứ hai và lượt đổi **phát hành vé mới cho một vé đã chết**.
+  2. Vé bị **soát ở cổng** trong lúc yêu cầu nằm chờ duyệt: huỷ một vé đã dùng là hoàn tiền cho
+     chuyến khách đã đi.
+- **Chuyến xin đổi sang chưa huỷ và chưa chạy xong** (`/ticket-changes`). Vé mới là vé thật, in QR
+  được — phát hành nó cho một chuyến không bao giờ chạy là bán một chỗ không tồn tại.
+
+Cả hai đều trả **409** với câu nói rõ đường lui ("hãy từ chối yêu cầu và mời khách chọn chuyến/ghế
+khác"), không phải 400: yêu cầu gửi lên hợp lệ, chỉ có thế giới đã đổi kể từ lúc khách gửi.
+
+> ⚠️ **Bộ test chạy EF InMemory KHÔNG dựng unique index lẫn khoá ngoại** (`docs/32` §4.4), nên hai
+> nhánh `xmin` và A6 **chỉ chạy thật trên PostgreSQL**. Test xanh trên InMemory không chứng minh hai
+> nhánh đó đúng — muốn kiểm phải dựng DDL bằng `GenerateCreateScript()` với chuỗi kết nối Npgsql giả.
+
+### Thông báo cho khách — việc nối tiếp, không phải việc của endpoint
+
+Duyệt/từ chối xong thì gọi `ITicketRequestResultNotifier` (`NotifyCancellationReviewedAsync` /
+`NotifyTicketChangeReviewedAsync`) — hợp đồng đầy đủ ở mục `/hubs/notifications` phía trên. Ba điều
+bắt buộc ở chỗ gọi:
+
+1. Gọi **SAU khi đã lưu** trạng thái — hàm tự kiểm và bỏ qua kèm cảnh báo nếu còn `Pending`.
+2. Hàm **không bao giờ ném** và **không nhận `CancellationToken`**; nó mở lượt lưu riêng, không chung
+   transaction với lượt PATCH. Thông báo hỏng không được làm hỏng lượt duyệt đã thành công.
+3. Nội dung thông báo **không chứa số tiền** — lý do ở mục `/hubs/notifications`.
+
 ## Thanh toán — `/payments`
 
 > Story 6 *"Cổng thanh toán"*. ✅ **Bảng `Payments` — migration ĐÃ SINH, ĐÃ SOÁT VÀ ĐÃ MERGE (PR #144)**
@@ -3941,6 +4203,77 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > `ProviderResponseCode` **cố ý để trống** thay vì bịa một con số. Đây là điểm KHÁC MoMo
 > (`resultCode`) và VNPay (`vnp_ResponseCode`): đừng đi tìm trường trạng thái trong `data`. Cần mã
 > kết quả thì job đối soát gọi `QueryOrderAsync` (`return_code` 1/2/3).
+
+## Báo cáo doanh thu — `/reports/revenue`
+
+> Story 19 *"Doanh thu"*. ✅ Backend đã có (`RevenueReportController` — Trần Trung Hiếu, task
+> *"API báo cáo doanh thu theo ngày / tuần / tháng"*, Sprint 4). Mục này là nửa "theo thời gian"
+> của story; **theo tuyến / theo xe / theo phương thức** (Kiên), **so sánh giữa các kỳ** (Hoàng)
+> và **xuất Excel/PDF** (các task sau) sẽ mở rộng trên cùng bề mặt `/reports/revenue`.
+
+**Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 19 là nghiệp vụ của quản lý). Người đã
+đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+#### `GET /reports/revenue` — tổng hợp doanh thu theo ngày / tuần / tháng
+
+Query — **mọi tham số bỏ trống được**:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `granularity` | `day` | Độ mịn: `day` / `week` / `month` (không phân biệt hoa/thường) |
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+```json
+// RevenueReport — ví dụ gộp theo ngày, 3 ngày
+{
+  "granularity": "day",
+  "from": "2026-10-12",
+  "to": "2026-10-14",
+  "totalRevenue": 123456789,
+  "totalPayments": 456,
+  "buckets": [
+    { "periodStart": "2026-10-12", "revenue": 35000000, "payments": 120 },
+    { "periodStart": "2026-10-13", "revenue": 0, "payments": 0 },
+    { "periodStart": "2026-10-14", "revenue": 88456789, "payments": 336 }
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `totalRevenue` / `totalPayments` | Tổng cả kỳ — hai con số cho thẻ số liệu của dashboard |
+| `buckets[].periodStart` | Điểm bắt đầu bucket, dạng `yyyy-MM-dd`: chính ngày đó (`day`) · thứ Hai của tuần (`week`) · ngày 1 của tháng (`month`) |
+| `buckets[].revenue` / `payments` | Doanh thu (VND) / số giao dịch của bucket |
+
+- **Nền số liệu là bảng `Payments`, chỉ đếm `Success`** — doanh thu là tiền ĐÃ THU THỰC, để kiểm
+  thử chéo "số liệu doanh thu khớp với giao dịch thực tế" có đối tượng để đối chiếu. Vé `Paid`/
+  `Used` không phải nền: vé là hàng hoá phát hành kèm tiền, tiền mới là thứ được đối soát.
+- **Mốc thời gian của giao dịch là `paidAt`** (cổng ghi nhận thu tiền); giao dịch `Success` thiếu
+  `paidAt` (dữ liệu cũ/lỗi) thì tính theo `createdAt` — tiền đã thu không được biến mất khỏi báo
+  cáo chỉ vì thiếu một cột thời gian.
+- **Trục thời gian theo giờ Việt Nam (UTC+7)** — giao dịch 00:30 giờ VN thuộc ngày HÔM ĐÓ, không
+  phải ngày hôm trước theo UTC. `from`/`to` là ngày lịch Việt Nam; tuần bắt đầu **thứ Hai** (ISO),
+  tháng theo lịch dương.
+- **Bucket LIÊN TỤC, không bỏ ngày rỗng** — biểu đồ cần trục đầy đủ: khoảng không có giao dịch
+  thì `revenue`/`payments` bằng 0. Bucket đầu có thể bắt đầu TRƯỚC `from` (tuần lấy từ thứ Hai,
+  tháng lấy từ ngày 1).
+- Khoảng `from` → `to` tối đa **366 ngày** (trọn một năm) · `to` trước `from` → **400** — lỗi gắn
+  ở cả `errors.from` lẫn `errors.to` · `granularity` lạ → **400** `errors.granularity` ·
+  `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
+
+> **Cho task "API doanh thu theo tuyến, theo xe, theo phương thức thanh toán" (Kiên):** dùng cùng
+> nền `Payments` `Success` và cùng trục thời gian ở trên — mở rộng bằng endpoint mới trên bề mặt
+> `/reports/revenue` (ví dụ `GET /reports/revenue/by-route`) thay vì dựng một nền tính khác, nếu
+> không hai báo cáo sẽ ra hai con số tổng khác nhau cho cùng một kỳ.
+
+> **Cho task "API so sánh doanh thu giữa các kỳ" (Hoàng):** cùng nền, so kỳ hiện tại với kỳ liền
+> trước cùng độ dài — tái dùng quy tắc bucket ở trên thay vì tự định nghĩa lại "tuần/tháng".
+
+> **Vì sao không trả kèm số vé?** Story chỉ hỏi doanh thu; vé đã bán là chuyện của báo cáo tỷ lệ
+> lấp đầy (US 20) — mỗi báo cáo một câu hỏi, trộn lại thì không báo cáo nào đọc được.
 
 ## Voucher — `/vouchers`
 
@@ -4488,7 +4821,7 @@ Checklist soát migration, danh sách file đã có sẵn, và các chốt cần
 > Story 8 *"Hoàn tiền tự động"*. 🟢 **Bảng `Refunds` + `RefundLogs` — migration ĐÃ SINH, ĐÃ SOÁT**
 > (nhánh `feature/8-migrate-refunds-refundlogs`, Vàng Thị Dăm — task *"Migrate bảng Refunds,
 > RefundLogs"*, dòng 38 Sprint 4). Entity + cấu hình: `AppDbContext.Refund.cs`; lý do từng cột, chỉ
-> mục và bất biến: **`docs/35-csdl-hoan-tien.md`**.
+> mục và bất biến: **`docs/40-csdl-hoan-tien.md`**.
 >
 > 🔴 **A9 KHÔNG có hai bảng này.** Đây là nhóm bảng thứ tư ngoài danh sách 20 bảng đóng băng, sau
 > `CancellationRequests` + `TicketChanges` (docs/32 §1), `Notifications` (docs/33 §1) và
@@ -4558,7 +4891,7 @@ Seats`, nên chúng null **cùng lúc** với `ticketCode`, không bao giờ l�
 
 #### `retryCount` — con số này đếm ở đâu ra
 
-`Refunds` **cố ý không có cột đếm** (lý do: docs/35 §2.4 — số lượt gọi là phép đếm trên nhật ký,
+`Refunds` **cố ý không có cột đếm** (lý do: docs/40 §2.4 — số lượt gọi là phép đếm trên nhật ký,
 không phải trạng thái của khoản hoàn). Giá trị này là:
 
 ```
@@ -4732,3 +5065,79 @@ liệu của người khác. Danh sách toàn hệ thống là việc của `GET
 | **Cổng sandbox nào hoàn tiền được?** Dòng 40 (Hiếu) gọi cổng để hoàn; MoMo/VNPay/ZaloPay sandbox có API hoàn hay không chưa ai kiểm | Chưa kiểm — chặn dòng 40 |
 | **`Refunds` + `RefundLogs` bổ sung vào A9?** | Nhóm cần chốt — lần thứ **tư** việc "A9 lệch thực tế" được nhắc |
 | **Ai làm `GET /admin/refunds`?** Bảng phân công có màn (dòng 46–47) nhưng **không có dòng nào** giao API danh sách ở tầng backend | Chưa có chủ |
+
+## Khung giờ cao điểm — `/reports/peak-hours`
+
+> Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có (`PeakHoursReportController` — Trần Trung Hiếu,
+> task *"API phân tích khung giờ cao điểm theo mật độ hành khách"*, Sprint 4). Mục này trả lời
+> câu hỏi **"giờ nào trong ngày đông khách nhất"**; **tỷ lệ lấp đầy theo chuyến/tuyến/khung giờ**
+> (Kiên) và **đề xuất tần suất** (Hoàng) là các task khác cùng story. Mục "Báo cáo doanh thu —
+> /reports/revenue" (US 19, nhánh `feature/19-api-bao-cao-doanh-thu` — chưa merge lúc viết mục
+> này) là mục chị em trên cùng bề mặt `/reports`. Chốt nghiệp vụ đầy đủ: `docs/38-api-khung-gio-cao-diem.md`.
+
+**Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 20 là nghiệp vụ của quản lý). Người đã
+đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+#### `GET /reports/peak-hours` — khung giờ cao điểm theo mật độ hành khách
+
+Query — **mọi tham số bỏ trống được**:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+```json
+// PeakHoursReport — ví dụ khoảng 14 ngày
+{
+  "from": "2026-10-01",
+  "to": "2026-10-14",
+  "totalPassengers": 5230,
+  "totalTrips": 412,
+  "averagePassengersPerTrip": 12.69,
+  "peakHours": [7, 8, 17, 18],
+  "hours": [
+    { "hour": 0,  "passengers": 0,   "trips": 0,  "averagePassengersPerTrip": 0,    "isPeak": false },
+    { "hour": 7,  "passengers": 780, "trips": 41, "averagePassengersPerTrip": 19.02, "isPeak": true },
+    { "hour": 8,  "passengers": 902, "trips": 44, "averagePassengersPerTrip": 20.5,  "isPeak": true },
+    { "hour": 12, "passengers": 205, "trips": 31, "averagePassengersPerTrip": 6.61,  "isPeak": false }
+    // … đủ 24 giờ, giờ rỗng vẫn hiện diện với số 0 …
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `totalPassengers` / `totalTrips` | Tổng lượt khách / tổng chuyến khởi hành cả kỳ |
+| `averagePassengersPerTrip` | Mật độ trung bình cả kỳ, làm tròn 2 chữ số — **chính là ngưỡng** đánh dấu cao điểm |
+| `hours[]` | **Đủ 24 phần tử** (giờ 0–23, tăng dần) — trục biểu đồ cột theo khung giờ |
+| `hours[].hour` | Giờ trong ngày (**giờ Việt Nam**), 0–23 |
+| `hours[].passengers` / `trips` | Tổng lượt khách / số chuyến **khác nhau** khởi hành trong giờ đó |
+| `hours[].averagePassengersPerTrip` | Mật độ giờ = passengers / trips, làm tròn 2 chữ số — 0 khi giờ không có chuyến |
+| `hours[].isPeak` | `true` khi giờ **có chuyến**, cả kỳ **có khách**, và mật độ ≥ `averagePassengersPerTrip` |
+| `peakHours` | Danh sách giờ có `isPeak = true`, tăng dần — lọc nhanh cho FE |
+
+- **Nền số liệu là bảng `Tickets`, đếm vé `Paid`/`Used` của các chuyến KHỞI HÀNH trong kỳ.** Mật
+  độ hành khách = khách đã trả tiền và lên xe, không phải số ghế hay số chuyến. Vé `Cancelled`
+  bỏ (khách không lên xe); vé đã soát (`Used`) vẫn tính (người đó đã đi thật).
+- **Khung giờ = giờ khởi hành của chuyến, theo giờ Việt Nam (UTC+7).** Chuyến 00:30 giờ VN thuộc
+  giờ 0 của ngày HÔM ĐÓ; trục là giờ chạy chứ không phải giờ bán vé — báo cáo phục vụ điều chỉnh
+  tần suất chạy xe.
+- **Mật độ = khách trung bình mỗi chuyến.** Hai giờ cùng 100 khách nhưng một giờ có 20 chuyến,
+  giờ kia có 4 — chỗ đông là giờ 4 chuyến. Chia cho số chuyến khiến "cao điểm" phản ánh độ chật
+  của xe.
+- **So sánh trên giá trị ĐÃ LÀM TRÒN 2 chữ số** — con số hiển thị chính là con số được so sánh,
+  người đọc phản hồi tự kiểm lại được. Kỳ không có chuyến hoặc không có khách nào → `peakHours`
+  rỗng (không đánh dấu cao điểm khi ngưỡng bằng 0).
+- Khoảng `from` → `to` tối đa **366 ngày** · `to` trước `from` → **400** — lỗi gắn ở cả
+  `errors.from` lẫn `errors.to` · `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
+
+> **Cho task "API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ" (Kiên):** mục này đã gộp
+> khách theo giờ KHỞI HÀNH; tỷ lệ lấp đầy cần thêm mẫu số **sức chứa** (ghế của xe) — đơn vị
+> khác hẳn (phần trăm), đừng đổi ngữ nghĩa của `passengers` ở đây, mở endpoint riêng trên bề mặt
+> `/reports` (ví dụ `GET /reports/fill-rate`).
+>
+> **Cho task "API đề xuất tăng/giảm tần suất" (Hoàng):** đọc thẳng `peakHours` của mục này —
+> giờ cao điểm là giờ nên tăng chuyến, không cần dựng lại nền tính.

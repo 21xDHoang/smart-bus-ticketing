@@ -336,6 +336,10 @@ báo để đổi lấy một phép lọc trên tập đã nhỏ.
    không chạy được nếu thiếu bảng. Tên migration vì vậy đặt theo mốc **Sprint 4** (nơi công việc thật
    sự xảy ra), và bảng phân công Sprint 5 dòng 14 coi như **bớt một bảng**: còn lại
    `NotificationTemplates` + `Subscriptions`. Nhóm chốt lại để dòng 14 không bị làm trùng.
+   > ✅ **Cập nhật 14/10/2026:** hai bảng còn lại **đã dựng xong** trên nhánh
+   > `feature/10-migrate-notificationtemplates-subscriptions` — xem
+   > **`docs/37-csdl-mau-thong-bao-va-theo-doi.md`**. Dòng 14 coi như xong phần CSDL, không ai làm lại
+   > `Notifications`. Mục 3 dưới đây (hình dạng "đã đọc") **vẫn còn treo** — nhánh đó không mở lại.
 2. **`docs/03-quy-uoc.md` vẫn không tồn tại trong repo.** Mọi tham chiếu A1–A9 ở đây chỉ còn là trích
    dẫn trong code và tài liệu. Đây là lần thứ **năm** việc này được nhắc (bốn lần trước: `docs/32` §7.2).
 3. **Cần chốt hình dạng "đã đọc" của thông báo trước Sprint 5.** §2 để trống có chủ ý, nhưng hai task

@@ -33,7 +33,7 @@ public enum RefundSource
     ///
     /// Khoản hoàn loại này LUÔN có <see cref="Refund.TicketId"/> và
     /// <see cref="Refund.CancellationRequestId"/> — đó là bất biến ở tầng nghiệp vụ đi kèm giá trị
-    /// này, xem <c>docs/35-csdl-hoan-tien.md</c> §2.3.
+    /// này, xem <c>docs/40-csdl-hoan-tien.md</c> §2.3.
     ///
     /// ⚠️ Chỉ yêu cầu <b>đã duyệt</b> mới sinh khoản hoàn. Yêu cầu còn <c>Pending</c> thì vé vẫn
     /// <c>Paid</c> và chưa có đồng nào phải trả lại — xem doc-comment

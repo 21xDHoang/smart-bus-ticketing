@@ -26,7 +26,7 @@ namespace SmartBus.Api.Entities;
 ///
 /// <para>
 /// Cũng vì chỉ ghi thêm nên bảng <b>không có cột <c>xmin</c></b>: khoá chống ghi đè chỉ có nghĩa
-/// với dòng bị sửa. Xem <c>docs/35-csdl-hoan-tien.md</c> §3.3.
+/// với dòng bị sửa. Xem <c>docs/40-csdl-hoan-tien.md</c> §3.3.
 /// </para>
 /// </summary>
 public class RefundLog

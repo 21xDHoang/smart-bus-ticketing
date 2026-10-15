@@ -16,6 +16,12 @@
 > **Chưa merge, chưa áp lên CSDL chung**: bảng chỉ có thật sau khi PR được merge rồi chạy
 > `database update` (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4). Trước bước đó, endpoint nào chạm
 > chúng sẽ lỗi `relation "Refunds" does not exist`.
+>
+> ⚠️ **Vì sao số 40 mà không phải 35:** tài liệu này mang số `35` từ lúc viết, nhưng khi gộp `main`
+> thì `main` **đã có** `docs/35-service-xuat-pdf-bao-cao.md` (US 21), và `36`–`39` cũng đã bị chiếm —
+> riêng `36` còn bị nhánh `feature/8-api-tra-cuu-hoan-tien` giữ. Hai file cùng số `35` nằm cạnh nhau
+> trong `docs/` là thứ git **không** báo xung đột (tên file khác nhau), nên phải tự soát. Đổi sang `40`
+> theo đúng lối nhóm đã dùng ở `docs/38-api-khung-gio-cao-diem.md`: **người viết sau nhường số**.
 
 ## 1. Hai bảng này KHÔNG nằm trong A9 — phải báo nhóm
 
@@ -429,7 +435,7 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
   `Unresolved` (§3.2).
 - **Dăm** (dòng 42) — API tra cứu trạng thái hoàn tiền của giao dịch. Đường tra là `RefundCode` hoặc
   `PaymentId` (§2.3), **không** phải `TicketId`. ✅ **Đã làm** — nhánh `feature/8-api-tra-cuu-hoan-tien`,
-  viết đầy đủ ở **`docs/36-api-tra-cuu-hoan-tien.md`**; mục hoàn tiền của `docs/api-contract.md` cũng
+  viết đầy đủ ở **`docs/41-api-tra-cuu-hoan-tien.md`**; mục hoàn tiền của `docs/api-contract.md` cũng
   do nhánh đó bổ sung, nên câu *"hợp đồng chưa có mục hoàn tiền"* ở §7.3 dưới đây **đã hết đúng**.
 - **Kiên** (dòng 43) — đối soát hoàn tiền hằng ngày. 🔴 Đây là **nơi duy nhất** xử lý được các khoản
   kẹt ở `Pending` vì lượt gọi `Unresolved` (§3.2), và là nơi phát hiện *"mã giao dịch của lượt cuối"
@@ -474,7 +480,7 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
    là làm hỏng hai màn đã merge, nên hợp đồng nên chép **nguyên văn** chúng.
 
    > ✅ **Cập nhật 14/10/2026:** mục `## Hoàn tiền — /refunds` **đã được bổ sung** bởi nhánh
-   > `feature/8-api-tra-cuu-hoan-tien` (task dòng 42) — xem `docs/36-api-tra-cuu-hoan-tien.md` §1.
+   > `feature/8-api-tra-cuu-hoan-tien` (task dòng 42) — xem `docs/41-api-tra-cuu-hoan-tien.md` §1.
    > Người viết là **Dăm** chứ không phải Hiếu, vì ⛔ luật 5 buộc sửa hợp đồng trước khi code mà task
    > dòng 42 không chờ được. **Hiếu và Băng nên đọc lại mục đó** — nội dung chép nguyên văn hình dạng
    > frontend đã chốt, không phải quyết định mới.
@@ -494,6 +500,18 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
    soát), chỉ khác nhau ở ba cột lúc sinh ra. Tách hai bảng là nhân đôi job dòng 41, nhân đôi màn dòng
    46, và nhân đôi bước đối soát dòng 43 — để đổi lấy việc hai cột nullable thành NOT NULL. **Nhóm
    biết để khỏi thắc mắc**, không cần chốt lại.
+7. **Số hiệu tài liệu trong `docs/` đang trùng nhau — nhóm nên chốt một lối đánh số.** Tài liệu này
+   **đã đổi số** từ `docs/35` sang `docs/40` khi gộp `main` (lý do ở §đầu). Trên `main` hiện **đã sẵn
+   hai cặp trùng số**: `docs/37-bao-cao-doanh-thu.md` + `docs/37-csdl-mau-thong-bao-va-theo-doi.md`, và
+   `docs/38-api-khung-gio-cao-diem.md` + `docs/38-csdl-hoa-don.md`. Nhánh
+   `feature/8-api-tra-cuu-hoan-tien` (API tra cứu hoàn tiền, dòng 42) **đã hết đụng** kể từ 15/10/2026:
+   khi gộp nhánh migrate vào, nó đổi `docs/36-api-tra-cuu-hoan-tien.md` →
+   **`docs/41-api-tra-cuu-hoan-tien.md`** (nhường `36` cho `docs/36-api-cap-nhat-vi-tri-chuyen.md`) và
+   kéo bản `docs/35-csdl-hoan-tien.md` cũ của nó về khớp `docs/40`. Nhánh đó vẫn **chưa merge vào
+   `main`**, nhưng **không còn chờ đổi số**. Nguyên nhân chung: các nhánh chọn số **độc lập với nhau**,
+   còn `main` nhận số theo **thứ tự merge** — và git **không** báo xung đột vì tên file khác nhau. Đề
+   nghị: hoặc chốt một bảng số hiệu, hoặc **bỏ hẳn số ở tên file** (chỉ giữ tên mô tả) để hết đụng.
+   Chi tiết: `docs/37-csdl-mau-thong-bao-va-theo-doi.md` §8.6 mục 6.
 
 ## 8. Migration đã sinh và đã soát — 14/10/2026
 
@@ -611,6 +629,41 @@ thay bằng: đọc trực tiếp `Entities/Payment.cs`, `CancellationRequest.cs
 `SeatHoldLog.cs` và các file `AppDbContext.*.cs` để đối chiếu lối đặt tên, lối comment và `Restrict`;
 cộng với `dotnet build` (0/0) và `dotnet test` (1287/1287) ở §8.3.
 
-**Ai có máy chạy được GitNexus nên chạy `impact` cho `Refund`, `RefundLog` và `AppDbContext` trước khi
+**Ai có máy chạy được GitNexus nên chạy `impact` cho `Refund`, `RefundLog`, `AppDbContext` trước khi
 merge** — `AppDbContext.cs` là **file dùng chung**, và nhánh này **có** sửa nó (thêm một dòng
 `ConfigureRefund` + một khai báo `partial void`), nên đây là chỗ va chạm với mọi nhánh khác đang mở.
+
+### 8.6 Kiểm lại sau khi gộp `main` — 15/10/2026
+
+`main` đã đi trước nhánh này **28 commit** (`274b6f7` → `f6f079a`; `git rev-list --count 5489950..f6f079a`).
+Gộp vào, **xung đột nội dung chỉ
+có MỘT file**: `Data/AppDbContext.cs` — hai bên cùng chèn một dòng `ConfigureXxx` vào cuối
+`OnModelCreating` (`ConfigureRefund` của nhánh này, `ConfigureInvoice` của `main`). Giữ **cả hai**.
+
+`AppDbContextModelSnapshot.cs` **tự gộp sạch** (git không báo xung đột) — nhưng *merge sạch **không**
+có nghĩa là merge đúng*, vì đây là file **sinh tự động**. Nên đã kiểm lại bằng số:
+
+| Phép kiểm | Kết quả |
+|---|---|
+| `git diff origin/main --numstat` trên snapshot | ✅ `168 0` — delta của nhánh còn **nguyên vẹn**, thuần thêm, 0 dòng xoá |
+| `git diff <HEAD cũ> --numstat` trên snapshot | ✅ `157 0` — delta của `main` (`Invoices`, `NotificationTemplates`, `Subscriptions`) |
+| `git diff origin/main --numstat` trên `AppDbContext.cs` | ✅ `11 0` — cũng thuần thêm |
+| `dotnet ef migrations has-pending-model-changes --no-build` | ✅ *"No changes have been made to the model since the last migration"* — snapshot tự gộp **đúng** bằng mô hình dựng từ entity + cấu hình fluent |
+| `dotnet build backend/SmartBus.Api` | ✅ 0 warning, 0 error |
+| `dotnet test backend/SmartBus.Tests` | ✅ **1394/1394** passed, 0 failed (nhiều hơn 1287 ở §8.3 vì `main` đã thêm test) |
+| `dotnet ef migrations script` (toàn chuỗi) | ✅ 18 migration đúng thứ tự thời gian; `Refunds`/`RefundLogs` mỗi bảng `CREATE` đúng **một** lần; **0** `ALTER TABLE` / `DROP` nào chạm hai bảng; 5 khoá ngoại đều `ON DELETE RESTRICT`; chỉ mục điều kiện §4.1 còn **nguyên văn** |
+
+⚠️ **Không phải sinh lại migration.** `20261014153025_Sprint4_Refunds_RefundLogs` **đứng trước**
+`20261014164805_Sprint4_NotificationTemplates_Subscriptions` và `20261014171948_Sprint4_Invoices` —
+đúng thứ tự thời gian thật — và **cả ba** migration đều thuần thêm, nên không migration nào của `main`
+đụng bảng của nhánh này. Sinh lại chỉ để "nhảy số" sẽ **không** đổi hành vi, mà lại phải sửa `docs/`
+và mọi tham chiếu tới tên file migration.
+
+🔴 **Giới hạn của bộ test vẫn nguyên như §4.4** — InMemory **không** cưỡng chế unique index lẫn FK, nên
+**1394/1394 xanh không chứng minh** chỉ mục chống hoàn hai lần (§4.1) hay `RESTRICT` của 5 khoá ngoại
+có thật. Các chốt đó chỉ kiểm được trên PostgreSQL.
+
+⚠️ **GitNexus vẫn không chạy được** (§8.5) — vẫn **không có** `impact` / `detect_changes` cho lần gộp
+này. Bù bằng: đọc trực tiếp phần xung đột của `AppDbContext.cs`, cộng `dotnet build` + `dotnet test` +
+`migrations script` ở bảng trên. Ai có máy chạy được GitNexus vẫn nên chạy `impact` cho `AppDbContext`
+**trước khi merge PR**.

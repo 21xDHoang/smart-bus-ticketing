@@ -134,6 +134,15 @@ builder.Services.AddScoped<ITripConflictService, TripConflictService>();
 // gọi ghi log tay.
 builder.Services.AddScoped<ITripAssignmentService, TripAssignmentService>();
 
+// Cập nhật vị trí hiện tại của chuyến: PUT /api/trips/{id}/location (US 10 "Thông báo trạm",
+// Sprint 4). Task "API cập nhật vị trí chuyến (CurrentLat/CurrentLng/CurrentStopId)" — Trần
+// Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Chỉ tài xế được phân công của chuyến ghi được (kiểm theo DriverId ngay trong truy vấn); chuyến
+// Scheduled/Running nhận vị trí, Completed/Cancelled → 409. Thay đổi thành công được
+// AuditLogMiddleware ghi tự động (Update / "Trips:{id}") — cùng lối TripAssignmentService ở trên.
+// Đặt cạnh khối chuyến xe vì cùng bảng Trips.
+builder.Services.AddScoped<ITripLocationService, TripLocationService>();
+
 // Danh sách xe buýt: CRUD /buses (biển số, loại xe, sức chứa, trạng thái).
 // Task story 14 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IBusService, BusService>();
@@ -193,6 +202,14 @@ builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
 // Cùng tiền tố với IAuditLogExportService ở trên nhưng khác controller — template đầy đủ khác
 // nhau nên hai đường dẫn không đụng nhau (đoạn literal "export" thắng đoạn tham số).
 builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
+
+// Service xuất PDF báo cáo (US 21 "Xuất dữ liệu", Sprint 4): báo cáo A4 có tiêu đề, logo, ngày
+// xuất — viên gạch chung cho mọi báo cáo xuất PDF (doanh thu / lấp đầy / nhật ký).
+// Task dòng 77 "Service xuất PDF có tiêu đề, logo, ngày xuất" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service thuần (không CSDL, không mạng): ngày xuất do bên gọi truyền vào qua ReportPdfModel.
+// Đặt cạnh khối xuất nhật ký ra Excel ở trên vì cùng chủ đề "xuất file" của Sprint 4.
+builder.Services.AddScoped<IReportPdfService, ReportPdfService>();
 
 
 // Xử lý phản ánh phía quản trị: GET/PATCH /api/admin/feedbacks, GET /api/admin/feedbacks/{id},
@@ -416,6 +433,14 @@ builder.Services.AddScoped<IVoucherStatisticsService, VoucherStatisticsService>(
 // IVoucherValidationService/IVoucherRedemptionService ở trên (luồng khách dùng mã ở thanh toán).
 builder.Services.AddScoped<IVoucherAdminService, VoucherAdminService>();
 
+// Báo cáo doanh thu theo ngày / tuần / tháng: GET /api/reports/revenue (US 19 "Doanh thu",
+// Sprint 4). Task "API báo cáo doanh thu theo ngày / tuần / tháng" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Nền là bảng Payments (chỉ đếm Success — tiền đã thu thực, khớp kiểm thử chéo của story), trục
+// thời gian theo giờ Việt Nam UTC+7, mốc giao dịch là PaidAt (thiếu thì dùng CreatedAt).
+// Đặt sau khối voucher vì cùng nhóm "đọc tổng hợp từ bảng đã có" — báo cáo không ghi dữ liệu.
+builder.Services.AddScoped<IRevenueReportService, RevenueReportService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
@@ -456,6 +481,16 @@ builder.Services.AddScoped<ITicketEmailService, TicketEmailService>();
 // (Hoàng) và tra cứu vé của tôi (endpoint này) đứng liền một mạch.
 builder.Services.AddScoped<IMyTicketsService, MyTicketsService>();
 
+// Khung giờ cao điểm theo mật độ hành khách: GET /api/reports/peak-hours (US 20 "Tỷ lệ lấp đầy",
+// Sprint 4). Task "API phân tích khung giờ cao điểm theo mật độ hành khách" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Nền là bảng Tickets (vé Paid/Used của các chuyến khởi hành trong kỳ), trục cố định 24 giờ theo
+// giờ Việt Nam UTC+7, mật độ = khách trung bình mỗi chuyến — giờ có mật độ ≥ trung bình cả kỳ là
+// cao điểm. Đặt sau khối vé điện tử vì cùng họ "đọc tổng hợp từ bảng Tickets/Trips" — báo cáo
+// không ghi dữ liệu, và KHÔNG chèn vào đúng khe sau khối voucher mà nhánh feature/19 (báo cáo
+// doanh thu, cũng của Hiếu) đang thêm dòng.
+builder.Services.AddScoped<IPeakHoursReportService, PeakHoursReportService>();
+
 // Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
 // sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).
 // Task "Đồng bộ trạng thái ghế realtime giữa các phiên (SignalR)" (dòng 11 Sprint 3) — Hoàng Văn Thịnh.
@@ -476,6 +511,28 @@ builder.Services.AddScoped<IMyTicketsService, MyTicketsService>();
 // vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ISeatMapNotifier, SeatMapNotifier>();
+
+// Thông báo kết quả xử lý yêu cầu huỷ/đổi cho hành khách (US 5, dòng 7 Sprint 4 — Vàng Thị Dăm):
+// ghi một dòng Notifications rồi đẩy NotificationReceived qua /hubs/notifications (khối MapHub ở cuối
+// file). Dùng CHUNG lượt AddSignalR ở trên, không gọi thêm. Hai chốt hợp đồng — không bao giờ ném lỗi,
+// và không nhận CancellationToken — ghi ở Services/ITicketRequestResultNotifier.cs; lý do từng dòng ở
+// docs/33-thong-bao-ket-qua-huy-doi-ve.md §3.1. TicketRequestResultWiringTests ghim đúng chỗ nối này.
+builder.Services.AddScoped<ITicketRequestResultNotifier, TicketRequestResultNotifier>();
+
+// Duyệt / từ chối yêu cầu huỷ và đổi vé (US 5, dòng 5 Sprint 4 — Phùng Duy Hoàng): PATCH
+// /api/cancellation-requests/{id} và PATCH /api/ticket-changes/{id}. Service tiêm THẲNG
+// ITicketRequestResultNotifier ở trên rồi gọi nó SAU khi lưu — không bọc decorator như ba khối
+// SeatHold* bên dưới: decorator ở đó tồn tại để người thêm thông báo không phải sửa file của người
+// khác (luật E1), chứ bản thân lớp bọc không có ích gì. Interface này không có factory nào bọc.
+builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewService>();
+
+// Ghi nhật ký soát vé + chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (US 15, dòng 18 Sprint 4 —
+// Phùng Duy Hoàng). Endpoint soát vé POST /tickets/validate (dòng 15, Trần Trung Hiếu) tiêm interface
+// này rồi gọi SAU khi đã xác thực chữ ký và tính xong kết quả — cả lượt online lẫn lượt đồng bộ đều đi
+// qua đúng một cửa. Hợp đồng idempotent (gửi lại cùng ClientScanId = thành công, đọc dòng cũ; khoảng
+// hợp lý của ScannedAt) ghi ở Services/ITicketValidationRecorder.cs; đặc tả phía máy quét ở
+// docs/39-hang-doi-ngoai-tuyen-soat-ve.md. Không có factory/decorator nào bọc interface này.
+builder.Services.AddScoped<ITicketValidationRecorder, TicketValidationRecorder>();
 
 builder.Services.AddScoped<SeatHoldCreateService>();
 builder.Services.AddScoped<ISeatHoldCreateService>(provider => new NotifyingSeatHoldCreateService(
@@ -556,6 +613,14 @@ app.MapControllers();
 // trên: negotiate và WebSocket handshake đều là request đi qua CORS, thiếu UseCors là trình duyệt
 // chặn ngay từ bước negotiate chứ không tới được hub.
 app.MapHub<SeatMapHub>("/hubs/seat-map");
+
+// Hub thông báo kết quả xử lý yêu cầu huỷ/đổi (US 5) — cùng khối đăng ký ở phần services.
+// KHÁC hub ghế: NotificationHub mang [Authorize] vì thông báo là dữ liệu riêng của một người, và
+// token đến từ query string "?access_token=…" (trình duyệt không đặt được header cho WebSocket) —
+// JwtMiddleware.ReadAccessTokenFromHubQueryAsync đọc token cho ĐÚNG tiền tố /hubs. Client không có
+// hàm nào gọi được lên hub: nhóm nhận suy từ ID người dùng trong token, không từ tham số client
+// (Hubs/NotificationHub.cs). Cùng yêu cầu SAU app.UseCors(AppCors) như hub ghế ở trên.
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 

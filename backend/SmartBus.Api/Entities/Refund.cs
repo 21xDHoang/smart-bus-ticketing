@@ -18,7 +18,7 @@ namespace SmartBus.Api.Entities;
 /// thì yêu cầu đã <see cref="CancellationRequestStatus.Approved"/> trong khi khoản hoàn còn
 /// <see cref="RefundStatus.Pending"/>. Gộp hai thứ vào một cột trạng thái là bịt mất đúng khoảng
 /// lệch đó. Cùng lối lập luận đã ghi ở doc-comment <see cref="CancellationRequestStatus"/> (mục "vì
-/// sao KHÔNG có trạng thái đã hoàn tiền"). Lý do đầy đủ: <c>docs/35-csdl-hoan-tien.md</c> §2.1.
+/// sao KHÔNG có trạng thái đã hoàn tiền"). Lý do đầy đủ: <c>docs/40-csdl-hoan-tien.md</c> §2.1.
 ///
 /// Bảng CÓ bị sửa (trạng thái lật, thử lại), nên A4 buộc có <see cref="UpdatedAt"/>. Nhật ký từng
 /// lượt gọi cổng nằm ở bảng anh em <see cref="RefundLog"/> (cùng file cấu hình
@@ -48,7 +48,7 @@ public class Refund
     /// ⚠️ Giá trị này gắn với một bất biến ở tầng nghiệp vụ:
     /// <see cref="CancellationRequestId"/> khác null <b>⟺</b> <see cref="Source"/> là
     /// <see cref="RefundSource.TicketCancellation"/>. Không diễn đạt được bằng CHECK constraint vì
-    /// <c>Source</c> lưu dạng chuỗi (A3) — xem <c>docs/35-csdl-hoan-tien.md</c> §4.3.
+    /// <c>Source</c> lưu dạng chuỗi (A3) — xem <c>docs/40-csdl-hoan-tien.md</c> §4.3.
     /// </summary>
     public RefundSource Source { get; set; }
 
@@ -63,7 +63,7 @@ public class Refund
     ///
     /// Cũng là cột mà chỉ mục duy nhất điều kiện <c>IX_Refunds_PaymentId_Active</c> canh: một giao
     /// dịch chỉ được có MỘT khoản hoàn chưa thất bại. Lý do ở AppDbContext.Refund.cs và
-    /// <c>docs/35-csdl-hoan-tien.md</c> §4.1.
+    /// <c>docs/40-csdl-hoan-tien.md</c> §4.1.
     /// </summary>
     public Guid PaymentId { get; set; }
 
@@ -140,7 +140,7 @@ public class Refund
     ///
     /// ⚠️ Cột này chỉ giữ trạng thái CUỐI. Việc khoản này đã bị gọi cổng mấy lần, mỗi lần cổng trả
     /// lời gì, nằm ở bảng <see cref="RefundLog"/> — và số lần thử lại là phép ĐẾM trên bảng đó, cố ý
-    /// không có cột đếm ở đây (lý do ở <c>docs/35-csdl-hoan-tien.md</c> §2.4).
+    /// không có cột đếm ở đây (lý do ở <c>docs/40-csdl-hoan-tien.md</c> §2.4).
     /// </summary>
     public RefundStatus Status { get; set; } = RefundStatus.Pending;
 

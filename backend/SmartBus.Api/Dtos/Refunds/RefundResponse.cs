@@ -92,7 +92,7 @@ public class RefundResponse
     ///
     /// Là phép ĐẾM trên <c>RefundLogs</c> (<c>Trigger &lt;&gt; 'Initial'</c>) chứ không phải một cột
     /// của <c>Refunds</c> — bảng <c>Refunds</c> cố ý không có cột đếm, lý do ở
-    /// <c>docs/35-csdl-hoan-tien.md</c> §2.4; chỗ cài đặt là phép chiếu <c>RetryCount</c> trong
+    /// <c>docs/40-csdl-hoan-tien.md</c> §2.4; chỗ cài đặt là phép chiếu <c>RetryCount</c> trong
     /// <c>RefundLookupService</c>. Định nghĩa đầy đủ: docs/api-contract.md mục
     /// "<c>retryCount</c> — con số này đếm ở đâu ra".
     /// </summary>

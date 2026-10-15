@@ -9,7 +9,8 @@
 > **Giàng A Vàng** (test, dòng 48–49).
 >
 > 🟢 **Trạng thái:** hai endpoint **đã code xong** trên nhánh `feature/8-api-tra-cuu-hoan-tien`,
-> `dotnet build` 0/0 và `dotnet test` **1309/1309** (§8). **Chưa merge.** Nhánh này **xếp trên**
+> `dotnet build` 0/0 và `dotnet test` **1416/1416** sau khi gộp nhánh migrate (§8.4). **Chưa merge
+> vào `main`.** Nhánh này **xếp trên**
 > `feature/8-migrate-refunds-refundlogs` (task dòng 38, cũng chưa merge) vì API không biên dịch được
 > nếu thiếu entity `Refund`/`RefundLog` — PR nhắm vào nhánh migration, sau khi nhánh đó vào `main`
 > thì GitHub tự trỏ lại `main`.
@@ -17,21 +18,28 @@
 > 🔴 **Chưa áp lên CSDL chung.** Bảng `Refunds` / `RefundLogs` chỉ có thật sau khi nhánh dòng 38
 > merge rồi chạy `database update` (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4). Trước bước đó,
 > gọi hai endpoint này sẽ lỗi `relation "Refunds" does not exist` — **không** phải lỗi của service.
+>
+> 🔢 **Số hiệu tài liệu — bản này từng là `docs/36`.** Ngày 15/10/2026, khi nhánh này gộp nhánh
+> `feature/8-migrate-refunds-refundlogs` vào, `main` đã có `docs/36-api-cap-nhat-vi-tri-chuyen.md`
+> (US 12), nên bản này **nhường số** và thành **`docs/41`**. Cùng lượt đó, tài liệu CSDL hoàn tiền mà
+> nó dẫn tới cũng đổi `docs/35` → **`docs/40`** (vì `main` đã có
+> `docs/35-service-xuat-pdf-bao-cao.md`). Mọi tham chiếu `docs/35` cũ trong bản này đã trỏ về
+> `docs/40`. Lý do đầy đủ + danh sách số còn trùng: `docs/40` §7 mục 7.
 
 ## 1. Bề mặt này KHÔNG nằm trong A9 — và hợp đồng API vừa được bổ sung
 
-Hai bảng đằng sau đã được báo ngoài A9 ở `docs/35-csdl-hoan-tien.md` §1 (nhóm bảng thứ **tư**). Phần
+Hai bảng đằng sau đã được báo ngoài A9 ở `docs/40-csdl-hoan-tien.md` §1 (nhóm bảng thứ **tư**). Phần
 **API** cũng có một việc tương tự, nhưng khác bản chất:
 
 | Nguồn | Nói gì |
 |---|---|
 | **Bảng phân công Sprint 4, dòng 42** | *"API tra cứu trạng thái hoàn tiền của giao dịch"* — Vàng Thị Dăm, ưu tiên **Trung bình**, 4 điểm |
 | **`docs/api-contract.md`** (trước nhánh này) | **Không có** mục nào về hoàn tiền — chỉ một câu nhắc ở mục "Phát hành vé sau khi thanh toán" |
-| **`docs/35` §7.3** | Đề nghị **Hiếu chủ trì** mục *"Hoàn tiền"* trong hợp đồng, vì *"hình dạng endpoint là việc của chủ API"* |
+| **`docs/40` §7.3** | Đề nghị **Hiếu chủ trì** mục *"Hoàn tiền"* trong hợp đồng, vì *"hình dạng endpoint là việc của chủ API"* |
 | Code đã merge | **Có** hình dạng rồi — `frontend/src/api/refundAdminApi.ts` (PR #187, màn Băng dòng 46) đã chốt cứng tên trường |
 
 ⚠️ **Đã bổ sung `docs/api-contract.md`** (mục `## Hoàn tiền — /refunds`), và đây là chỗ **lệch nhẹ**
-so với đề nghị ở `docs/35` §7.3: đề nghị đó muốn Hiếu chủ trì, còn nhánh này **tự viết** — vì ⛔ luật
+so với đề nghị ở `docs/40` §7.3: đề nghị đó muốn Hiếu chủ trì, còn nhánh này **tự viết** — vì ⛔ luật
 5 buộc *sửa hợp đồng TRƯỚC rồi mới code*, mà chờ Hiếu thì task dòng 42 đứng lại. Nội dung **không**
 phải quyết định mới: nó **chép nguyên văn** hình dạng đã bị frontend chốt cứng và bổ sung phần còn
 thiếu (đường dẫn, mã trạng thái, ngữ nghĩa mảng rỗng). **Hiếu và Băng nên đọc lại mục đó** — Hiếu là
@@ -79,13 +87,13 @@ thông tin cho người đang dò. Cùng lối `MyTicketsService` và `SeatHoldL
 Câu chữ của task là *"trạng thái hoàn tiền **của giao dịch**"*, và "giao dịch" trong dự án này là
 bảng `Payments` (`PaymentCode` = *"mã giao dịch nội bộ"*). Nên `?paymentCode=` là thứ biến endpoint
 thành câu trả lời cho **một** giao dịch — `Refund.PaymentId` là khoá ngoại BẮT BUỘC, và
-`docs/35` §2.3 đã chỉ đúng đường tra này.
+`docs/40` §2.3 đã chỉ đúng đường tra này.
 
 `GetByRefundCodeAsync` phục vụ câu hỏi còn lại (*"khoản RF-xxxx của tôi giờ ra sao"*), cũng đúng như
 doc-comment `Refund.RefundCode` đã ghi trước. Hai đường tra, hai câu hỏi khác nhau — không có đường
-tra theo `TicketId`, lý do ở `docs/35` §2.3.
+tra theo `TicketId`, lý do ở `docs/40` §2.3.
 
-`paymentCode` **không** chép thành cột riêng trên `Refunds` (đó là lý do `docs/35` §2.5 không có cột
+`paymentCode` **không** chép thành cột riêng trên `Refunds` (đó là lý do `docs/40` §2.5 không có cột
 `MethodCode`): lọc qua khoá ngoại sang `Payments`, dùng unique index của `Payments.PaymentCode` một
 đầu và `IX_Refunds_PaymentId` đầu kia. Chép mã giao dịch sang bảng hoàn tiền là dựng nguồn sự thật
 thứ hai cho cùng một chuỗi.
@@ -143,14 +151,14 @@ có nghĩa là không tìm thấy. Thứ tự mã trạng thái của endpoint n
 
 🔴 Một giao dịch **có thể có nhiều dòng** trong `Refunds` theo thời gian: khoản đầu `Failed` hết lịch
 thử lại rồi bị bỏ, sau đó phát sinh khoản mới. Chỉ mục duy nhất `IX_Refunds_PaymentId_Active` **cố ý**
-chỉ chặn hai khoản **chưa thất bại** cùng lúc (`docs/35` §4.1). Nên *"giao dịch này đã được hoàn
+chỉ chặn hai khoản **chưa thất bại** cùng lúc (`docs/40` §4.1). Nên *"giao dịch này đã được hoàn
 chưa"* **không** trả lời được bằng phép đếm — phải đọc `status` của từng dòng. Đây là lời hứa đã ghi
 sẵn trong `AppDbContext.Refund.cs`, và `GET /refunds?paymentCode=` trả **cả** các dòng lịch sử chứ
 không lọc bớt.
 
 ## 5. `retryCount` — chỗ cài đặt lời hứa "không có cột đếm"
 
-`Refunds` **cố ý không có cột `RetryCount`** (`docs/35` §2.4): số lượt gọi cổng là phép **đếm trên
+`Refunds` **cố ý không có cột `RetryCount`** (`docs/40` §2.4): số lượt gọi cổng là phép **đếm trên
 nhật ký**, không phải trạng thái của khoản hoàn. Bản này là chỗ cài đặt lời hứa đó:
 
 ```
@@ -179,7 +187,7 @@ Vì đây là tương quan `COUNT` chứ không phải `Include`, `Refund` **kh�
   không có câu trả lời; `retryCount` ở đây đếm thẳng trên bảng đó nên thiếu log là **số hiển thị sai**
   cho khách (§5).
 - **Hoàng** (dòng 41) — `NextRetryAt` là cột riêng, **không** suy ra từ `Status` + `CreatedAt`
-  (`docs/35` §2.6). Endpoint này **không** trả `nextRetryAt`: màn hành khách không cần, còn màn Admin
+  (`docs/40` §2.6). Endpoint này **không** trả `nextRetryAt`: màn hành khách không cần, còn màn Admin
   lấy được từ `GET /admin/refunds` khi endpoint đó có. Muốn thêm vào hình dạng chung thì sửa
   `docs/api-contract.md` trước (⛔ luật 5).
 - **Ai cần thêm trường** — nhắn Dăm: hình dạng 21 trường đã bị **frontend chốt cứng** và có test ghim,
@@ -190,7 +198,7 @@ Vì đây là tương quan `COUNT` chứ không phải `Include`, `Refund` **kh�
 1. **Hợp đồng API đã có mục hoàn tiền — Hiếu và Băng đọc lại.** Trước nhánh này `docs/api-contract.md`
    **không** có một chữ nào về hoàn tiền (§1), trong khi hai màn frontend đã merge đều đọc API hoàn
    tiền. Đây là lần thứ **tư** việc này được nhắc — US 5 (`docs/32` §7.4, rồi nhắc lại ở `docs/33`
-   §7.5), US 15 (`docs/34` §7.4) và US 8 (`docs/35` §7.3). **Nhóm nên chốt: mỗi story có endpoint thì
+   §7.5), US 15 (`docs/34` §7.4) và US 8 (`docs/40` §7.3). **Nhóm nên chốt: mỗi story có endpoint thì
    mục hợp đồng là một phần của Definition of Done**, chứ không phải việc nhớ ra sau.
 2. **`docs/03-quy-uoc.md` vẫn không tồn tại trong repo** — lần thứ **tám**. Mọi tham chiếu A1–A9 và
    mục D3 ở tài liệu này chỉ còn là trích dẫn trong code.
@@ -199,14 +207,14 @@ Vì đây là tương quan `COUNT` chứ không phải `Include`, `Refund` **kh�
    45 ghi *"qua email và trên web"*, A8.5 chốt **in-app qua SignalR**, không email — xung đột y hệt
    dòng 7 của US 5); *(b)* **cổng sandbox nào hoàn tiền được thật** — nếu không cổng nào thì dòng
    40–41 và bước kiểm thử chéo dòng 49 đều phải dựa vào mock.
-4. **A9 cần bổ sung `Refunds` + `RefundLogs`** — nhắc lại lần thứ **tư** (đã ghi ở `docs/35` §7.1).
+4. **A9 cần bổ sung `Refunds` + `RefundLogs`** — nhắc lại lần thứ **tư** (đã ghi ở `docs/40` §7.1).
    Nhóm nên bổ sung **một lượt** cả năm bảng còn thiếu thay vì nhắc từng lần.
 5. **Chưa ai nhận `GET /admin/refunds` và `GET /admin/refunds/export`.** Bảng phân công có dòng 46–47
    cho **Băng** (giao diện), nhưng **API** của hai màn đó không nằm ở dòng nào — dòng 42 là API **tra
    cứu của hành khách**, không phải API quản trị. Nhóm nên chỉ định người làm (Hiếu hoặc Kiên) trước
    khi Băng nối API thật.
 
-## 8. Kiểm chứng trên nhánh này — 14/10/2026
+## 8. Kiểm chứng trên nhánh này — 14–15/10/2026
 
 ### 8.1 Nội dung đã làm
 
@@ -248,7 +256,7 @@ lượt `Initial` · chỉ đếm lượt gọi lại · chỉ đếm log của 
 
 `CLAUDE.md` bắt buộc chạy `impact` trước khi sửa và `detect_changes` trước khi commit. Trên máy dựng
 nhánh này **cả hai đều không chạy được** (repo không có `.gitnexus/`, `analyze` tự crash — đã ghi ở
-`docs/35` §8.5). Nên **không có** kết quả `impact`/`detect_changes` cho nhánh này. Bù lại bằng:
+`docs/40` §8.5). Nên **không có** kết quả `impact`/`detect_changes` cho nhánh này. Bù lại bằng:
 
 - đọc trực tiếp `MyTicketsService`, `FeedbackLookupService`, `SeatHoldLookupService`,
   `MyTicketsController`, `FeedbackLookupController` và `SeatHoldLookupController` để đối chiếu lối
@@ -261,7 +269,41 @@ nhánh này **cả hai đều không chạy được** (repo không có `.gitnex
 dùng chung** duy nhất nhánh này sửa (đúng một dòng `AddScoped`), nên là chỗ va chạm với mọi nhánh
 Sprint 4 khác đang mở.
 
-### 8.4 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
+### 8.4 Kiểm lại sau khi gộp nhánh migrate — 15/10/2026
+
+Nhánh này **xếp trên** `feature/8-migrate-refunds-refundlogs`, mà nhánh đó vừa gộp `main` về (nhánh
+migrate đi trước `main` **28 commit**). Nếu không gộp lại, PR của nhánh này sẽ hiện **toàn bộ** diff
+của nhánh migrate như thể là việc của mình. Đã chạy `git merge feature/8-migrate-refunds-refundlogs`
+trên nhánh này.
+
+**Xung đột: đúng MỘT file — `docs/api-contract.md`.** Hai bên cùng **thêm mới ở cuối file**: bên này
+thêm mục `## Hoàn tiền — /refunds`, còn `main` thêm mục `## Khung giờ cao điểm — /reports/peak-hours`.
+Không bên nào sửa phần của bên kia, nên cách giải quyết là **giữ cả hai**, không phải chọn một. Kiểm
+lại bằng `grep "^## " | sort | uniq -d`: **không tiêu đề nào lặp**, tức hai mục thật sự độc lập chứ
+không phải bản sao của nhau. Trong mục hoàn tiền, ba tham chiếu `docs/35` cũ đã trỏ về `docs/40`.
+
+Mọi file khác gộp sạch. Hai chỗ **đáng kiểm tay** thay vì tin vào chữ "gộp sạch":
+
+| File | Vì sao không được tin vào việc gộp sạch | Kết quả |
+|---|---|---|
+| `Program.cs` | **File của Hoàng** (⛔ luật 4), cả hai bên cùng chèn dòng `AddScoped` vào cùng vùng | Gộp sạch; build 0/0 là bằng chứng không mất đăng ký nào |
+| `Migrations/AppDbContextModelSnapshot.cs` | File **sinh tự động** — gộp sạch **không** đồng nghĩa với đúng | Đối chiếu `git diff --numstat` với **cả hai** gốc: delta của bên này **và** của `main` đều còn nguyên |
+| `docs/api-contract.md` (mục hoàn tiền) | Tham chiếu `docs/35` đã đổi số từ trước | Đã trỏ về `docs/40`; `grep "docs/35"` trong file hết sạch |
+
+**Số hiệu tài liệu:** cùng lượt gộp này bản thân tài liệu đổi `docs/36` → `docs/41` — lý do ở ghi chú
+đầu file.
+
+**Lệnh đã chạy lại trên cây đã gộp:**
+
+```
+dotnet build SmartBus.Api/SmartBus.Api.csproj     → 0 Warning, 0 Error
+dotnet test  SmartBus.Tests/SmartBus.Tests.csproj → 1416/1416 ✅
+```
+
+1416 = **1394** test của nhánh migrate (đã gộp `main`) + **22** test của bản này. Con số **1309** ở
+§8.2 là lượt chạy 14/10 **trước khi** gộp `main`; giữ nguyên ở đó làm mốc lịch sử chứ không sửa lại.
+
+### 8.5 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
 
 1. PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge**.
    Base của PR là `feature/8-migrate-refunds-refundlogs` (nhánh dòng 38), **không phải** `main`.
