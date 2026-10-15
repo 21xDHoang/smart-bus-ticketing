@@ -10,6 +10,7 @@ import { useQrScanner } from '../components/useQrScanner';
 import type { QrScannerStatus } from '../components/useQrScanner';
 import { PageCard, PageHeader } from '../components/ui';
 import { formatDateTime } from '../components/ui/format';
+import { playValidationErrorSound, playValidationSuccessSound } from '../components/ui/validationSound';
 
 const { Text } = Typography;
 
@@ -23,7 +24,7 @@ const STATUS_MESSAGE: Record<Exclude<QrScannerStatus, 'starting' | 'scanning'>, 
   error: 'Không mở được camera.',
 };
 
-/** Kết quả soát vé — xanh/đỏ rõ ràng kèm thông tin vé khi hợp lệ. */
+/** Kết quả soát vé — xanh/đỏ rõ ràng: nền tint + icon lớn + âm thanh, kèm thông tin vé khi hợp lệ. */
 function ScanResult({
   result,
   onRescan,
@@ -31,6 +32,7 @@ function ScanResult({
   result: TicketValidationResult;
   onRescan: () => void;
 }) {
+  const { token } = theme.useToken();
   const rescanButton = (
     <Button type="primary" icon={<ReloadOutlined />} onClick={onRescan}>
       Quét tiếp
@@ -41,55 +43,73 @@ function ScanResult({
     const meta = result.reason ? getTicketValidationReasonMeta(result.reason) : null;
 
     return (
-      <Result
-        status="error"
-        title="Vé không hợp lệ"
-        subTitle={meta ? meta.label : 'Không xác định được lý do.'}
-        extra={rescanButton}
-      />
+      <div
+        style={{
+          background: token.colorErrorBg,
+          border: `1px solid ${token.colorErrorBorder}`,
+          borderRadius: token.borderRadiusLG,
+          padding: '24px 16px',
+        }}
+      >
+        <Result
+          status="error"
+          title="Vé không hợp lệ"
+          subTitle={meta ? meta.label : 'Không xác định được lý do.'}
+          extra={rescanButton}
+        />
+      </div>
     );
   }
 
   const ticket = result.ticket;
 
   return (
-    <Result
-      status="success"
-      title="Vé hợp lệ"
-      subTitle={`Cho hành khách lên xe · Ghế ${ticket.seatNumber}`}
-      extra={rescanButton}
+    <div
+      style={{
+        background: token.colorSuccessBg,
+        border: `1px solid ${token.colorSuccessBorder}`,
+        borderRadius: token.borderRadiusLG,
+        padding: '24px 16px',
+      }}
     >
-      <Descriptions
-        bordered
-        size="small"
-        column={1}
-        style={{ maxWidth: 480, margin: '0 auto', textAlign: 'left' }}
-        items={[
-          {
-            key: 'passenger',
-            label: 'Hành khách',
-            children: ticket.passengerName ?? <Text type="secondary">—</Text>,
-          },
-          {
-            key: 'route',
-            label: 'Tuyến',
-            children: (
-              <span>
-                <Tag style={{ marginInlineEnd: 6 }}>{ticket.routeCode}</Tag>
-                {ticket.routeName}
-              </span>
-            ),
-          },
-          { key: 'departure', label: 'Giờ khởi hành', children: formatDateTime(ticket.departureTime) },
-          {
-            key: 'stops',
-            label: 'Lộ trình',
-            children: `${ticket.boardingStopName} → ${ticket.alightingStopName}`,
-          },
-          { key: 'code', label: 'Mã vé', children: <Text code>{ticket.code}</Text> },
-        ]}
-      />
-    </Result>
+      <Result
+        status="success"
+        title="Vé hợp lệ"
+        subTitle={`Cho hành khách lên xe · Ghế ${ticket.seatNumber}`}
+        extra={rescanButton}
+      >
+        <Descriptions
+          bordered
+          size="small"
+          column={1}
+          style={{ maxWidth: 480, margin: '0 auto', textAlign: 'left' }}
+          items={[
+            {
+              key: 'passenger',
+              label: 'Hành khách',
+              children: ticket.passengerName ?? <Text type="secondary">—</Text>,
+            },
+            {
+              key: 'route',
+              label: 'Tuyến',
+              children: (
+                <span>
+                  <Tag style={{ marginInlineEnd: 6 }}>{ticket.routeCode}</Tag>
+                  {ticket.routeName}
+                </span>
+              ),
+            },
+            { key: 'departure', label: 'Giờ khởi hành', children: formatDateTime(ticket.departureTime) },
+            {
+              key: 'stops',
+              label: 'Lộ trình',
+              children: `${ticket.boardingStopName} → ${ticket.alightingStopName}`,
+            },
+            { key: 'code', label: 'Mã vé', children: <Text code>{ticket.code}</Text> },
+          ]}
+        />
+      </Result>
+    </div>
   );
 }
 
@@ -119,6 +139,9 @@ export default function TicketScanPage() {
       .then((validation) => {
         setResult(validation);
         setPhase('result');
+        // Phản hồi nghe + rung ngay khi có kết quả — xanh kêu "ding-ding", đỏ kêu "buzz".
+        // Fire-and-forget: không chặn hiển thị vì chờ AudioContext resume có thể lâu.
+        void (validation.valid ? playValidationSuccessSound() : playValidationErrorSound());
       })
       .catch((err: unknown) => {
         // Soát hỏng (mạng/backend) không phải "vé không hợp lệ" — báo lỗi và quay lại quét.
