@@ -38,6 +38,7 @@ import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AdminRefundPage from './pages/AdminRefundPage';
 import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
+import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
@@ -355,6 +356,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <AdminTicketRequestPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /fill-rate là màn hình thống kê tỷ lệ lấp đầy theo chuyến (US 20 "Tỷ lệ lấp đầy",
+                  task của Dương Thị Hạnh) — tỷ lệ khách thực tế trên sức chứa ghế của từng
+                  chuyến trong ngày. Báo cáo vận hành nên chỉ Admin và Manager vào được. Backend
+                  thống kê tỷ lệ lấp đầy chưa có (dòng 66 của Kiên) nên màn hình đang chạy dữ
+                  liệu giả (fillRateReportApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn
+                  hình cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) —
+                  đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/fill-rate"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <FillRateReportPage />
                   </RouteGuard>
                 }
               />

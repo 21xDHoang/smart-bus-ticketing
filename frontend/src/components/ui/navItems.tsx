@@ -22,6 +22,7 @@ import {
   LayoutOutlined,
   MessageOutlined,
   PartitionOutlined,
+  PercentageOutlined,
   PlusCircleOutlined,
   QrcodeOutlined,
   ScanOutlined,
@@ -292,6 +293,12 @@ const NAV: NavEntry[] = [
     label: 'Báo cáo',
     icon: <BarChartOutlined />,
     children: [
+      {
+        to: '/fill-rate',
+        label: 'Tỷ lệ lấp đầy theo chuyến',
+        roles: ADMIN_MANAGER,
+        icon: <PercentageOutlined />,
+      },
       {
         to: '/revenue-dashboard',
         label: 'Dashboard doanh thu',
