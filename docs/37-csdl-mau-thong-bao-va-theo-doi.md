@@ -59,10 +59,15 @@ A9 (danh sách **20 bảng đóng băng**, nguồn `quy uoc.docx` mục A9) li�
 (`TicketChanges`/`CancellationRequests` — *"lần thứ hai"*), `docs/34` §1 (`TicketValidations` — *"lần
 thứ ba"*), rồi `Refunds`/`RefundLogs` (*"lần thứ tư"*).
 
-⚠️ **Lần thứ tư không có tài liệu mở được từ `main`**: nó nằm ở `docs/35` §1, mà `docs/35` và `docs/36`
-hiện **chỉ tồn tại trên nhánh `feature/8-api-tra-cuu-hoan-tien`** (chưa merge). Bốn lần còn lại đều
-đọc được từ `main`. Ghi rõ ở đây để người đọc `main` không tưởng tài liệu bị thiếu — và để lần merge
-nhánh hoàn tiền đó không sinh ra hai số thứ tự đụng nhau.
+⚠️ **Số hiệu của "lần thứ tư" đã đổi khi gộp `main`**: tài liệu đó nay là `docs/40-csdl-hoan-tien.md`
+§1. Lúc viết mục này nó mang số `docs/35` và **không mở được từ `main`**; khi nhánh migrate `Refunds`/
+`RefundLogs` gộp `main` thì `main` đã có `docs/35-service-xuat-pdf-bao-cao.md` (US 21), nên tài liệu
+hoàn tiền **nhường số** và thành `docs/40` (lý do đầy đủ ở §đầu `docs/40`). Bốn lần còn lại đều đọc
+được từ `main`.
+
+⚠️ **Nhánh `feature/8-api-tra-cuu-hoan-tien` (API tra cứu hoàn tiền, dòng 42) VẪN CHƯA MERGE** — và nó
+vẫn giữ `docs/36-api-tra-cuu-hoan-tien.md` cùng bản `docs/35-csdl-hoan-tien.md` cũ. Nghĩa là hai số
+`35` và `36` **sẽ còn đụng** cho tới khi nhánh đó cũng được đổi số lúc merge.
 
 **Cách xử lý vẫn giữ nguyên như bốn lần trước** (`docs/32` §7.1): **dựng theo phân công, rồi báo nhóm
 bổ sung A9.** Chủ CSDL không tự thêm bảng ngoài A9 mà im lặng — nhưng tên bảng đã nằm sẵn trong bảng
@@ -369,11 +374,20 @@ Nhóm thấy sai thì nói; đổi tên một migration **chưa merge** thì r�
    ⚠️ Con số này **không đáng tin**: `docs/32` §7.2 và `docs/33` §9.2 cùng ghi *"lần thứ năm"*, `docs/34`
    §9.3 ghi *"lần thứ sáu"* — các tài liệu đếm lệch nhau. Việc đáng làm không phải sửa số, mà là **đưa
    `quy uoc.docx` vào repo**, lúc đó cả chuỗi đếm này thành vô nghĩa.
-6. **`docs/35` và `docs/36` không có trên `main`** — chúng chỉ nằm ở nhánh
-   `feature/8-api-tra-cuu-hoan-tien` (§1), cùng nhánh giữ code `Refunds`/`RefundLogs` (mục 3). Số thứ
-   tự **không đụng nhau** (35, 36, 37 khác nhau), nên merge nhánh nào trước cũng được — nhưng cho tới
-   lúc merge, mọi tham chiếu tới `docs/35`/`docs/36` **từ `main` là tham chiếu chết**. Tài liệu này
-   vì vậy chỉ trỏ tới những gì đọc được từ `main`.
+6. **Số hiệu tài liệu ĐANG đụng nhau — bản viết trước ở mục này đã sai.** Câu cũ nói *"số thứ tự
+   không đụng nhau (35, 36, 37 khác nhau), nên merge nhánh nào trước cũng được"*. Điều đó **không
+   đúng**: các nhánh chọn số độc lập với nhau, còn `main` thì nhận số theo **thứ tự merge**. Tình
+   trạng thật:
+   - `docs/35` của nhánh migrate `Refunds`/`RefundLogs` đã **đổi thành `docs/40`** khi gộp `main`
+     (vì `main` đã có `docs/35-service-xuat-pdf-bao-cao.md`). Từ nay đọc `docs/40` §1.
+   - `docs/36-api-tra-cuu-hoan-tien.md` của nhánh `feature/8-api-tra-cuu-hoan-tien` **vẫn chưa merge**
+     và **vẫn đụng** `docs/36-api-cap-nhat-vi-tri-chuyen.md` của `main`; nhánh đó còn giữ bản
+     `docs/35-csdl-hoan-tien.md` cũ, phải đổi số cùng lúc.
+   - Trên `main` **đã sẵn hai cặp trùng số**: `docs/37-bao-cao-doanh-thu.md` +
+     `docs/37-csdl-mau-thong-bao-va-theo-doi.md`, và `docs/38-api-khung-gio-cao-diem.md` +
+     `docs/38-csdl-hoa-don.md`.
+   Việc này thuộc **nhóm**: hoặc chốt một bảng số hiệu (ai giữ số nào), hoặc bỏ hẳn số ở tên file và
+   để `docs/` chỉ còn tên mô tả — lúc đó không còn gì để đụng.
 
 ## 9. Migration — ✅ **đã sinh** và đã kiểm
 

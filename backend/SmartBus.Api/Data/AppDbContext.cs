@@ -34,6 +34,7 @@ public partial class AppDbContext : DbContext
         ConfigureSubscription(modelBuilder);
         ConfigureTicketValidation(modelBuilder);
         ConfigureInvoice(modelBuilder);
+        ConfigureRefund(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -128,4 +129,14 @@ public partial class AppDbContext : DbContext
     // A9 KHÔNG có bảng này — lần thứ sáu việc "A9 lệch thực tế" được nhắc, xem
     // docs/38-csdl-hoa-don.md §1. Xem AppDbContext.Invoice.cs.
     partial void ConfigureInvoice(ModelBuilder modelBuilder);
+
+    // US 8 (Refunds + RefundLogs — Sprint 4, Vàng Thị Dăm): task "Migrate bảng Refunds, RefundLogs"
+    // của bảng phân công Sprint 4 (dòng 38). HOÀN TIỀN TỰ ĐỘNG — bảng Refunds giữ trạng thái từng
+    // khoản hoàn, RefundLogs giữ nhật ký từng lượt gọi cổng. Hai bảng nằm chung MỘT file vì
+    // RefundLogs không có đời sống riêng (mọi dòng của nó thuộc về một khoản hoàn) — cùng lối
+    // SeatHolds + SeatHoldLogs ở ConfigureSeat.
+    //
+    // A9 KHÔNG có hai bảng này — lần thứ tư việc "A9 lệch thực tế" được nhắc, xem
+    // docs/40-csdl-hoan-tien.md §1. Xem AppDbContext.Refund.cs.
+    partial void ConfigureRefund(ModelBuilder modelBuilder);
 }
