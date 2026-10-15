@@ -512,6 +512,20 @@ builder.Services.AddScoped<IPeakHoursReportService, PeakHoursReportService>();
 builder.Services.AddSignalR();
 builder.Services.AddScoped<ISeatMapNotifier, SeatMapNotifier>();
 
+// Thông báo kết quả xử lý yêu cầu huỷ/đổi cho hành khách (US 5, dòng 7 Sprint 4 — Vàng Thị Dăm):
+// ghi một dòng Notifications rồi đẩy NotificationReceived qua /hubs/notifications (khối MapHub ở cuối
+// file). Dùng CHUNG lượt AddSignalR ở trên, không gọi thêm. Hai chốt hợp đồng — không bao giờ ném lỗi,
+// và không nhận CancellationToken — ghi ở Services/ITicketRequestResultNotifier.cs; lý do từng dòng ở
+// docs/33-thong-bao-ket-qua-huy-doi-ve.md §3.1. TicketRequestResultWiringTests ghim đúng chỗ nối này.
+builder.Services.AddScoped<ITicketRequestResultNotifier, TicketRequestResultNotifier>();
+
+// Duyệt / từ chối yêu cầu huỷ và đổi vé (US 5, dòng 5 Sprint 4 — Phùng Duy Hoàng): PATCH
+// /api/cancellation-requests/{id} và PATCH /api/ticket-changes/{id}. Service tiêm THẲNG
+// ITicketRequestResultNotifier ở trên rồi gọi nó SAU khi lưu — không bọc decorator như ba khối
+// SeatHold* bên dưới: decorator ở đó tồn tại để người thêm thông báo không phải sửa file của người
+// khác (luật E1), chứ bản thân lớp bọc không có ích gì. Interface này không có factory nào bọc.
+builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewService>();
+
 builder.Services.AddScoped<SeatHoldCreateService>();
 builder.Services.AddScoped<ISeatHoldCreateService>(provider => new NotifyingSeatHoldCreateService(
     provider.GetRequiredService<SeatHoldCreateService>(),
@@ -573,6 +587,14 @@ app.MapControllers();
 // trên: negotiate và WebSocket handshake đều là request đi qua CORS, thiếu UseCors là trình duyệt
 // chặn ngay từ bước negotiate chứ không tới được hub.
 app.MapHub<SeatMapHub>("/hubs/seat-map");
+
+// Hub thông báo kết quả xử lý yêu cầu huỷ/đổi (US 5) — cùng khối đăng ký ở phần services.
+// KHÁC hub ghế: NotificationHub mang [Authorize] vì thông báo là dữ liệu riêng của một người, và
+// token đến từ query string "?access_token=…" (trình duyệt không đặt được header cho WebSocket) —
+// JwtMiddleware.ReadAccessTokenFromHubQueryAsync đọc token cho ĐÚNG tiền tố /hubs. Client không có
+// hàm nào gọi được lên hub: nhóm nhận suy từ ID người dùng trong token, không từ tham số client
+// (Hubs/NotificationHub.cs). Cùng yêu cầu SAU app.UseCors(AppCors) như hub ghế ở trên.
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
 
