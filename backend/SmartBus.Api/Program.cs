@@ -558,7 +558,7 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
     provider.GetRequiredService<ISeatMapNotifier>()));
 
 // Hoàn tiền (US 8, Sprint 4): MỘT lượt gọi cổng hoàn tiền cho một khoản — kiểm điều kiện theo
-// trigger, GIÀNH DÒNG bằng xmin TRƯỚC khi gọi cổng (docs/35 §4.2), ghi kết quả + đúng một dòng
+// trigger, GIÀNH DÒNG bằng xmin TRƯỚC khi gọi cổng (docs/40 §4.2), ghi kết quả + đúng một dòng
 // RefundLog. Task "Xử lý hoàn tiền thất bại + retry theo lịch" — Phùng Duy Hoàng (file này cũng
 // của Hoàng).
 // Ba người gọi phân biệt bằng trigger (chi tiết ở IRefundAttemptService): service hoàn tiền tự
@@ -597,6 +597,24 @@ builder.Services.AddScoped<IRefundAttemptService>(provider => new NotifyingRefun
 // vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
 builder.Services.AddScoped<IRefundRetryService, RefundRetryService>();
 builder.Services.AddHostedService<RefundRetryBackgroundService>();
+
+// Hoàn tiền (US 8, Sprint 4), phần đọc của hành khách: GET /api/refunds và
+// GET /api/refunds/{refundCode}.
+// Task "API tra cứu trạng thái hoàn tiền của giao dịch" (dòng 42 Sprint 4) — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự xem khoản hoàn của mình, quyền sở
+// hữu kiểm ngay trong truy vấn theo userId (khoản của người khác trả 404 chứ không 403). Lọc theo
+// paymentCode chính là câu "trạng thái hoàn tiền CỦA MỘT GIAO DỊCH" của task; lọc theo status trả
+// mảng rỗng khi mã lạ chứ không 400 (mục D3).
+// Hai bảng Refunds/RefundLogs đứng NGOÀI danh sách A9 nên service đọc thẳng DbSet, không đi qua
+// interface trung gian nào; migration đã có ở nhánh feature/8-migrate-refunds-refundlogs.
+// Các phần CÒN LẠI của bề mặt hoàn tiền chưa dựng và không thuộc task này: tạo khoản hoàn (Kiên,
+// dòng 39), gọi cổng (Hiếu, dòng 40), job thử lại theo lịch (Hoàng, dòng 41), đối soát (Kiên,
+// dòng 43) và ba endpoint quản trị GET /admin/refunds, POST /admin/refunds/{id}/retry,
+// GET /admin/refunds/export (dòng 46–47) — chưa có dòng đăng ký nào ở đây vì chưa có service.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR ghế, trước phần hạ tầng JWT/RBAC/CORS) để không
+// chèn vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
+builder.Services.AddScoped<IRefundLookupService, RefundLookupService>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);

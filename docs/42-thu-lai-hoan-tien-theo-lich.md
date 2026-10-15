@@ -4,9 +4,22 @@
 >
 > Việc này là **dòng 30** sheet Sprint 4 — *"Xử lý hoàn tiền thất bại + retry theo lịch"* (Cao · 5 điểm · Hoàng). Các dòng chung quanh: **27** Dăm (Migrate `Refunds`/`RefundLogs`) · **28** Kiên (service hoàn tiền tự động) · **29** Hiếu (gọi cổng MoMo/VNPay/ZaloPay) · **31** Dăm (API tra cứu trạng thái) · **32** Kiên (đối soát hằng ngày) · **33** Hạnh (màn theo dõi hành khách) · **34** Hoàng (thông báo kết quả) · **35–36** Băng (màn Admin + lọc/xuất) · **37–38** Vàng (test + kiểm thử chéo).
 >
-> ⚠️ **Hai cách đánh số**: tài liệu thiết kế US 8 (`docs/35` của Dăm) đánh số lệch +8 — việc trong tài liệu này là *"dòng 41"* ở đó. Cùng một task; sheet hiện hành gọi là dòng 30.
+> ⚠️ **Hai cách đánh số**: tài liệu thiết kế US 8 (`docs/40` của Dăm) đánh số lệch +8 — việc trong tài liệu này là *"dòng 41"* ở đó. Cùng một task; sheet hiện hành gọi là dòng 30.
 >
-> 🟢 **Trạng thái**: nhánh `feature/30-xu-ly-hoan-tien-that-bai-retry-theo-lich`, đứng trên nhánh CSDL hoàn tiền của Dăm (`feature/8-migrate-refunds-refundlogs`, chưa vào main). **11 file mới + Program.cs + 5 file test (43 bài mới)**; toàn bộ backend **1331/1331 xanh**. Chưa ai gọi service ngoài job — **Kiên (dòng 28) là bên gọi đầu tiên** với lượt `Initial`. Cổng hoàn tiền đang là **placeholder** (mọi lượt ra `Unresolved` cho tới khi Hiếu cắm cổng thật — dòng 29). Hai bảng `Refunds`/`RefundLogs` **chưa có trên CSDL chung** (theo `docs/35` §8.4: chỉ áp sau khi nhánh Dăm merge).
+> 🟢 **Trạng thái**: nhánh `feature/30-xu-ly-hoan-tien-that-bai-retry-theo-lich`, đứng trên nhánh CSDL hoàn tiền của Dăm (`feature/8-migrate-refunds-refundlogs`, chưa vào main). **11 file mới + Program.cs + 5 file test (43 bài mới)**; toàn bộ backend **1331/1331 xanh**. Chưa ai gọi service ngoài job — **Kiên (dòng 28) là bên gọi đầu tiên** với lượt `Initial`. Cổng hoàn tiền đang là **placeholder** (mọi lượt ra `Unresolved` cho tới khi Hiếu cắm cổng thật — dòng 29). Hai bảng `Refunds`/`RefundLogs` **chưa có trên CSDL chung** (theo `docs/40` §8.4: chỉ áp sau khi nhánh Dăm merge).
+>
+> 🔢 **Cập nhật 15/10/2026 — số hiệu và hai chỗ đã cũ.** Bản này viết ra với số `docs/40`, **đổi
+> thành `docs/42`** khi gộp vào `main`: `main` đã có `docs/40-csdl-hoan-tien.md` (tài liệu CSDL hoàn
+> tiền của Dăm, vào trước qua PR #203) nên bản này **nhường số** theo lối *"người viết sau nhường
+> số"* — Hoàng đã đồng ý. Cùng lượt đó **16 con trỏ `docs/35`** trong bản này trỏ về tài liệu CSDL
+> hoàn tiền đã đổi thành **`docs/40`** (`docs/35` nay là tài liệu xuất PDF báo cáo, US 21 — không
+> liên quan hoàn tiền), và **34 con trỏ cùng loại** trong code/test cũng vậy.
+>
+> Hai câu ở khối *"Trạng thái"* trên **đã cũ, giữ nguyên làm mốc lịch sử**: nhánh CSDL của Dăm
+> (`feature/8-migrate-refunds-refundlogs`) **đã vào `main`** qua PR #203 — nên điều kiện *"chỉ áp lên
+> CSDL sau khi merge"* ở §7 nay **đã thoả**, chỉ còn chờ chạy `dotnet ef database update`. Con số
+> **1331/1331** là lượt chạy của riêng nhánh này lúc đó; sau khi gộp `main`, toàn bộ backend là
+> **1460/1460**.
 
 ---
 
@@ -16,13 +29,13 @@
 | --- | --- | --- | --- |
 | **Kiên** | **28** | **§4.4**, §2.3 | Gọi `ExecuteAsync(..., Initial, ...)` ngay sau khi tạo khoản hoàn `Pending` — **bên gọi đầu tiên** |
 | **Hiếu** | **29** | **§3** | Cắm cổng hoàn tiền thật vào `IRefundGatewayCaller` — thay **một dòng** `Program.cs`, không đổi hợp đồng |
-| **Dăm** | 27, 31 | §2.3, §6 | Đối chiếu: giao thức giành dòng (`docs/35` §4.2) đã được cài đúng; bảng và migration vẫn thuộc nhánh Dăm |
+| **Dăm** | 27, 31 | §2.3, §6 | Đối chiếu: giao thức giành dòng (`docs/40` §4.2) đã được cài đúng; bảng và migration vẫn thuộc nhánh Dăm |
 | **Kiên** | **32** | **§5** | Khoản `Unresolved → Pending` là **đầu vào của đối soát** — hàng đợi tự động KHÔNG nhặt chúng |
 | **Băng** | **35**, 36 | **§4.5** | Nút "Thử lại" → lượt `ManualRetry`; `retryCount` hiển thị gồm cả lượt thử tay |
 | **Hạnh** | 33 | §2.2, §4.2 | Ba giá trị `Status`; `Pending` gồm cả "chưa gọi được cổng" — không phải lỗi hiển thị |
 | **Giàng A Vàng** | 37–38 | §6 | Danh sách 43 bài test đã có — khỏi viết trùng, biết chỗ nào còn trống |
 
-**Nguồn gốc nhiệm vụ** — `docs/35` §6, dòng giao cho Hoàng (nguyên văn):
+**Nguồn gốc nhiệm vụ** — `docs/40` §6, dòng giao cho Hoàng (nguyên văn):
 
 > - **Hoàng** (dòng 41) — job thử lại theo lịch. 🔴 **Giành dòng bằng `xmin` TRƯỚC khi gọi cổng** (§4.2) — đây là chỗ dễ sai nhất và sai thì mất tiền thật. Ghi `NextRetryAt` theo chính sách (§2.6); hết lịch thì để `null`, **đừng** thêm giá trị enum mới. ⚠️ **Đừng** xếp lịch cho khoản có lượt cuối là `Unresolved` (§3.2).
 
@@ -56,7 +69,7 @@ Test mới (5 file, **43 bài**): `RefundRetryPolicyTests` (10) · `RefundAttemp
 | ✅ Có làm | ❌ Không làm (việc của ai) |
 | --- | --- |
 | Quét khoản `Failed` tới hạn theo `(Status, NextRetryAt)` mỗi phút | Tạo khoản hoàn (`RefundCode`, `Source`, `Amount`) — **dòng 28 Kiên** |
-| **Giành dòng bằng `xmin` TRƯỚC khi gọi cổng** (`docs/35` §4.2) | Nói chuyện với MoMo/VNPay/ZaloPay — **dòng 29 Hiếu** (service chỉ gọi qua seam) |
+| **Giành dòng bằng `xmin` TRƯỚC khi gọi cổng** (`docs/40` §4.2) | Nói chuyện với MoMo/VNPay/ZaloPay — **dòng 29 Hiếu** (service chỉ gọi qua seam) |
 | Gọi cổng qua `IRefundGatewayCaller` — mỗi khoản một lượt gọi tại một thời điểm | Tính số tiền hoàn — tiền là `Refund.Amount` **đã ghi**, không đọc lại vé |
 | Ghi `RefundLogs` **một dòng mỗi lượt gọi** — kể cả lượt hỏng lẫn lượt `Unresolved` | Lật trạng thái vé / hủy-đổi vé — nhóm huỷ-đổi (dòng 5 Sprint 4) |
 | Cập nhật `Status` / `FailReason` / `NextRetryAt` / `ProcessedAt` / `UpdatedAt` | Đối soát khoản `Unresolved` với sao kê cổng — **dòng 32 Kiên** |
@@ -67,7 +80,7 @@ Test mới (5 file, **43 bài**): `RefundRetryPolicyTests` (10) · `RefundAttemp
 
 ### 2.3 Giao thức giành dòng — trái tim của cả việc
 
-Đúng theo `docs/35` §4.2: **đọc → sửa → `SaveChanges()` (câu UPDATE có `WHERE "xmin" = <giá trị đã đọc>)` → RỒI MỚI gọi cổng**. Cửa sổ đua nằm giữa "đọc" và "ghi"; lượt thua nhận `DbUpdateConcurrencyException` và **bỏ lượt trong im lặng có kiểm soát**:
+Đúng theo `docs/40` §4.2: **đọc → sửa → `SaveChanges()` (câu UPDATE có `WHERE "xmin" = <giá trị đã đọc>)` → RỒI MỚI gọi cổng**. Cửa sổ đua nằm giữa "đọc" và "ghi"; lượt thua nhận `DbUpdateConcurrencyException` và **bỏ lượt trong im lặng có kiểm soát**:
 
 | Tình huống | Cơ chế | Test ghìm |
 | --- | --- | --- |
@@ -96,10 +109,10 @@ Lượt thua **không ghi `RefundLogs`** — nhật ký chỉ có dòng cho nh�
 Ba điểm dễ đọc nhầm:
 
 - **Lượt quét đầu tiên của job cho một khoản đã `Failed` đã là `ScheduledRetry` #1** → hỏng tiếp thì hẹn **+30 phút**, KHÔNG phải +5. Nấc +5 phút chỉ sinh ra từ một lượt `Initial` hỏng (đường của Kiên). Ghim đúng con số ở `Moc_thoi_gian_di_xuyen_suot_luot_quet`.
-- **Thử tay tiêu nấc y như thử tự động** — k đếm theo nhật ký, mà nhật ký không phân biệt ai bấm (`docs/35` §3.4). Quản trị bấm tay liên tục có thể đốt hết thang.
+- **Thử tay tiêu nấc y như thử tự động** — k đếm theo nhật ký, mà nhật ký không phân biệt ai bấm (`docs/40` §3.4). Quản trị bấm tay liên tục có thể đốt hết thang.
 - **Hết thang vẫn thử tay được** — `ManualRetry` cố ý KHÔNG đọc `NextRetryAt` (`Bấm_tay_tren_khoan_da_het_thang_van_chay`); nhưng lượt tay hỏng sau khi hết thang lại ra `null` tiếp.
 
-### 2.5 Bốn bất biến (`docs/35` §4.3) — ai giữ
+### 2.5 Bốn bất biến (`docs/40` §4.3) — ai giữ
 
 | Bất biến | Ai giữ | Ghim ở đâu |
 | --- | --- | --- |
@@ -110,7 +123,7 @@ Ba điểm dễ đọc nhầm:
 
 ### 2.6 Quyết định cài đặt (đọc trước khi sửa service)
 
-1. **Giành dòng bằng `xmin` qua EF, không khoá bi quan** — cột `xmin` đã khai `IsRowVersion()` trên `Refund`; EF tự đưa nó vào `WHERE` của câu UPDATE. Không `SELECT ... FOR UPDATE`, không bảng khoá riêng (`docs/35` §4.2 chốt).
+1. **Giành dòng bằng `xmin` qua EF, không khoá bi quan** — cột `xmin` đã khai `IsRowVersion()` trên `Refund`; EF tự đưa nó vào `WHERE` của câu UPDATE. Không `SELECT ... FOR UPDATE`, không bảng khoá riêng (`docs/40` §4.2 chốt).
 2. **Thua cuộc đua là chuyện thường, không phải lỗi** — log `Information`; job không dừng, không `LogError` (nếu không, mỗi lần quản trị bấm tay nhanh hơn job là một dòng đỏ vô nghĩa).
 3. **Mỗi khoản một scope riêng** (`IServiceScopeFactory`) — một `AppDbContext` dùng chung cho cả lượt quét nghĩa là mọi thay đổi của cả lượt nằm trong một mẻ dở dang; một khoản ném giữa đường là kéo theo cả lượt.
 4. **Hai lượt ghi, lượt thứ hai có đường cứu** — lượt ghi *giành dòng* trước khi gọi cổng (bắt buộc); lượt ghi *kết quả* sau khi cổng trả lời. Lượt thứ hai đứt thì `LogError` với thông điệp **"TIỀN CÓ THỂ ĐÃ ĐI…"**, gỡ entity khỏi `ChangeTracker` và ghi lại — không bao giờ nuốt im lặng.
@@ -133,15 +146,15 @@ Task<RefundGatewayCallOutcome> CallAsync(
 ```
 
 - **`RefundId` vừa là khoá chống trùng** gửi kèm cổng (idempotency key) — lượt gửi lại vì mạng đứt không được tạo giao dịch hoàn thứ hai.
-- **`MethodCode` luôn lấy từ `Payments.MethodCode` của giao dịch gốc** (`docs/35` §2.5) — service đã đọc sẵn và truyền vào; cổng thật không phải tra lại, cũng không nhận phương thức từ tham số người dùng.
+- **`MethodCode` luôn lấy từ `Payments.MethodCode` của giao dịch gốc** (`docs/40` §2.5) — service đã đọc sẵn và truyền vào; cổng thật không phải tra lại, cũng không nhận phương thức từ tham số người dùng.
 - **`Amount` là con số đã ghi trên `Refund`** — không tính lại từ vé.
-- **Ba giá trị `Result` là ba thái độ với tiền**: `Succeeded` = chắc chắn xong (có mã giao dịch cổng); `Failed` = cổng **từ chối dứt khoát**, chắc chắn tiền KHÔNG đi; `Unresolved` = **không biết** (timeout, mạng đứt, lỗi mơ hồ). Đoán sai hai chiều đều mất tiền: nhận `Succeeded` nhầm là báo khách tiền đã về khi chưa gửi ai; nhận `Failed` nhầm là job gọi lại một khoản **có thể đã hoàn** → hoàn hai lần (`docs/35` §3.2).
+- **Ba giá trị `Result` là ba thái độ với tiền**: `Succeeded` = chắc chắn xong (có mã giao dịch cổng); `Failed` = cổng **từ chối dứt khoát**, chắc chắn tiền KHÔNG đi; `Unresolved` = **không biết** (timeout, mạng đứt, lỗi mơ hồ). Đoán sai hai chiều đều mất tiền: nhận `Succeeded` nhầm là báo khách tiền đã về khi chưa gửi ai; nhận `Failed` nhầm là job gọi lại một khoản **có thể đã hoàn** → hoàn hai lần (`docs/40` §3.2).
 
 ### 3.2 `PlaceholderRefundGatewayCaller` — vì sao luôn `Unresolved`
 
 Lớp cắm tạm log `Warning` mỗi lượt rồi trả `{ Result = Unresolved, Message = "Chưa nối cổng hoàn tiền thật (task dòng 29)." }`. Nó **không bao giờ bịa** `Succeeded`/`Failed` — vì bịa một trong hai là mất tiền thật, còn `Unresolved` chỉ đẩy khoản về bàn đối soát.
 
-**Hệ quả đang sống**: hôm nay mọi lượt gọi ra `Unresolved` → khoản về `Pending`, `NextRetryAt = null` → hàng đợi tự động đứng yên (không xếp lịch cho lượt `Unresolved` — luật của `docs/35` §3.2). Đường thử lại theo thang chỉ sống dậy khi Hiếu cắm cổng thật trả về `Failed`. Đừng đọc việc "job chạy mà không thấy retry" là job hỏng.
+**Hệ quả đang sống**: hôm nay mọi lượt gọi ra `Unresolved` → khoản về `Pending`, `NextRetryAt = null` → hàng đợi tự động đứng yên (không xếp lịch cho lượt `Unresolved` — luật của `docs/40` §3.2). Đường thử lại theo thang chỉ sống dậy khi Hiếu cắm cổng thật trả về `Failed`. Đừng đọc việc "job chạy mà không thấy retry" là job hỏng.
 
 ### 3.3 Hiếu cắm cổng thật — ba việc
 
@@ -178,7 +191,7 @@ Service **không tự đọc đồng hồ** — mọi mốc (`NextRetryAt`, `Pro
 
 ### 4.4 Kiên (dòng 28) — lượt `Initial`, bên gọi đầu tiên
 
-Sau khi tạo khoản hoàn `Pending` (`RefundCode` unique, `Source`, `Amount`, giữ 4 bất biến §2.5 — nhớ bất biến 1), gọi `ExecuteAsync(id, RefundLogTrigger.Initial, now)`. Hỏng ở lượt này sinh nấc **+5 phút** — nấc duy nhất mà chỉ đường của Kiên tạo ra được. Vi phạm unique `RefundCode` lúc tạo = **thành công idempotent** (`docs/35` §6), không phải lỗi cần xử lý.
+Sau khi tạo khoản hoàn `Pending` (`RefundCode` unique, `Source`, `Amount`, giữ 4 bất biến §2.5 — nhớ bất biến 1), gọi `ExecuteAsync(id, RefundLogTrigger.Initial, now)`. Hỏng ở lượt này sinh nấc **+5 phút** — nấc duy nhất mà chỉ đường của Kiên tạo ra được. Vi phạm unique `RefundCode` lúc tạo = **thành công idempotent** (`docs/40` §6), không phải lỗi cần xử lý.
 
 ### 4.5 Băng (dòng 35) — nút "Thử lại"
 
@@ -190,14 +203,14 @@ Nút gọi endpoint `ManualRetry` (§3.3). Hai điều để hiển thị đúng
 
 - **Nhịp 1 phút không ghim bằng test** — cố ý; test gọi thẳng `SweepAsync(now)`, nhịp là quyết định vận hành.
 - **Thua cuộc đua không ghi gì cả** — không `RefundLogs`, không `UpdatedAt`; chỉ một dòng `Information` phía job. Nhật ký "số dòng = số lượt tiền ra ngoài" vì vậy luôn đúng.
-- **Placeholder làm mọi lượt ra `Unresolved → Pending`** — không xếp lịch, đúng luật (`docs/35` §3.2: đừng thử lại khoản có thể đã hoàn). Thang thử lại chỉ sống khi cổng thật trả `Failed`.
+- **Placeholder làm mọi lượt ra `Unresolved → Pending`** — không xếp lịch, đúng luật (`docs/40` §3.2: đừng thử lại khoản có thể đã hoàn). Thang thử lại chỉ sống khi cổng thật trả `Failed`.
 - **Khoản `Pending` do `Unresolved` chỉ hiện ra qua đối soát (dòng 32)** — hàng đợi quét chỉ nhặt `Failed`; Kiên phải đọc `RefundLogs` (lượt cuối `Unresolved`) để nhặt chúng lên bàn.
 - **Hết thang (`k ≥ 5`) → `NextRetryAt = null` vĩnh viễn trên đường tự động** — quản trị vẫn bấm tay được, nhưng lượt tay hỏng cũng ra `null` tiếp; muốn chạy lại thang phải tạo khoản mới (chỉ mục lọc duy nhất cho phép: chỉ tính `Pending`/`Succeeded`).
 - **Sập giữa giành dòng và lượt ghi kết quả** → `LogError` "TIỀN CÓ THỂ ĐÃ ĐI…" + gỡ entity + ghi lại; ghi lại cũng đứt thì khoản nằm `Pending`, `GatewayTransactionId` null — **đối soát (dòng 32) phải nhặt được cả trường hợp này**.
 - **`xmin` chỉ cưỡng chế được trên nhà cung cấp có cột hệ thống (PostgreSQL)** — InMemory/SQLite không có; `RefundClaimConcurrencyTests` Part B dựng lại lượt thua trên SQLite thật bằng interceptor bơm `xmin` (cơ chế `DbUpdateConcurrencyException` là thật, chỉ nguồn tăng `xmin` là giả).
 - **Lượt quét không phân trang** — mọi khoản tới hạn trong một lượt; đủ cho quy mô hiện tại, ghi lại để biết trước khi bảng lớn.
 - **PR này không mở endpoint nào** — `api-contract.md` không đụng; endpoint "Thử lại" + API tra cứu (dòng 31) là việc của các dòng khác.
-- **`Refund`/`RefundLog`/`xmin`/migration thuộc nhánh Dăm** (`feature/8-migrate-refunds-refundlogs`, chưa vào main) — nhánh này xếp **trên** nhánh đó; merge theo thứ tự nhánh Dăm trước (hoặc cùng lúc), và chỉ **sau khi merge** mới áp lên CSDL chung (`docs/35` §8.4).
+- **`Refund`/`RefundLog`/`xmin`/migration thuộc nhánh Dăm** (`feature/8-migrate-refunds-refundlogs`, chưa vào main) — nhánh này xếp **trên** nhánh đó; merge theo thứ tự nhánh Dăm trước (hoặc cùng lúc), và chỉ **sau khi merge** mới áp lên CSDL chung (`docs/40` §8.4).
 
 ---
 
@@ -215,4 +228,4 @@ Nút gọi endpoint `ManualRetry` (§3.3). Hai điều để hiển thị đúng
 
 **Bộ backend đầy đủ: 1331/1331 xanh** (trước nhánh: 1288 — nhánh này đứng trên nhánh Dăm, chưa gồm các dòng 5/18/23 vừa vào main).
 
-**Bảng CSDL:** `Refunds`/`RefundLogs` thuộc migration `20261014153025_Sprint4_Refunds_RefundLogs` của **Dăm** — **chưa có trên CSDL chung**. Theo `docs/35` §8.4: merge nhánh Dăm rồi mới `dotnet ef database update --project backend/SmartBus.Api`. Trước mốc đó, mọi endpoint chạm hai bảng sẽ lỗi `relation "Refunds" does not exist`; riêng job thì thử lại mỗi phút và log `Error` — chấp nhận được, không phải sự cố.
+**Bảng CSDL:** `Refunds`/`RefundLogs` thuộc migration `20261014153025_Sprint4_Refunds_RefundLogs` của **Dăm** — **chưa có trên CSDL chung**. Theo `docs/40` §8.4: merge nhánh Dăm rồi mới `dotnet ef database update --project backend/SmartBus.Api`. Trước mốc đó, mọi endpoint chạm hai bảng sẽ lỗi `relation "Refunds" does not exist`; riêng job thì thử lại mỗi phút và log `Error` — chấp nhận được, không phải sự cố.

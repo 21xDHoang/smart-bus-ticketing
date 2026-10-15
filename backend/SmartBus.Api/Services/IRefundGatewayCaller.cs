@@ -9,7 +9,7 @@ namespace SmartBus.Api.Services;
 /// Người gọi duy nhất hiện tại: <c>RefundAttemptService</c> (task *"Xử lý hoàn tiền thất bại +
 /// retry theo lịch"* — Phùng Duy Hoàng), chạy trong job thử lại theo lịch (dòng 30/41) và lượt
 /// gọi tay từ màn Admin. Service gọi <b>ngay sau</b> khi giành được dòng bằng <c>xmin</c> — thứ tự
-/// đó là bắt buộc, xem docs/35 §4.2.
+/// đó là bắt buộc, xem docs/40 §4.2.
 ///
 /// ⚠️ Bản cài đặt thật là task *"API gọi cổng hoàn tiền"* (dòng 29 — Hiếu), tạm thời chưa dựng;
 /// bản đang đăng ký trong DI là <see cref="PlaceholderRefundGatewayCaller"/> (luôn trả

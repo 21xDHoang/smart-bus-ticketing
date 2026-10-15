@@ -7,7 +7,7 @@ namespace SmartBus.Api.Services;
 
 /// <summary>
 /// Thực hiện MỘT lượt gọi cổng hoàn tiền (US 8 — task *"Xử lý hoàn tiền thất bại + retry theo
-/// lịch"*, Phùng Duy Hoàng). Trình tự bắt buộc, đúng docs/35 §4.2:
+/// lịch"*, Phùng Duy Hoàng). Trình tự bắt buộc, đúng docs/40 §4.2:
 ///
 /// 1. Đọc khoản hoàn + giao dịch gốc; kiểm tra lượt gọi có đủ điều kiện với <c>trigger</c> không;
 /// 2. GIÀNH DÒNG bằng một lượt ghi có khoá phiên bản <c>xmin</c> (<c>SaveChanges</c> trên entity
@@ -51,7 +51,7 @@ public class RefundAttemptService : IRefundAttemptService
         DateTime now,
         CancellationToken cancellationToken = default)
     {
-        // Nạp kèm giao dịch gốc: phương thức hoàn tiền đọc từ đó (docs/35 §6 — hoàn tiền luôn quay
+        // Nạp kèm giao dịch gốc: phương thức hoàn tiền đọc từ đó (docs/40 §6 — hoàn tiền luôn quay
         // về đúng kênh đã thu, không có tham số chọn kênh từ người dùng).
         var refund = await _db.Refunds
             .Include(r => r.Payment)
@@ -74,7 +74,7 @@ public class RefundAttemptService : IRefundAttemptService
             };
         }
 
-        // ── GIÀNH DÒNG (docs/35 §4.2) ────────────────────────────────────────────────────────
+        // ── GIÀNH DÒNG (docs/40 §4.2) ────────────────────────────────────────────────────────
         // Đưa khoản về trạng thái "đang gọi": Pending + xoá sạch dấu vết lượt trước.
         refund.Status = RefundStatus.Pending;
         refund.NextRetryAt = null;
@@ -115,7 +115,7 @@ public class RefundAttemptService : IRefundAttemptService
         // này chạm được khoản cho tới khi nó ghi kết quả bên dưới.
         var call = await CallGatewaySafelyAsync(refund, cancellationToken);
 
-        // Áp kết quả — ba bất biến service-level của docs/35 §4.3 nằm gọn trong khối này:
+        // Áp kết quả — ba bất biến service-level của docs/40 §4.3 nằm gọn trong khối này:
         //   • FailReason khác null ⟺ Status = Failed;
         //   • NextRetryAt khác null CHỈ khi Status = Failed;
         //   • Unresolved giữ nguyên Pending — không xếp lịch, không chốt ProcessedAt.
@@ -165,7 +165,7 @@ public class RefundAttemptService : IRefundAttemptService
                 break;
         }
 
-        // Nhật ký cho MỌI lượt đã gọi — kể cả Unresolved (docs/35 §6): thiếu dòng log của lượt
+        // Nhật ký cho MỌI lượt đã gọi — kể cả Unresolved (docs/40 §6): thiếu dòng log của lượt
         // không trả lời là mất đúng bằng chứng mà bước đối soát cần.
         _db.RefundLogs.Add(new RefundLog
         {
@@ -223,7 +223,7 @@ public class RefundAttemptService : IRefundAttemptService
 
     /// <summary>
     /// Lượt gọi này có đủ điều kiện cho khoản ở trạng thái hiện tại không. Điều kiện khác nhau theo
-    /// <paramref name="trigger"/>; thiếu vế nào là mở đường cho một lượt gọi trùng (docs/35 §4.2).
+    /// <paramref name="trigger"/>; thiếu vế nào là mở đường cho một lượt gọi trùng (docs/40 §4.2).
     /// </summary>
     private static bool IsEligible(Refund refund, RefundLogTrigger trigger, DateTime now) => trigger switch
     {

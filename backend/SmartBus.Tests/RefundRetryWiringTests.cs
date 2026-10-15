@@ -30,7 +30,7 @@ public class RefundRetryWiringTests
 
         // Single chứ không Contains: đăng ký hai lần thì hai vòng lặp cùng quét một bảng — lượt quét
         // thứ hai nhặt đúng các khoản còn Failed tới hạn, nhưng lượt gọi cổng vẫn chỉ ra ngoài một
-        // lần cho mỗi khoản (giao thức giành dòng ở docs/35 §4.2 lo phần đó). Khác biệt không nằm ở
+        // lần cho mỗi khoản (giao thức giành dòng ở docs/40 §4.2 lo phần đó). Khác biệt không nằm ở
         // tiền: nằm ở chỗ đôi khi mỗi khoản bị hai lượt giành nhau và lượt thua ghi log "bỏ qua"
         // như có sự cố, làm log vận hành đọc sai hoàn toàn.
         Assert.Single(job);

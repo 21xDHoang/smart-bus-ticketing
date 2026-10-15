@@ -16,7 +16,7 @@ public class RefundGatewayCallOutcome
     /// Cổng trả lời gì: <see cref="RefundLogResult.Succeeded"/> (đã hoàn tiền),
     /// <see cref="RefundLogResult.Failed"/> (từ chối/lỗi — được phép xếp lịch thử lại), hoặc
     /// <see cref="RefundLogResult.Unresolved"/> (không trả lời — khoản giữ nguyên
-    /// <see cref="RefundStatus.Pending"/> và KHÔNG xếp lịch, xem docs/35 §4.3).
+    /// <see cref="RefundStatus.Pending"/> và KHÔNG xếp lịch, xem docs/40 §4.3).
     /// </summary>
     public RefundLogResult Result { get; set; }
 

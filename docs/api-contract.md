@@ -4949,6 +4949,258 @@ dotnet ef database update
 Checklist soát migration, danh sách file đã có sẵn, và các chốt cần đối chiếu: xem
 **`docs/27-huong-dan-migrate-vouchers.md`**.
 
+---
+
+## Hoàn tiền — `/refunds`
+
+> Story 8 *"Hoàn tiền tự động"*. 🟢 **Bảng `Refunds` + `RefundLogs` — migration ĐÃ SINH, ĐÃ SOÁT**
+> (nhánh `feature/8-migrate-refunds-refundlogs`, Vàng Thị Dăm — task *"Migrate bảng Refunds,
+> RefundLogs"*, dòng 38 Sprint 4). Entity + cấu hình: `AppDbContext.Refund.cs`; lý do từng cột, chỉ
+> mục và bất biến: **`docs/40-csdl-hoan-tien.md`**.
+>
+> 🔴 **A9 KHÔNG có hai bảng này.** Đây là nhóm bảng thứ tư ngoài danh sách 20 bảng đóng băng, sau
+> `CancellationRequests` + `TicketChanges` (docs/32 §1), `Notifications` (docs/33 §1) và
+> `TicketValidations` (docs/34 §1). Nhóm cần bổ sung A9 **một lượt** cho cả bốn nhóm.
+>
+> Mục này chốt phần **ĐỌC** của hoàn tiền — task dòng 42 *"API tra cứu trạng thái hoàn tiền của
+> giao dịch"* (Vàng Thị Dăm). Ba mảnh còn lại của story **chưa có trong tài liệu này** và chưa có
+> chủ ở tầng API: `POST /admin/refunds/{id}/retry` (dòng 41), `GET /admin/refunds` có lọc + phân
+> trang (màn dòng 46–47), và `GET /admin/refunds/export` (dòng 47). Hình dạng **dự kiến** của ba
+> endpoint đó nằm ở đầu `frontend/src/api/refundAdminApi.ts` — **chưa cam kết** cho tới khi có mục
+> trong file này.
+
+### Vì sao hoàn tiền là bảng RIÊNG, không phải một cột của `CancellationRequests`
+
+Bảng yêu cầu huỷ trả lời *"có cho huỷ không"*; bảng hoàn tiền trả lời *"đã trả được tiền chưa"*.
+Hai câu hỏi khác nhau và **trả lời lệch nhau được trong nhiều ngày**: quản lý duyệt huỷ xong mà
+cổng hoàn tiền lỗi thì yêu cầu đã `Approved` trong khi khoản hoàn còn `Pending` — có khi `Failed`
+rồi phải thử lại. Gộp hai thứ vào một cột trạng thái là bịt mất đúng khoảng lệch đó.
+
+Hệ quả trực tiếp cho mục này: **một khoản hoàn không có trạng thái "đã huỷ"** hay bất kỳ giá trị
+nào suy từ yêu cầu huỷ. Ai đọc hợp đồng này để vẽ màn hình thì đọc `status` của khoản hoàn, đừng
+suy từ trạng thái yêu cầu huỷ.
+
+### `Refund` — hình dạng trả về
+
+Khớp đúng interface `Refund` trong bản nháp FE đã merge (`frontend/src/api/refundAdminApi.ts`,
+PR #187, màn quản trị của Băng) — trường **giữ nguyên tên**, không đổi một chữ nào:
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | GUID | Khoá dòng |
+| `refundCode` | string | `"RF-xxxxxxxx"` — duy nhất, **khoá tra cứu bằng mắt** |
+| `source` | string | `"PaymentFailure"` \| `"TicketCancellation"` |
+| `ticketCode` | string \| **null** | ⚠️ **nullable** — xem mục "Bảy trường nullable" bên dưới |
+| `routeCode` | string \| **null** | ⚠️ nullable, cùng lý do |
+| `routeName` | string \| **null** | ⚠️ nullable |
+| `origin` | string \| **null** | ⚠️ nullable |
+| `destination` | string \| **null** | ⚠️ nullable |
+| `departureTime` | ISO 8601 \| **null** | ⚠️ nullable — giờ khởi hành của chuyến (UTC) |
+| `seatNumber` | string \| **null** | ⚠️ nullable |
+| `passengerName` | string | Họ tên người **nhận lại** tiền (`Users.FullName`) |
+| `amount` | number | Số tiền hoàn (VND), `numeric(12,2)` |
+| `methodName` | string | Mã phương thức của giao dịch gốc — `"MoMo"` \| `"VNPay"` \| `"ZaloPay"` \| `"BankCard"` |
+| `paymentCode` | string | `"PM-xxxxxxxx"` — **khoá tra theo giao dịch** |
+| `gatewayTransactionId` | string \| null | Mã giao dịch phía cổng của lượt hoàn **thành công**; null khi chưa có |
+| `status` | string | `"Pending"` \| `"Succeeded"` \| `"Failed"` |
+| `failReason` | string \| null | Lý do lượt gọi **gần nhất** thất bại; chỉ khác null khi `status` = `"Failed"` |
+| `retryCount` | number | Số lượt **gọi lại** cổng (không tính lượt gọi đầu) — xem mục riêng |
+| `createdAt` | ISO 8601 | Lúc hệ thống tạo khoản hoàn |
+| `processedAt` | ISO 8601 \| null | Lúc cổng chốt kết quả cuối; null khi còn `Pending` |
+| `updatedAt` | ISO 8601 \| null | Chỉ đổi khi dòng bị sửa (thử lại, lật trạng thái) |
+
+#### Bảy trường nullable — ⚠️ FE phải nới kiểu
+
+Bản nháp `refundAdminApi.ts` khai `ticketCode`, `routeCode`, `routeName`, `origin`, `destination`,
+`departureTime`, `seatNumber` là `string` **không nullable**. Hợp đồng này khai **nullable**, và đây
+là chủ ý, không phải sót:
+
+Khoản hoàn nguồn `PaymentFailure` **thường không có vé nào**. Vé chỉ được phát hành sau khi tiền về
+thành công (mục "Phát hành vé sau khi thanh toán"), nên giao dịch hỏng thì chưa có vé — và đó chính
+là nhánh mà US 8 nêu ra **đầu tiên**. Bảy trường trên đều suy từ `Tickets → Trips → Routes →
+Seats`, nên chúng null **cùng lúc** với `ticketCode`, không bao giờ lệch nhau.
+
+> 🔴 Đừng "sửa" bằng chuỗi rỗng. `departureTime: ""` đi qua `new Date("")` ra `Invalid Date` — màn
+> hình hiện `NaN` chứ không hiện ô trống. Null là giá trị duy nhất nói đúng "không có chuyến nào
+> gắn với khoản hoàn này", cùng lối `boardingStopName` của `/tickets`.
+
+#### `retryCount` — con số này đếm ở đâu ra
+
+`Refunds` **cố ý không có cột đếm** (lý do: docs/40 §2.4 — số lượt gọi là phép đếm trên nhật ký,
+không phải trạng thái của khoản hoàn). Giá trị này là:
+
+```
+COUNT(*) trên RefundLogs WHERE RefundId = <khoản> AND Trigger <> 'Initial'
+```
+
+Nghĩa là **số lượt gọi LẠI**, không phải tổng số lượt gọi: lượt gọi đầu tiên (`Initial`, do service
+hoàn tiền tự động thực hiện) không tính. Khớp đúng ngữ nghĩa bản nháp FE — dòng vừa tạo có
+`retryCount = 0`.
+
+#### `status` và số dòng — đọc `status`, ĐỪNG đếm dòng
+
+🔴 Một giao dịch **có thể có nhiều dòng** trong `Refunds` theo thời gian: khoản đầu `Failed` hết lịch
+thử lại rồi bị bỏ, sau đó phát sinh khoản mới. Chỉ mục duy nhất `IX_Refunds_PaymentId_Active` chỉ
+chặn **hai khoản chưa thất bại** cùng lúc, cố ý **không** chặn dòng `Failed` cũ.
+
+Nên câu hỏi *"giao dịch này đã được hoàn tiền chưa"* trả lời bằng **`status` của dòng**, không bằng
+số dòng trả về. FE lọc theo `status` chứ đừng suy từ `items.length`.
+
+### Endpoints
+
+| Method | Endpoint | Task | Trạng thái |
+|---|---|---|---|
+| GET | `/refunds/{refundCode}` | *"API tra cứu trạng thái hoàn tiền của giao dịch"* (dòng 42) — Vàng Thị Dăm | ✅ đã làm |
+| GET | `/refunds?paymentCode=&status=` | *"API tra cứu trạng thái hoàn tiền của giao dịch"* (dòng 42) — Vàng Thị Dăm | ✅ đã làm |
+| POST | `/admin/refunds/{id}/retry` | *"Xử lý hoàn tiền thất bại + retry theo lịch"* (dòng 41) — Phùng Duy Hoàng | Chưa làm |
+| GET | `/admin/refunds` | màn *"Admin quản lý yêu cầu hoàn tiền"* (dòng 46–47) — Nguyễn Đình Băng | Chưa làm |
+| GET | `/admin/refunds/export` | *"Component lọc và xuất danh sách hoàn tiền"* (dòng 47) — Nguyễn Đình Băng | Chưa làm |
+
+Cả hai endpoint đã làm đều **yêu cầu đăng nhập** (`[Authorize]` trần, **không** policy vai trò) và
+**chỉ trả khoản hoàn của chính người gọi** — phạm vi "của tôi" nằm NGAY TRONG TRUY VẤN theo
+`Refunds.UserId`, cùng lối `/seat-holds/{sessionCode}`, `/tickets/me` và `/feedbacks/me`. Không có
+tham số nào để dò khoản hoàn của người khác, và ca "của người khác" trả **404** chứ không phải 403 —
+không để lộ khoản hoàn nào đang tồn tại.
+
+> **Vì sao không gắn policy `ManagerOrAbove`?** Vì đây là cửa của **hành khách**: người vừa bị trừ
+> tiền là người cần tra nhất. Nhóm quản trị tra khoản hoàn của người khác bằng `GET /admin/refunds`
+> (chưa làm) — hai đối tượng, hai bề mặt, cùng lối `/feedbacks` (của tôi) và `/admin/feedbacks`
+> (toàn hệ thống).
+
+#### `GET /refunds/{refundCode}` — tra theo mã hoàn tiền
+
+```json
+// 200
+{
+  "id": "9d5f1e2c-0000-0000-0000-000000000000",
+  "refundCode": "RF-9d5f1e2c",
+  "source": "TicketCancellation",
+  "ticketCode": "TK-08-9B0C1D",
+  "routeCode": "08",
+  "routeName": "Cầu Giấy — Bờ Hồ Hoàn Kiếm",
+  "origin": "Cầu Giấy",
+  "destination": "Bờ Hồ Hoàn Kiếm",
+  "departureTime": "2026-10-13T10:30:00Z",
+  "seatNumber": "A01",
+  "passengerName": "Nguyễn Văn An",
+  "amount": 7200.00,
+  "methodName": "MoMo",
+  "paymentCode": "PM-9d3e6a0b",
+  "gatewayTransactionId": "MM-99182220",
+  "status": "Succeeded",
+  "failReason": null,
+  "retryCount": 0,
+  "createdAt": "2026-10-11T08:00:00Z",
+  "processedAt": "2026-10-11T10:00:00Z",
+  "updatedAt": "2026-10-11T10:00:00Z"
+}
+```
+
+```json
+// 200 — nguồn PaymentFailure: không có vé nào, bảy trường vé/chuyến đều null
+{
+  "id": "4c1e7a2b-0000-0000-0000-000000000000",
+  "refundCode": "RF-4c1e7a2b",
+  "source": "PaymentFailure",
+  "ticketCode": null,
+  "routeCode": null,
+  "routeName": null,
+  "origin": null,
+  "destination": null,
+  "departureTime": null,
+  "seatNumber": null,
+  "passengerName": "Trần Thị Bình",
+  "amount": 12000.00,
+  "methodName": "VNPay",
+  "paymentCode": "PM-8f2b1d64",
+  "gatewayTransactionId": null,
+  "status": "Failed",
+  "failReason": "VNPay hoàn tiền quá hạn chờ phản hồi (timeout).",
+  "retryCount": 2,
+  "createdAt": "2026-10-14T05:00:00Z",
+  "processedAt": "2026-10-14T07:00:00Z",
+  "updatedAt": "2026-10-14T07:00:00Z"
+}
+```
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Tìm thấy khoản hoàn thuộc chính người gọi |
+| 401 | Không có token |
+| 404 | Mã không tồn tại **hoặc** thuộc người khác — cùng một câu, không phân biệt |
+
+**Không có nhánh 400.** `refundCode` là đoạn đường dẫn nên không có gì để validate: mã dài bao nhiêu
+cũng chỉ là một chuỗi tra không ra, và tra không ra là 404.
+
+So khớp mã là **đúng từng ký tự**, không bỏ qua hoa/thường — cùng lối `/seat-holds/{sessionCode}`
+so `SessionCode`. Mã do hệ thống sinh (`RF-` + hex) nên chỗ sinh và chỗ tra dùng chung một nguồn;
+muốn tra kiểu bỏ qua hoa/thường thì phải thêm chỉ mục hàm (`lower(RefundCode)`) và **bỏ được** chỉ
+mục unique hiện có — không đáng, và làm lệch với mọi mã khác của dự án.
+
+#### `GET /refunds` — tra theo mã giao dịch, và danh sách khoản hoàn của tôi
+
+Đây là endpoint chính của task dòng 42: *"trạng thái hoàn tiền **của giao dịch**"*.
+
+| Query | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `paymentCode` | ❌ | Mã giao dịch gốc (`Payments.PaymentCode`), dạng `"PM-xxxxxxxx"`. Tối đa 64 ký tự. **Bỏ trống = mọi khoản hoàn của tôi** |
+| `status` | ❌ | `Pending` \| `Succeeded` \| `Failed`. Tối đa 20 ký tự |
+
+```json
+// 200 — GET /refunds?paymentCode=PM-8f2b1d64 : trạng thái hoàn tiền của MỘT giao dịch
+[
+  {
+    "id": "4c1e7a2b-0000-0000-0000-000000000000",
+    "refundCode": "RF-4c1e7a2b",
+    "source": "PaymentFailure",
+    "status": "Failed",
+    "retryCount": 2,
+    "paymentCode": "PM-8f2b1d64",
+    "amount": 12000.00
+  }
+]
+```
+
+> Ví dụ trên lược bớt trường cho dễ đọc — **mọi dòng đều đủ 21 trường** như bảng "Hình dạng `Refund`".
+
+- Trả **mảng trần, không phân trang**, **mới nhất trước**. Một hành khách có vài khoản hoàn, và một
+  giao dịch có vài dòng — phân trang là nghi thức thừa (cùng lối `/feedbacks/me`,
+  `/monthly-passes/me`, `/tickets/me`).
+- 🔴 **Giao dịch không có khoản hoàn nào → 200 kèm `[]`, KHÔNG phải 404.** *"Giao dịch này không
+  phát sinh khoản hoàn nào"* là một **câu trả lời**, không phải lỗi — và là câu trả lời thường gặp
+  nhất (mọi giao dịch thành công đều rơi vào ca này). Trả 404 ở đây là bắt frontend coi "không có
+  hoàn tiền" như một sự cố.
+- 🔴 **`paymentCode` không tồn tại, hoặc là giao dịch của người khác → cũng 200 kèm `[]`.** Cùng một
+  câu trả lời cho cả ba ca, nên endpoint này **không dùng được để dò** xem một mã giao dịch có tồn
+  tại hay không. Phạm vi lọc theo `Refunds.UserId` đã chặn từ trong truy vấn.
+- `status` **gõ sai → 200 kèm `[]`**, không phải 400 (mục D3 của docs/03-quy-uoc.md): mã lạ có thể là
+  trạng thái hợp lệ trong tương lai, mà 400 ở đây làm màn hình cũ vỡ khi backend thêm giá trị mới.
+  Cùng lối `/feedbacks/me`.
+- Mã quá dài (>64 ký tự với `paymentCode`, >20 với `status`) → **400** theo cấu trúc lỗi chung
+  `{ message, errors }` — đây là ràng buộc hình dạng, khác hẳn "gõ sai mã".
+
+**Vì sao không có `GET /refunds/mine`.** Bản nháp `frontend/src/api/myRefundApi.ts` (nhánh
+`feature/8-man-hinh-theo-doi-hoan-tien`, task dòng 44 của Hạnh) ghi endpoint dự kiến là
+`GET /refunds/mine?status=`. Hợp đồng này **không** có đoạn `/mine`: danh sách này **vốn đã** là "của
+tôi" — phạm vi nằm trong truy vấn, không nằm ở đoạn đường dẫn. Thêm `/mine` là dựng hai đường dẫn
+cho cùng một câu hỏi, rồi phải trả lời câu tiếp theo *"vậy `/refunds` trần để làm gì?"* — và câu trả
+lời duy nhất hợp lý là "trả khoản hoàn của mọi người", tức là mở một cửa hành khách nhìn thấy dữ
+liệu của người khác. Danh sách toàn hệ thống là việc của `GET /admin/refunds`.
+
+> ⚠️ **Việc của Hạnh (dòng 44):** bản nháp `myRefundApi.ts` chưa merge — khi nối API thật thì đổi
+> `/refunds/mine` thành `/refunds` và **nới kiểu bảy trường nullable** ở mục trên. File đó đã ghi rõ
+> hình dạng endpoint của nó là *"CHƯA cam kết"*, nên đây là chỗ chốt lại chứ không phải đổi hợp đồng
+> đã hứa.
+
+### Bốn câu hỏi nhóm phải chốt — chưa có câu trả lời trong code
+
+| Câu hỏi | Hiện trạng |
+|---|---|
+| **Thông báo kết quả hoàn tiền đi kênh nào?** Bảng phân công dòng 45 ghi *"qua **email** và trên web"*, nhưng A8.5 chốt thông báo **chỉ in-app qua SignalR** + bảng `Notifications`, không email/SMS/Web Push | **Chưa cài.** Cùng dạng xung đột đã gặp ở dòng 7 (docs/33 §1) — nhóm nên chốt **một lần** cho cả hai |
+| **Cổng sandbox nào hoàn tiền được?** Dòng 40 (Hiếu) gọi cổng để hoàn; MoMo/VNPay/ZaloPay sandbox có API hoàn hay không chưa ai kiểm | Chưa kiểm — chặn dòng 40 |
+| **`Refunds` + `RefundLogs` bổ sung vào A9?** | Nhóm cần chốt — lần thứ **tư** việc "A9 lệch thực tế" được nhắc |
+| **Ai làm `GET /admin/refunds`?** Bảng phân công có màn (dòng 46–47) nhưng **không có dòng nào** giao API danh sách ở tầng backend | Chưa có chủ |
+
 ## Khung giờ cao điểm — `/reports/peak-hours`
 
 > Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có (`PeakHoursReportController` — Trần Trung Hiếu,

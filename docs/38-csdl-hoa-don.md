@@ -266,9 +266,15 @@ giờ** — sau khi có dữ liệu thì đắt hơn hẳn. A2 chốt entity s�
    `tripId` là hình dạng API (luật 5 — sửa contract trước). **Đừng sửa `Payments` vì mục này.**
 5. **Cấu hình `Email__*` phải có trước khi US 7 lên bản deploy** (§5 cảnh báo 2) — hiện chưa ai chạy
    thử đường gửi email thật lần nào.
-6. **Số thứ tự tài liệu đang bị chia cắt giữa ba nhánh chưa merge**: `docs/35`, `docs/36` (nhánh hoàn
-   tiền), `docs/37` (nhánh thông báo), `docs/38` (nhánh này). Số không đụng nhau, nhưng từ `main` thì
-   `docs/35`–`docs/38` **đều chưa đọc được**.
+6. **Số thứ tự tài liệu đang bị chia cắt giữa các nhánh** — ✅ **đã dọn một phần, 15/10/2026.** Câu
+   gốc ở đây nói `docs/35`–`docs/38` đều chưa đọc được từ `main`; nay **`35` và `36` đã hết vướng**:
+   hai tài liệu hoàn tiền đổi thành **`docs/40-csdl-hoan-tien.md`** và
+   **`docs/41-api-tra-cuu-hoan-tien.md`** (nhường số cho `docs/35-service-xuat-pdf-bao-cao.md` và
+   `docs/36-api-cap-nhat-vi-tri-chuyen.md`), và bản retry của Hoàng thành
+   **`docs/42-thu-lai-hoan-tien-theo-lich.md`**. ⚠️ **Còn lại vẫn trùng**: `docs/37` (`37-bao-cao-doanh-thu.md`
+   + `37-csdl-mau-thong-bao-va-theo-doi.md`) và `docs/38` (`38-api-khung-gio-cao-diem.md` + chính bản
+   này) — **nhóm cần chốt một lối đánh số**, vì git **không** báo xung đột khi hai file khác tên cùng
+   số. Chi tiết: `docs/40` §7 mục 7 và `docs/37-csdl-mau-thong-bao-va-theo-doi.md` §8.6 mục 6.
 7. ⚠️ **Ba tài liệu đang trích một mục không tồn tại.** `docs/32` §1 và §9, `docs/34` §1 và §8 đều viết
    `docs/28` **§7.4** (và `docs/32` §9 viết `docs/28` §7.3) — nhưng `docs/28-csdl-ve-dien-tu.md` **§7
    không có mục con nào**: đó là danh sách đánh số 1–5. Chỗ đúng là **§7 mục 1** (`Tickets`) và **§7

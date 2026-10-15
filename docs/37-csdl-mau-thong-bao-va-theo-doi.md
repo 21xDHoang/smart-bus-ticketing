@@ -65,9 +65,12 @@ thứ ba"*), rồi `Refunds`/`RefundLogs` (*"lần thứ tư"*).
 hoàn tiền **nhường số** và thành `docs/40` (lý do đầy đủ ở §đầu `docs/40`). Bốn lần còn lại đều đọc
 được từ `main`.
 
-⚠️ **Nhánh `feature/8-api-tra-cuu-hoan-tien` (API tra cứu hoàn tiền, dòng 42) VẪN CHƯA MERGE** — và nó
-vẫn giữ `docs/36-api-tra-cuu-hoan-tien.md` cùng bản `docs/35-csdl-hoan-tien.md` cũ. Nghĩa là hai số
-`35` và `36` **sẽ còn đụng** cho tới khi nhánh đó cũng được đổi số lúc merge.
+✅ **Cập nhật 15/10/2026 — nhánh `feature/8-api-tra-cuu-hoan-tien` (API tra cứu hoàn tiền, dòng 42)
+đã đổi số xong.** Nhánh đó **xếp trên** nhánh migrate, nên khi nó gộp nhánh migrate vào thì kéo theo
+`docs/40` và **tự đổi hai tài liệu của mình cùng lúc**: `docs/36-api-tra-cuu-hoan-tien.md` →
+**`docs/41-api-tra-cuu-hoan-tien.md`** (nhường `36` cho `docs/36-api-cap-nhat-vi-tri-chuyen.md`), và
+bản `docs/35-csdl-hoan-tien.md` cũ → khớp luôn `docs/40`. Từ đây **hết đụng số `35` và `36`** ở cả
+hai nhánh. Nhánh vẫn **chưa merge vào `main`**, nhưng không còn chờ ai đổi số nữa.
 
 **Cách xử lý vẫn giữ nguyên như bốn lần trước** (`docs/32` §7.1): **dựng theo phân công, rồi báo nhóm
 bổ sung A9.** Chủ CSDL không tự thêm bảng ngoài A9 mà im lặng — nhưng tên bảng đã nằm sẵn trong bảng
@@ -380,9 +383,10 @@ Nhóm thấy sai thì nói; đổi tên một migration **chưa merge** thì r�
    trạng thật:
    - `docs/35` của nhánh migrate `Refunds`/`RefundLogs` đã **đổi thành `docs/40`** khi gộp `main`
      (vì `main` đã có `docs/35-service-xuat-pdf-bao-cao.md`). Từ nay đọc `docs/40` §1.
-   - `docs/36-api-tra-cuu-hoan-tien.md` của nhánh `feature/8-api-tra-cuu-hoan-tien` **vẫn chưa merge**
-     và **vẫn đụng** `docs/36-api-cap-nhat-vi-tri-chuyen.md` của `main`; nhánh đó còn giữ bản
-     `docs/35-csdl-hoan-tien.md` cũ, phải đổi số cùng lúc.
+   - `docs/41-api-tra-cuu-hoan-tien.md` của nhánh `feature/8-api-tra-cuu-hoan-tien` — **đã hết đụng**:
+     lúc gộp nhánh migrate nó đổi `36` → `41` (nhường `docs/36-api-cap-nhat-vi-tri-chuyen.md`) và kéo
+     bản `docs/35-csdl-hoan-tien.md` cũ về `docs/40`. Nhánh vẫn **chưa merge vào `main`**, nhưng phần
+     số hiệu đã xong — xem ghi chú ở §1.
    - Trên `main` **đã sẵn hai cặp trùng số**: `docs/37-bao-cao-doanh-thu.md` +
      `docs/37-csdl-mau-thong-bao-va-theo-doi.md`, và `docs/38-api-khung-gio-cao-diem.md` +
      `docs/38-csdl-hoa-don.md`.

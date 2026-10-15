@@ -41,7 +41,7 @@ public class RefundClaimConcurrencyTests
     [Fact]
     public void Refund_giu_khoa_phien_ban_xmin_dung_cot_he_thong()
     {
-        // Cả giao thức giành dòng (docs/35 §4.2) đứng trên đúng một giả định: Refund có khoá phiên
+        // Cả giao thức giành dòng (docs/40 §4.2) đứng trên đúng một giả định: Refund có khoá phiên
         // bản. Gỡ IsRowVersion là mọi lượt SaveChanges() ngừng so phiên bản — hai luồng cùng gọi cổng
         // cho một khoản mà không có gì chặn, im lặng hoàn tiền hai lần. Không test nào khác bắt được
         // việc gỡ đó: InMemory không có xmin, SQLite cũng không.
@@ -106,7 +106,7 @@ public class RefundClaimConcurrencyTests
     {
         // Nhật ký gọi cổng là bằng chứng, không phải trạng thái: mỗi lượt gọi đẻ thêm một dòng, không
         // ai sửa dòng cũ. Thêm khoá phiên bản cho nó là mời gọi sửa/xoá nhật ký — đúng thứ các bất
-        // biến §4.3 muốn chặn. (Số lượt thử lại đếm bằng số dòng có Trigger ≠ Initial, xem docs/35 §4.4.)
+        // biến §4.3 muốn chặn. (Số lượt thử lại đếm bằng số dòng có Trigger ≠ Initial, xem docs/40 §4.4.)
         using var db = TaoDbContextQuanHe();
 
         var nhatKy = db.Model.FindEntityType(typeof(RefundLog));

@@ -6,7 +6,7 @@ namespace SmartBus.Api.Dtos.Refunds;
 /// Kết quả MỘT lượt thực hiện gọi cổng hoàn tiền mà <c>RefundAttemptService</c> trả về cho người
 /// gọi (job thử lại theo lịch — task dòng 30; nút "Thử lại" của màn Admin sau này). Đây là DTO nội
 /// bộ để người gọi ghi log/tổng hợp, KHÔNG phải hình dạng trả cho khách qua HTTP (task này không
-/// mở endpoint — xem docs/35 §6).
+/// mở endpoint — xem docs/40 §6).
 /// </summary>
 public class RefundAttemptOutcome
 {
