@@ -3,6 +3,7 @@ import { Button, Layout } from 'antd';
 import { MenuOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { ThemeModeToggle } from '../ui';
+import NotificationBell from '../NotificationBell';
 import UserMenu from './UserMenu';
 
 const { Header } = Layout;
@@ -74,6 +75,7 @@ export default function AppHeader({
       {children}
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+        <NotificationBell />
         <ThemeModeToggle />
         <UserMenu />
       </div>
