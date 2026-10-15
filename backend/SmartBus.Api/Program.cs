@@ -526,6 +526,14 @@ builder.Services.AddScoped<ITicketRequestResultNotifier, TicketRequestResultNoti
 // khác (luật E1), chứ bản thân lớp bọc không có ích gì. Interface này không có factory nào bọc.
 builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewService>();
 
+// Ghi nhật ký soát vé + chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (US 15, dòng 18 Sprint 4 —
+// Phùng Duy Hoàng). Endpoint soát vé POST /tickets/validate (dòng 15, Trần Trung Hiếu) tiêm interface
+// này rồi gọi SAU khi đã xác thực chữ ký và tính xong kết quả — cả lượt online lẫn lượt đồng bộ đều đi
+// qua đúng một cửa. Hợp đồng idempotent (gửi lại cùng ClientScanId = thành công, đọc dòng cũ; khoảng
+// hợp lý của ScannedAt) ghi ở Services/ITicketValidationRecorder.cs; đặc tả phía máy quét ở
+// docs/39-hang-doi-ngoai-tuyen-soat-ve.md. Không có factory/decorator nào bọc interface này.
+builder.Services.AddScoped<ITicketValidationRecorder, TicketValidationRecorder>();
+
 builder.Services.AddScoped<SeatHoldCreateService>();
 builder.Services.AddScoped<ISeatHoldCreateService>(provider => new NotifyingSeatHoldCreateService(
     provider.GetRequiredService<SeatHoldCreateService>(),
