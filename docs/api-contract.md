@@ -3942,6 +3942,77 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 > (`resultCode`) và VNPay (`vnp_ResponseCode`): đừng đi tìm trường trạng thái trong `data`. Cần mã
 > kết quả thì job đối soát gọi `QueryOrderAsync` (`return_code` 1/2/3).
 
+## Báo cáo doanh thu — `/reports/revenue`
+
+> Story 19 *"Doanh thu"*. ✅ Backend đã có (`RevenueReportController` — Trần Trung Hiếu, task
+> *"API báo cáo doanh thu theo ngày / tuần / tháng"*, Sprint 4). Mục này là nửa "theo thời gian"
+> của story; **theo tuyến / theo xe / theo phương thức** (Kiên), **so sánh giữa các kỳ** (Hoàng)
+> và **xuất Excel/PDF** (các task sau) sẽ mở rộng trên cùng bề mặt `/reports/revenue`.
+
+**Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 19 là nghiệp vụ của quản lý). Người đã
+đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+#### `GET /reports/revenue` — tổng hợp doanh thu theo ngày / tuần / tháng
+
+Query — **mọi tham số bỏ trống được**:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `granularity` | `day` | Độ mịn: `day` / `week` / `month` (không phân biệt hoa/thường) |
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+```json
+// RevenueReport — ví dụ gộp theo ngày, 3 ngày
+{
+  "granularity": "day",
+  "from": "2026-10-12",
+  "to": "2026-10-14",
+  "totalRevenue": 123456789,
+  "totalPayments": 456,
+  "buckets": [
+    { "periodStart": "2026-10-12", "revenue": 35000000, "payments": 120 },
+    { "periodStart": "2026-10-13", "revenue": 0, "payments": 0 },
+    { "periodStart": "2026-10-14", "revenue": 88456789, "payments": 336 }
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `totalRevenue` / `totalPayments` | Tổng cả kỳ — hai con số cho thẻ số liệu của dashboard |
+| `buckets[].periodStart` | Điểm bắt đầu bucket, dạng `yyyy-MM-dd`: chính ngày đó (`day`) · thứ Hai của tuần (`week`) · ngày 1 của tháng (`month`) |
+| `buckets[].revenue` / `payments` | Doanh thu (VND) / số giao dịch của bucket |
+
+- **Nền số liệu là bảng `Payments`, chỉ đếm `Success`** — doanh thu là tiền ĐÃ THU THỰC, để kiểm
+  thử chéo "số liệu doanh thu khớp với giao dịch thực tế" có đối tượng để đối chiếu. Vé `Paid`/
+  `Used` không phải nền: vé là hàng hoá phát hành kèm tiền, tiền mới là thứ được đối soát.
+- **Mốc thời gian của giao dịch là `paidAt`** (cổng ghi nhận thu tiền); giao dịch `Success` thiếu
+  `paidAt` (dữ liệu cũ/lỗi) thì tính theo `createdAt` — tiền đã thu không được biến mất khỏi báo
+  cáo chỉ vì thiếu một cột thời gian.
+- **Trục thời gian theo giờ Việt Nam (UTC+7)** — giao dịch 00:30 giờ VN thuộc ngày HÔM ĐÓ, không
+  phải ngày hôm trước theo UTC. `from`/`to` là ngày lịch Việt Nam; tuần bắt đầu **thứ Hai** (ISO),
+  tháng theo lịch dương.
+- **Bucket LIÊN TỤC, không bỏ ngày rỗng** — biểu đồ cần trục đầy đủ: khoảng không có giao dịch
+  thì `revenue`/`payments` bằng 0. Bucket đầu có thể bắt đầu TRƯỚC `from` (tuần lấy từ thứ Hai,
+  tháng lấy từ ngày 1).
+- Khoảng `from` → `to` tối đa **366 ngày** (trọn một năm) · `to` trước `from` → **400** — lỗi gắn
+  ở cả `errors.from` lẫn `errors.to` · `granularity` lạ → **400** `errors.granularity` ·
+  `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
+
+> **Cho task "API doanh thu theo tuyến, theo xe, theo phương thức thanh toán" (Kiên):** dùng cùng
+> nền `Payments` `Success` và cùng trục thời gian ở trên — mở rộng bằng endpoint mới trên bề mặt
+> `/reports/revenue` (ví dụ `GET /reports/revenue/by-route`) thay vì dựng một nền tính khác, nếu
+> không hai báo cáo sẽ ra hai con số tổng khác nhau cho cùng một kỳ.
+
+> **Cho task "API so sánh doanh thu giữa các kỳ" (Hoàng):** cùng nền, so kỳ hiện tại với kỳ liền
+> trước cùng độ dài — tái dùng quy tắc bucket ở trên thay vì tự định nghĩa lại "tuần/tháng".
+
+> **Vì sao không trả kèm số vé?** Story chỉ hỏi doanh thu; vé đã bán là chuyện của báo cáo tỷ lệ
+> lấp đầy (US 20) — mỗi báo cáo một câu hỏi, trộn lại thì không báo cáo nào đọc được.
+
 ## Voucher — `/vouchers`
 
 > Story 18 *"Quản lý Voucher"*. Bảng phân công Sprint 3 tách story này thành năm dòng; mục này chốt

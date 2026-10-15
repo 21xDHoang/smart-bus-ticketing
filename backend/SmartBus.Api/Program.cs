@@ -416,6 +416,14 @@ builder.Services.AddScoped<IVoucherStatisticsService, VoucherStatisticsService>(
 // IVoucherValidationService/IVoucherRedemptionService ở trên (luồng khách dùng mã ở thanh toán).
 builder.Services.AddScoped<IVoucherAdminService, VoucherAdminService>();
 
+// Báo cáo doanh thu theo ngày / tuần / tháng: GET /api/reports/revenue (US 19 "Doanh thu",
+// Sprint 4). Task "API báo cáo doanh thu theo ngày / tuần / tháng" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Nền là bảng Payments (chỉ đếm Success — tiền đã thu thực, khớp kiểm thử chéo của story), trục
+// thời gian theo giờ Việt Nam UTC+7, mốc giao dịch là PaidAt (thiếu thì dùng CreatedAt).
+// Đặt sau khối voucher vì cùng nhóm "đọc tổng hợp từ bảng đã có" — báo cáo không ghi dữ liệu.
+builder.Services.AddScoped<IRevenueReportService, RevenueReportService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
