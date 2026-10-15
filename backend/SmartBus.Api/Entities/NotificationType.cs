@@ -9,6 +9,13 @@ namespace SmartBus.Api.Entities;
 /// <c>Pending → Approved | Rejected</c> ở <see cref="CancellationRequest"/> và
 /// <see cref="TicketChange"/>, nhân với hai loại yêu cầu.
 ///
+/// Hai giá trị <c>Refund…</c> là kết quả CUỐI của một khoản hoàn tiền thuộc US 8 — task Sprint 4
+/// *"Thông báo kết quả hoàn tiền qua email và trên web"* (Phùng Duy Hoàng, dòng 34): báo cho CHỦ
+/// khoản hoàn khi dòng <see cref="Refund"/> đã chốt kết quả cuối. Vế "trên web" được cài, vế email
+/// không — A8.5 chốt thông báo in-app + bảng <c>Notifications</c>, và người đặt việc chốt lại ngày
+/// 15/10. Chính sách đầy đủ (khi nào báo, khi nào im lặng) ở doc-comment hai giá trị dưới và
+/// docs/41-thong-bao-ket-qua-hoan-tien.md.
+///
 /// ⚠️ Đây KHÔNG phải bản sao của <see cref="CancellationRequestStatus"/>: <c>Approved</c> của yêu cầu
 /// huỷ và <c>Approved</c> của yêu cầu đổi là hai thông báo khác nhau (một bên là "vé đã huỷ", một
 /// bên là "vé mới đã phát hành"), nên không thể gộp còn hai giá trị. Cũng không thể chỉ có hai giá
@@ -35,5 +42,22 @@ public enum NotificationType
     TicketChangeApproved,
 
     /// <summary>Quản lý đã TỪ CHỐI yêu cầu đổi chuyến — vé giữ nguyên, lý do ở <see cref="Notification.Body"/>.</summary>
-    TicketChangeRejected
+    TicketChangeRejected,
+
+    /// <summary>
+    /// Lượt gọi cổng hoàn tiền THÀNH CÔNG — tiền đã thực sự rời cổng. Chỉ phát ở kết quả CUỐI: một
+    /// khoản hoàn có thể phải gọi cổng nhiều lượt (thang thử lại), nhưng thành công là lượt cuối của
+    /// khoản đó (dòng đã Succeeded không bao giờ được gọi lại — gọi nữa là hoàn hai lần), nên "mỗi
+    /// lượt thành công" và "khoản đã Succeeded" là một.
+    /// </summary>
+    RefundSucceeded,
+
+    /// <summary>
+    /// Khoản hoàn đã HẾT LỊCH thử lại (<see cref="Refund.NextRetryAt"/> null) mà vẫn chưa chuyển
+    /// được — hệ thống đã làm hết phần tự động, khoản chờ quản trị xử lý tay. Các lượt thất bại CÒN
+    /// lịch thử lại KHÔNG phát loại này: một khoản hỏng tạm thời sẽ dội tới năm thông báo giống hệt
+    /// nhau. Khoản còn <see cref="RefundStatus.Pending"/> (cổng chưa trả lời) cũng không phát — chưa
+    /// có gì để nói, và đoán là chuyện hệ thống này không làm.
+    /// </summary>
+    RefundFailed
 }

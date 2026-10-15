@@ -564,7 +564,19 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
 builder.Services.AddScoped<IRefundGatewayCaller, PlaceholderRefundGatewayCaller>();
-builder.Services.AddScoped<IRefundAttemptService, RefundAttemptService>();
+// Thông báo kết quả hoàn tiền cho khách (US 8, dòng 34 Sprint 4 — Phùng Duy Hoàng): từ đây
+// IRefundAttemptService resolve ra LỚP BỌC NotifyingRefundAttemptService thay vì lớp trần, nên CẢ BA
+// đường gọi cổng ở trên đi qua chỗ báo tin mà không đường nào phải tự nhớ — kể cả hai đường chưa
+// dựng (dòng 35, dòng 28). Cùng lối đăng ký SeatHoldCreateService ở trên: lớp trần trước, lớp bọc
+// sau. Notifier tự quyết định "có gì để báo" bằng dòng Refunds đã lưu (chỉ kết quả CUỐI — thành
+// công, hoặc thất bại hết lịch thử lại); hợp đồng không-bao-giờ-ném-lỗi + lý do bọc decorator thay vì
+// sửa thẳng service ghi ở Services/IRefundResultNotifier.cs và NotifyingRefundAttemptService.cs.
+// RefundRetryWiringTests ghim đúng chỗ nối này.
+builder.Services.AddScoped<RefundAttemptService>();
+builder.Services.AddScoped<IRefundResultNotifier, RefundResultNotifier>();
+builder.Services.AddScoped<IRefundAttemptService>(provider => new NotifyingRefundAttemptService(
+    provider.GetRequiredService<RefundAttemptService>(),
+    provider.GetRequiredService<IRefundResultNotifier>()));
 
 // Job thử lại hoàn tiền theo lịch (US 8, Sprint 4): mỗi phút quét khoản Failed tới mốc NextRetryAt
 // rồi gọi lại cổng theo nấc thang RefundRetryPolicy (5' → 30' → 2h → 12h → 24h; hết thang thì dừng,
