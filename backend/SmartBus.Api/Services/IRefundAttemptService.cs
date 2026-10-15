@@ -15,7 +15,7 @@ namespace SmartBus.Api.Services;
 /// </list>
 ///
 /// Bảo đảm xuyên suốt: mỗi khoản có ĐÚNG MỘT lượt gọi cổng tại một thời điểm — lượt gọi giành dòng
-/// bằng <c>xmin</c> TRƯỚC khi gọi cổng (docs/35 §4.2); lượt thua trả <c>Claimed = false</c> mà
+/// bằng <c>xmin</c> TRƯỚC khi gọi cổng (docs/40 §4.2); lượt thua trả <c>Claimed = false</c> mà
 /// không gọi gì và không ghi gì.
 ///
 /// Vì sao <c>now</c> là tham số: mọi mốc thời gian của lượt gọi (<c>NextRetryAt</c>,

@@ -397,7 +397,7 @@ public class RefundAttemptServiceTests
     [Fact]
     public async Task Yeu_cau_gui_cong_lay_phuong_thuc_tu_giao_dich_goc_khong_phai_tham_so_nguoi_dung()
     {
-        // docs/35 §6: phương thức hoàn BẮT BUỘC lấy từ Payments.MethodCode của giao dịch gốc.
+        // docs/40 §6: phương thức hoàn BẮT BUỘC lấy từ Payments.MethodCode của giao dịch gốc.
         // Không có tham số nào để người gọi chọn phương thức — đó là chốt chống hoàn nhầm kênh.
         var gateway = new FakeRefundGatewayCaller();
         using var db = TaoDb();

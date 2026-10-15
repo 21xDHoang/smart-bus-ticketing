@@ -551,7 +551,7 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
     provider.GetRequiredService<ISeatMapNotifier>()));
 
 // Hoàn tiền (US 8, Sprint 4): MỘT lượt gọi cổng hoàn tiền cho một khoản — kiểm điều kiện theo
-// trigger, GIÀNH DÒNG bằng xmin TRƯỚC khi gọi cổng (docs/35 §4.2), ghi kết quả + đúng một dòng
+// trigger, GIÀNH DÒNG bằng xmin TRƯỚC khi gọi cổng (docs/40 §4.2), ghi kết quả + đúng một dòng
 // RefundLog. Task "Xử lý hoàn tiền thất bại + retry theo lịch" — Phùng Duy Hoàng (file này cũng
 // của Hoàng).
 // Ba người gọi phân biệt bằng trigger (chi tiết ở IRefundAttemptService): service hoàn tiền tự

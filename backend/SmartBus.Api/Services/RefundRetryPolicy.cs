@@ -9,7 +9,7 @@ namespace SmartBus.Api.Services;
 /// Lý do chọn: khoảng cách tăng dần để lượt hỏng tạm thời (cổng nghẽn, timeout thoáng qua) được
 /// cứu sớm, còn lỗi cấu hình thật (sai mã tài khoản nhận hoàn) không dội bom cổng 5 phút một lần
 /// suốt ngày. Hết thang thì <c>NextRetryAt = null</c> — khoản nằm lại ở <c>Failed</c> và chờ quản
-/// trị bấm tay, CỐ Ý không thêm giá trị enum mới (docs/35 §2.6 + §6).
+/// trị bấm tay, CỐ Ý không thêm giá trị enum mới (docs/40 §2.6 + §6).
 ///
 /// ⚠️ Cố ý hard-code thay vì đọc từ cấu hình — cùng lối và cùng lý do đã ghi ở
 /// <c>SeatHoldExpiryBackgroundService</c>: một khoá cấu hình gõ sai sẽ làm app chết ngay lúc khởi

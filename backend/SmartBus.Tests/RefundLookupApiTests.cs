@@ -23,7 +23,7 @@ namespace SmartBus.Tests;
 ///     ảnh hưởng endpoint này vì nó chỉ ĐỌC, và phép nối trong projection vẫn chạy trên InMemory.
 ///   • KHÔNG dựng unique index nào (kể cả <c>IX_Refunds_PaymentId_Active</c> và unique
 ///     <c>Refunds.RefundCode</c>): chốt "một giao dịch chỉ có một khoản hoàn chưa thất bại" ở tầng
-///     PostgreSQL không có test nào phủ ở đây — đó là việc của migration (docs/35 §4.1).
+///     PostgreSQL không có test nào phủ ở đây — đó là việc của migration (docs/40 §4.1).
 ///   • <c>COUNT</c> trên <c>RefundLogs</c> chạy được bình thường (đây là phép đếm trong bộ nhớ của
 ///     provider, không phải SQL), nên <c>retryCount</c> phủ được đầy đủ.
 /// </summary>
@@ -541,7 +541,7 @@ public class RefundLookupApiTests
         await SeedRefundLogAsync(factory, refund.Id, RefundLogTrigger.ManualRetry, RefundLogResult.Failed);
         await SeedRefundLogAsync(factory, refund.Id, RefundLogTrigger.ManualRetry, RefundLogResult.Succeeded);
 
-        // Refunds CỐ Ý không có cột đếm (docs/35 §2.4): 4 dòng nhật ký, 1 lượt Initial → 3 lượt gọi
+        // Refunds CỐ Ý không có cột đếm (docs/40 §2.4): 4 dòng nhật ký, 1 lượt Initial → 3 lượt gọi
         // lại, và khoản này đã thành công ở lượt cuối.
         Assert.Equal(3, await RetryCountOfAsync(client));
     }

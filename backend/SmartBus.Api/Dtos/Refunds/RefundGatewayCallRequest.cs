@@ -19,7 +19,7 @@ public class RefundGatewayCallRequest
 
     /// <summary>
     /// Phương thức thanh toán của GIAO DỊCH GỐC — đọc từ <c>Payments.MethodCode</c>, KHÔNG bao giờ
-    /// lấy từ tham số người dùng (docs/35 §6): hoàn tiền luôn phải quay về đúng kênh đã thu tiền.
+    /// lấy từ tham số người dùng (docs/40 §6): hoàn tiền luôn phải quay về đúng kênh đã thu tiền.
     /// Điều này cũng có nghĩa Job thử lại và nút Admin không có tham số chọn kênh hoàn.
     /// </summary>
     public string MethodCode { get; set; } = string.Empty;

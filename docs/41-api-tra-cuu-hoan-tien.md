@@ -333,7 +333,7 @@ type ...` — **không** phải lỗi biên dịch, nên `dotnet build` xanh v�
 nguyên văn bản chú thích của cả hai bên**, không sửa gì thêm — nhờ Hoàng xem qua trong PR.
 
 ⚠️ **Hai hệ số dòng khác nhau trong hai chú thích cạnh nhau — không phải lỗi mới.**
-`docs/40-thu-lai-hoan-tien-theo-lich.md` giải thích rõ: tài liệu CSDL hoàn tiền đánh số **lệch +8**,
+`docs/42-thu-lai-hoan-tien-theo-lich.md` giải thích rõ: tài liệu CSDL hoàn tiền đánh số **lệch +8**,
 việc Hoàng gọi *"dòng 30"* thì tài liệu đó gọi *"dòng 41"*. Cùng một task, hai cách đếm. Đọc kèm
 **tên task**, đừng đọc mỗi con số.
 
@@ -358,8 +358,12 @@ dotnet test  SmartBus.Tests   → 1460/1460 ✅
 4. Kiểm thử chéo (**Giàng A Vàng**) chỉ có nghĩa khi bước 3 xong **và** có service ghi vào `Refunds`.
    Nhánh dòng 30 đã cắm `PlaceholderRefundGatewayCaller` — mọi lượt ra `Unresolved`, nên **chưa** có
    lượt nào ghi `Succeeded`; test tích hợp ở §8.2 vì vậy vẫn seed thẳng dữ liệu.
-5. ⚠️ **Va chạm số hiệu tài liệu chưa ai dọn:** `main` nay có **hai** `docs/40-*` —
-   `40-csdl-hoan-tien.md` (của Dăm, vào trước qua PR #203) và `40-thu-lai-hoan-tien-theo-lich.md`
-   (của Hoàng, vào sau qua PR #202). Theo lối nhóm *"người viết sau nhường số"* thì bản sau nhường,
-   nhưng đó là **file của Hoàng** (⛔ luật 4) nên **không tự đổi** — **báo Hoàng**. Kèm theo: tài liệu
-   đó còn dẫn `docs/35` §4.2 cho tài liệu CSDL hoàn tiền — nay phải là **`docs/40`**.
+5. ✅ **Va chạm số hiệu tài liệu — ĐÃ DỌN 15/10/2026.** `main` từng có **hai** `docs/40-*`:
+   `40-csdl-hoan-tien.md` (của Dăm, vào trước qua PR #203) và bản retry của Hoàng (vào sau qua
+   PR #202). Theo lối nhóm *"người viết sau nhường số"* thì bản sau nhường — **Hoàng đã đồng ý**, nên
+   bản retry đổi `docs/40` → **`docs/42-thu-lai-hoan-tien-theo-lich.md`**. Cùng lượt đó, **34 con trỏ
+   `docs/35` cũ** trỏ về tài liệu CSDL hoàn tiền đã được sửa thành **`docs/40`** — trong đó **33 chỗ
+   nằm ở file của Hoàng** (`RefundAttemptService`, `IRefundGatewayCaller`, `RefundRetryPolicy`,
+   `RefundGatewayCall*`, `Program.cs`, 3 file test) và **1 chỗ ở test của Dăm**
+   (`RefundLookupApiTests.cs`). Tất cả chỉ là **chú thích**, không đổi hành vi — xác nhận bằng build
+   + test ở dưới. `docs/40` hết trùng số; `37` và `38` vẫn còn, **việc của nhóm**.
