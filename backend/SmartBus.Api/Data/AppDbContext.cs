@@ -31,6 +31,7 @@ public partial class AppDbContext : DbContext
         ConfigureTicketChange(modelBuilder);
         ConfigureNotification(modelBuilder);
         ConfigureTicketValidation(modelBuilder);
+        ConfigureInvoice(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -98,4 +99,14 @@ public partial class AppDbContext : DbContext
     // A9 KHÔNG có bảng này — lần thứ ba việc "A9 lệch thực tế" được nhắc, xem
     // docs/34-csdl-soat-ve-qr.md §1. Xem AppDbContext.TicketValidation.cs.
     partial void ConfigureTicketValidation(ModelBuilder modelBuilder);
+
+    // US 7 (Invoices — không có trong A9, Vàng Thị Dăm): task "Migrate bảng Invoices" của bảng phân
+    // công **Sprint 4, dòng 27** (ưu tiên Cao, 3 điểm). HOÁ ĐƠN ĐIỆN TỬ của một lượt thanh toán —
+    // neo vào Payments chứ không vào vé, theo đúng giả định đã ghi trước ở docs/32 §3.1.
+    // ⚠️ Dòng 27 này là dòng migrate DUY NHẤT của Sprint 4 còn nợ: dòng 50 (PriorityGroups,
+    // PriorityApprovals) đã xong từ Sprint 2 dưới tên DiscountRequests — xem docs/38 §0 (bản dài ở
+    // docs/37 §8.1, nhưng docs/37 nằm ở nhánh feature/10-… CHƯA MERGE nên đừng trích nó làm nguồn).
+    // A9 KHÔNG có bảng này — lần thứ sáu việc "A9 lệch thực tế" được nhắc, xem
+    // docs/38-csdl-hoa-don.md §1. Xem AppDbContext.Invoice.cs.
+    partial void ConfigureInvoice(ModelBuilder modelBuilder);
 }

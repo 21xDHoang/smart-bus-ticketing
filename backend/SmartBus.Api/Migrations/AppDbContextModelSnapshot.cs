@@ -321,6 +321,44 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("FeedbackReplies");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.Invoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PdfUrl")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("Invoices");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.MonthlyPass", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1440,6 +1478,25 @@ namespace SmartBus.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("Feedback");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.Invoice", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
 
                     b.Navigation("User");
                 });
