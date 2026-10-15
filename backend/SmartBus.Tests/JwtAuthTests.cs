@@ -347,9 +347,10 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Đổi bốn job nền của app sang bản chạy RỖNG trong host test
+    /// Đổi năm job nền của app sang bản chạy RỖNG trong host test
     /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>,
-    /// <see cref="NoopSeatHoldExpiryJob"/>, <see cref="NoopSeatHoldAbuseJob"/>).
+    /// <see cref="NoopSeatHoldExpiryJob"/>, <see cref="NoopSeatHoldAbuseJob"/>,
+    /// <see cref="NoopRefundRetryJob"/>).
     ///
     /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
     /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
@@ -396,6 +397,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         [typeof(MonthlyPassExpiryBackgroundService)] = typeof(NoopMonthlyPassExpiryJob),
         [typeof(SeatHoldExpiryBackgroundService)] = typeof(NoopSeatHoldExpiryJob),
         [typeof(SeatHoldAbuseBackgroundService)] = typeof(NoopSeatHoldAbuseJob),
+        [typeof(RefundRetryBackgroundService)] = typeof(NoopRefundRetryJob),
     };
 
     /// <summary>
@@ -464,6 +466,25 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopSeatHoldAbuseJob(
             IServiceScopeFactory scopeFactory,
             ILogger<SeatHoldAbuseBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="RefundRetryBackgroundService"/> cho host test — cùng lý do với
+    /// <see cref="NoopTripGenerationJob"/>. Job hoàn tiền (US 8 — task *"Xử lý hoàn tiền thất bại +
+    /// retry theo lịch"*, Phùng Duy Hoàng) cũng quét mỗi PHÚT như job hết hạn giữ chỗ, và nếu test
+    /// nào seed khoản hoàn <c>Failed</c> tới hạn thì lượt quét THẬT sẽ gọi cổng rồi GHI vào
+    /// <c>Refunds</c>/<c>RefundLogs</c> — đúng kiểu đỏ ngẫu nhiên của PR #81.
+    /// </summary>
+    private sealed class NoopRefundRetryJob : RefundRetryBackgroundService
+    {
+        public NoopRefundRetryJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<RefundRetryBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }

@@ -9,15 +9,15 @@
 > **Giàng A Vàng** (test, dòng 48–49).
 >
 > 🟢 **Trạng thái:** hai endpoint **đã code xong** trên nhánh `feature/8-api-tra-cuu-hoan-tien`,
-> `dotnet build` 0/0 và `dotnet test` **1416/1416** sau khi gộp nhánh migrate (§8.4). **Chưa merge
-> vào `main`.** Nhánh này **xếp trên**
-> `feature/8-migrate-refunds-refundlogs` (task dòng 38, cũng chưa merge) vì API không biên dịch được
-> nếu thiếu entity `Refund`/`RefundLog` — PR nhắm vào nhánh migration, sau khi nhánh đó vào `main`
-> thì GitHub tự trỏ lại `main`.
+> `dotnet build` 0/0 và `dotnet test` **1460/1460** sau lượt gộp `main` thứ hai (§8.5). **Chưa merge
+> vào `main`.** Nhánh này từng **xếp trên** `feature/8-migrate-refunds-refundlogs` (task dòng 38) vì
+> API không biên dịch được nếu thiếu entity `Refund`/`RefundLog` — **nhánh đó nay đã vào `main`**
+> (PR #203), nên **base của PR đổi sang `main`**.
 >
-> 🔴 **Chưa áp lên CSDL chung.** Bảng `Refunds` / `RefundLogs` chỉ có thật sau khi nhánh dòng 38
-> merge rồi chạy `database update` (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4). Trước bước đó,
-> gọi hai endpoint này sẽ lỗi `relation "Refunds" does not exist` — **không** phải lỗi của service.
+> 🔴 **Chưa áp lên CSDL chung.** Bảng `Refunds` / `RefundLogs` có thật sau khi chạy `database update`
+> (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4) — nhánh dòng 38 đã vào `main` nên bước đó nay
+> **đã chạy được**, nhưng **chưa ai chạy**. Trước bước đó, gọi hai endpoint này sẽ lỗi
+> `relation "Refunds" does not exist` — **không** phải lỗi của service.
 >
 > 🔢 **Số hiệu tài liệu — bản này từng là `docs/36`.** Ngày 15/10/2026, khi nhánh này gộp nhánh
 > `feature/8-migrate-refunds-refundlogs` vào, `main` đã có `docs/36-api-cap-nhat-vi-tri-chuyen.md`
@@ -303,19 +303,63 @@ dotnet test  SmartBus.Tests/SmartBus.Tests.csproj → 1416/1416 ✅
 1416 = **1394** test của nhánh migrate (đã gộp `main`) + **22** test của bản này. Con số **1309** ở
 §8.2 là lượt chạy 14/10 **trước khi** gộp `main`; giữ nguyên ở đó làm mốc lịch sử chứ không sửa lại.
 
-### 8.5 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
+### 8.5 Gộp `main` — lượt hai — 15/10/2026
 
-1. PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge**.
-   Base của PR là `feature/8-migrate-refunds-refundlogs` (nhánh dòng 38), **không phải** `main`.
-2. ⚠️ **Sau khi nhánh dòng 38 được squash-merge vào `main`, nhánh này phải được dựng lại** — đừng
-   bấm merge tiếp trên nhánh cũ. Lý do: `main` nhận nội dung của dòng 38 dưới **commit hash khác**,
-   nên commit đó **không** phải tổ tiên của nhánh này; PR sẽ hiện lại **toàn bộ** diff của dòng 38, và
-   lần squash thứ hai dễ đụng nhau ở `AppDbContext.cs`, `ModelSnapshot.cs`. Cách làm đúng: dựng nhánh
-   **mới** từ `main` đã cập nhật rồi `git cherry-pick` (⛔ luật 8 **cấm** `push --force` và
-   `--force-with-lease`, nên **không** rebase-rồi-đẩy-đè lên nhánh cũ).
-3. Merge nhánh dòng 38 vào `main` trước, rồi mới:
-   `dotnet ef database update --project backend/SmartBus.Api` — sau bước này hai endpoint mới chạy thật
-   được. Trước đó chúng trả 500 kèm `relation "Refunds" does not exist`.
-4. Kiểm thử chéo dòng 48–49 (**Giàng A Vàng**) chỉ có nghĩa khi bước 3 xong **và** dòng 39 (service
-   tạo khoản hoàn) đã có — hiện **chưa** có service nào ghi vào `Refunds`, nên test tích hợp ở §8.2
-   seed thẳng dữ liệu thay vì đi qua luồng thật.
+**Nhánh mẹ nay ĐÃ VÀO `main`.** PR #203 (`33c6196`) merge `feature/8-migrate-refunds-refundlogs` vào
+`main`, nên `de18017` — đúng commit mà §8.4 gộp vào — **là tổ tiên của `main`**. Kiểm bằng
+`git merge-base --is-ancestor de18017 origin/main`: **đúng**. Hệ quả: PR của nhánh này **đổi base sang
+`main`**, diff không còn phải "mượn" nhánh mẹ nữa.
+
+Cùng lúc `main` nhận PR #202 (`7046f4d`) — task *"Xử lý hoàn tiền thất bại + retry theo lịch"*
+(Phùng Duy Hoàng), **cùng bề mặt hoàn tiền**, cũng đăng ký DI ở cuối `Program.cs`. Hai bên vì vậy
+chèn vào **đúng cùng một khe** — đây là **xung đột duy nhất** của lượt gộp này.
+
+| Bên | Khối đăng ký | Việc |
+|---|---|---|
+| Nhánh này (Dăm) | `IRefundLookupService → RefundLookupService` | phần **đọc** của hành khách |
+| `main` (Hoàng) | `IRefundGatewayCaller`, `IRefundAttemptService`, `IRefundRetryService` + `AddHostedService<RefundRetryBackgroundService>()` | phần **ghi** + job nền |
+
+**Cách giải quyết: giữ CẢ HAI khối** — khối của `main` đứng trước, khối của nhánh này đứng sau cùng.
+Hai khối độc lập: service đọc thẳng `DbSet`, không bên nào tiêm cái của bên kia, và thứ tự đăng ký
+trong DI của .NET không đổi cách phân giải (trừ `AddHostedService`, vốn là singleton chạy nền nên
+cũng không phụ thuộc vị trí). Đặt khối của nhánh này **sau cùng** để phần thêm vào so với `main` nằm
+gọn ở cuối file.
+
+🔴 **Không được dùng `--ours`/`--theirs` cho file này.** Cả hai khối đều là việc thật đã code xong;
+chọn một bên là **mất đăng ký DI**, mà triệu chứng là lỗi **runtime** `Unable to resolve service for
+type ...` — **không** phải lỗi biên dịch, nên `dotnet build` xanh vẫn không chỉ ra được.
+
+⚠️ **`Program.cs` là file của Hoàng** (⛔ luật 4). Lượt gộp này chỉ sửa đúng vùng xung đột và **giữ
+nguyên văn bản chú thích của cả hai bên**, không sửa gì thêm — nhờ Hoàng xem qua trong PR.
+
+⚠️ **Hai hệ số dòng khác nhau trong hai chú thích cạnh nhau — không phải lỗi mới.**
+`docs/40-thu-lai-hoan-tien-theo-lich.md` giải thích rõ: tài liệu CSDL hoàn tiền đánh số **lệch +8**,
+việc Hoàng gọi *"dòng 30"* thì tài liệu đó gọi *"dòng 41"*. Cùng một task, hai cách đếm. Đọc kèm
+**tên task**, đừng đọc mỗi con số.
+
+**Kiểm chứng lượt gộp này:**
+
+```
+dotnet build SmartBus.Api     → 0 Warning, 0 Error
+dotnet test  SmartBus.Tests   → 1460/1460 ✅
+```
+
+### 8.6 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
+
+1. **Đổi base của PR sang `main`** rồi mới xin approve (⛔ luật 7: phải có người khác approve). Base
+   cũ là nhánh dòng 38 — nhánh đó **đã vào `main`**, để nguyên base thì GitHub tự đóng PR khi nhánh
+   nền bị xoá.
+2. ✅ **Không phải dựng lại nhánh.** Cảnh báo cũ ở đây lo `main` nhận nội dung dòng 38 dưới **commit
+   hash khác** (squash) — điều đó **đã không xảy ra**: PR #203 là **merge commit**, `de18017` nằm
+   nguyên trong lịch sử `main`. Nên diff của PR chỉ còn **4 commit** của nhánh này.
+3. `dotnet ef database update --project backend/SmartBus.Api` — nhánh dòng 38 đã vào `main` nên bước
+   này nay **chạy được**; sau đó hai endpoint mới chạy thật. Trước đó chúng trả 500 kèm
+   `relation "Refunds" does not exist`. **Chỉ Dăm chạy** (⛔ luật 3).
+4. Kiểm thử chéo (**Giàng A Vàng**) chỉ có nghĩa khi bước 3 xong **và** có service ghi vào `Refunds`.
+   Nhánh dòng 30 đã cắm `PlaceholderRefundGatewayCaller` — mọi lượt ra `Unresolved`, nên **chưa** có
+   lượt nào ghi `Succeeded`; test tích hợp ở §8.2 vì vậy vẫn seed thẳng dữ liệu.
+5. ⚠️ **Va chạm số hiệu tài liệu chưa ai dọn:** `main` nay có **hai** `docs/40-*` —
+   `40-csdl-hoan-tien.md` (của Dăm, vào trước qua PR #203) và `40-thu-lai-hoan-tien-theo-lich.md`
+   (của Hoàng, vào sau qua PR #202). Theo lối nhóm *"người viết sau nhường số"* thì bản sau nhường,
+   nhưng đó là **file của Hoàng** (⛔ luật 4) nên **không tự đổi** — **báo Hoàng**. Kèm theo: tài liệu
+   đó còn dẫn `docs/35` §4.2 cho tài liệu CSDL hoàn tiền — nay phải là **`docs/40`**.
