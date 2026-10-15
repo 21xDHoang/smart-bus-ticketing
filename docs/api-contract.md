@@ -1766,11 +1766,12 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 
 ## Thông báo kết quả xử lý — `/hubs/notifications`
 
-> ⏳ Backend đã có code (`NotificationHub` + `TicketRequestResultNotifier` — task *"Ghi log và thông
-> báo kết quả xử lý cho hành khách"*, dòng 7 Sprint 4, phân công bảng tính: Vàng Thị Dăm) nhưng
-> **chưa nối vào `Program.cs`**: còn thiếu `AddScoped<ITicketRequestResultNotifier, …>` và
-> `MapHub<NotificationHub>("/hubs/notifications")` — hai dòng thuộc file của Phùng Duy Hoàng. Chi
-> tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
+> ✅ Backend đã nối đủ: `NotificationHub` + `TicketRequestResultNotifier` (task *"Ghi log và thông
+> báo kết quả xử lý cho hành khách"*, dòng 7 Sprint 4, phân công bảng tính: Vàng Thị Dăm) đã có
+> `AddScoped<ITicketRequestResultNotifier, TicketRequestResultNotifier>()` và
+> `MapHub<NotificationHub>("/hubs/notifications")` trong `Program.cs` — hai dòng thuộc file của
+> Phùng Duy Hoàng, thêm ở task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4) vì
+> chính hai endpoint PATCH đó là nguồn phát sự kiện. Chi tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
 >
 > Hub KHÔNG phải nguồn dữ liệu: nó chỉ báo "bạn vừa có thông báo mới", còn **danh sách** thông báo
 > sẽ đến từ một endpoint REST (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19
@@ -1830,8 +1831,10 @@ gọi** — client chỉ kết nối và lắng nghe.
 | `PATCH /cancellation-requests/{id}` (duyệt / từ chối yêu cầu huỷ) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 | `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 
-Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4)
-— **chưa có trong tài liệu này** (chờ Hiếu). Mục này chỉ chốt phần thông báo của chúng.
+Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4,
+Phùng Duy Hoàng) — hình dạng request/response đầy đủ ở mục
+**"Huỷ & Đổi vé — `/cancellation-requests` và `/ticket-changes`"**. Mục này chỉ chốt phần thông báo
+của chúng.
 
 > ⚠️ **Không có sự kiện nào khi khách GỬI yêu cầu.** Gửi yêu cầu là việc của khách, không phải kết
 > quả cần báo cho khách. Thông báo chỉ đi ở bước **duyệt hoặc từ chối**.
@@ -3654,6 +3657,198 @@ phải viết trong `OnModelCreating` (file của Dăm).
 ⚠️ Nhánh `'Held'` trong điều kiện trên là **dự phòng**: enum `TicketStatus` chỉ có
 `Paid`/`Used`/`Cancelled` (đúng bảng trường ở trên), vé sinh thẳng ở `Paid` nên không dòng nào mang
 `'Held'`. Giữ nguyên chữ của A6 — ai truy vấn ghế đã bán chỉ cần hỏi `'Paid'`.
+
+## Huỷ & Đổi vé — `/cancellation-requests` và `/ticket-changes`
+
+> Story 5 *"Hủy & Đổi vé"*. ✅ **Hai bảng đã có thật**: migration
+> `Sprint4_CancellationRequests_TicketChanges` (Vàng Thị Dăm, task dòng 2 Sprint 4) đã merge và **đã
+> áp lên CSDL chung**. Thiết kế đầy đủ — vì sao hai bảng, vì sao điều kiện thời gian, vì sao vé cũ
+> bị HUỶ chứ không bị sửa: `docs/32-csdl-huy-doi-ve.md`.
+>
+> Mục này chốt **hai endpoint duyệt** — task *"API duyệt / từ chối yêu cầu huỷ - đổi vé"* (dòng 5
+> Sprint 4, Phùng Duy Hoàng). Hai endpoint **gửi yêu cầu** là việc của người khác và **chưa có trong
+> tài liệu này**: `POST /cancellation-requests` (Trần Trung Hiếu, dòng 3), `POST /ticket-changes`
+> (Nguyễn Duy Kiên, dòng 4). Cả bốn endpoint dùng chung **một hình dạng dòng** ở dưới, nên màn duyệt
+> của Admin và màn theo dõi của khách đọc được cả hai loại yêu cầu bằng một khuôn.
+
+### Hình dạng một dòng yêu cầu — chốt theo bản nháp FE
+
+Hai bảng có tên cột giống nhau ở phần chung (đúng chủ ý của Dăm — xem `docs/32` §3.4), nên hình dạng
+response cũng là một. Trường nào của riêng một loại thì **null ở loại kia**, không lược bỏ khỏi JSON
+(giữ đúng lối `boardingStopName` của mục Vé điện tử).
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `type` | `string` | `"Cancel"` / `"Change"` — **suy từ endpoint, không có cột trong CSDL**: nó là tên bảng, không phải dữ liệu |
+| `ticketId` | `string` (GUID) | Vé gốc — FE mở thẳng `GET /tickets/{ticketId}` từ đây |
+| `ticketCode` | `string` | Mã vé gốc (nội dung QR). Với `"Change"` **đã duyệt** thì vé này đã là `Cancelled` |
+| `status` | `string` | `"Pending"` / `"Approved"` / `"Rejected"` |
+| `price` | `number` | Giá vé GỐC đã thanh toán (VND) — chụp lúc phát hành vé |
+| `reason` | `string \| null` | Lý do khách gửi kèm |
+| `cancellationFee` | `number \| null` | **Chỉ `"Cancel"`** — phí huỷ, chụp lúc khách gửi; `0` = huỷ miễn phí. Có giá trị ngay cả khi còn `Pending` |
+| `refundAmount` | `number \| null` | **Chỉ `"Cancel"` VÀ `status = "Approved"`** — `price - cancellationFee`. Null ở mọi ca còn lại, kể cả `"Rejected"` (từ chối thì không khoản nào di chuyển — trả `price - fee` ở đó là nói dối) |
+| `newTripId` | `string \| null` | **Chỉ `"Change"`** — chuyến khách xin đổi sang |
+| `newSeatId` | `string \| null` | **Chỉ `"Change"`** — ghế khách xin ngồi ở chuyến mới |
+| `newPrice` | `number \| null` | **Chỉ `"Change"`** — giá chuyến mới, chụp lúc khách gửi |
+| `priceDifference` | `number \| null` | **Chỉ `"Change"`** — `newPrice - price`, **có dấu**: dương = khách trả thêm, âm = nhà xe hoàn lại, `0` = ngang giá |
+| `newTicketId` | `string \| null` | **Chỉ `"Change"` ĐÃ DUYỆT** — vé mới phát hành lúc duyệt; null khi `Pending`/`Rejected`. Mở vé mới bằng `GET /tickets/{newTicketId}` |
+| `reviewedByUserId` | `string \| null` | Quản lý đã xử lý |
+| `reviewedAt` | `string \| null` | Mốc bấm duyệt / từ chối |
+| `rejectReason` | `string \| null` | Lý do từ chối do quản lý nhập — chỉ có nghĩa khi `"Rejected"` |
+| `createdAt` | `string` | Thời điểm khách gửi |
+| `updatedAt` | `string \| null` | Lần sửa cuối (null khi còn `Pending`) |
+
+> ⚠️ **Hai trường đổi tên so với bản nháp `frontend/src/api/ticketRequestApi.ts`** (bản nháp tự ghi
+> *"DỰ KIẾN … CHƯA cam kết"*, nên đây là chốt chứ không phải phá hợp đồng): `reviewNote` →
+> **`rejectReason`** (khớp nguyên tên cột `RejectReason` và tên trường mà thông báo đọc — xem mục
+> `/hubs/notifications`), và `fee` tách thành **`cancellationFee`** / **`priceDifference`** (một cái
+> tên mang hai nghĩa khác nhau tuỳ `type` là thứ sẽ cắn người đọc code sau này). Bản nháp cũng
+> **thiếu** `price`, `newPrice`, `ticketId`, `reviewedByUserId`, `reviewedAt`, `newTicketId` — đều là
+> trường màn duyệt của Admin cần (Hạnh, dòng 11).
+
+> **Vì sao `refundAmount` là trường SUY RA, không phải cột:** `docs/32` §3.1 đã chốt số phải hoàn là
+> `Ticket.Price - CancellationRequest.CancellationFee`, và cố ý KHÔNG đặt cột thứ ba — cả hai vế đều
+> bất biến nên phép trừ không bao giờ lệch, còn thêm cột thì có thêm một chỗ để ba con số nói khác
+> nhau. Ở đây nó được tính trong cùng một response với hai vế của nó, nên không có khe thời gian nào
+> để lệch. Số tiền **đã** hoàn thật nằm ở bảng `Refunds` (US 8, sprint khác) — không phải trường này.
+
+### Endpoints
+
+| Method | Endpoint | Task | Trạng thái |
+|---|---|---|---|
+| PATCH | `/cancellation-requests/{id}` | *"API duyệt / từ chối yêu cầu huỷ - đổi vé"* — Phùng Duy Hoàng (dòng 5) | ✅ mục dưới |
+| PATCH | `/ticket-changes/{id}` | cùng task | ✅ mục dưới |
+| POST | `/cancellation-requests` | Trần Trung Hiếu (dòng 3) | ⛔ chưa có trong tài liệu này |
+| POST | `/ticket-changes` | Nguyễn Duy Kiên (dòng 4) | ⛔ chưa có trong tài liệu này |
+
+### Body của cả hai endpoint — giống hệt nhau
+
+```json
+// Duyệt
+{ "status": "Approved" }
+
+// Từ chối, có nêu lý do
+{ "status": "Rejected", "rejectReason": "Chuyến khởi hành dưới 2 giờ nên không đủ điều kiện huỷ." }
+```
+
+| Trường | Bắt buộc | Mô tả |
+|---|---|---|
+| `status` | **Có** | Đúng hai giá trị `"Approved"` / `"Rejected"`. Giá trị khác → 400 kèm `errors.status` |
+| `rejectReason` | Không | Chỉ có nghĩa khi `"Rejected"`; tối đa 2000 ký tự. Bỏ trống vẫn hợp lệ — thông báo ghi rõ *"Người duyệt không nêu lý do."* thay vì để cụt |
+
+⚠️ **Gửi `rejectReason` kèm `"Approved"` KHÔNG phải lỗi 400** — service bỏ qua và **không lưu** (cột
+`RejectReason` chỉ có nghĩa ở nhánh từ chối; lưu rồi để màn hình hiện "lý do từ chối" trên một yêu
+cầu đã duyệt là dữ liệu sai). Cố ý: client đang cầm sẵn một object có cả hai trường (form giữ state
+cũ) mà bị chặn ở một lượt gọi hoàn toàn hợp lệ là cái bẫy không đáng có.
+
+### Duyệt / từ chối yêu cầu HUỶ — `PATCH /cancellation-requests/{id}`
+
+`[Authorize(Policy = RbacPolicies.ManagerOrAbove)]` — Admin và Manager. Người duyệt lấy từ token
+(`ClaimTypes.NameIdentifier`), **không nhận từ body**: để client gửi lên là mở đường cho người này
+ghi danh người khác vào `ReviewedByUserId`.
+
+**Nhánh `Approved`:**
+1. Lật `status` → `Approved`, ghi `reviewedByUserId` + `reviewedAt` + `updatedAt`.
+2. Lật vé gốc `Ticket.Status` → `Cancelled` (kèm `Ticket.UpdatedAt` — A4 buộc, vì đây là sửa dòng).
+   **Ghế trở về chợ**: chỉ mục duy nhất điều kiện của A6 (`WHERE "Status" IN ('Held', 'Paid')`)
+   không còn thấy vé này, nên khách khác đặt lại được chính ghế đó. Xem
+   `CancellationRequestStatus.Approved` để biết vì sao vé CHỈ bị huỷ ở bước này chứ không phải lúc
+   khách gửi.
+3. KHÔNG ghi dòng `Refunds` nào — bảng đó thuộc US 8 và **chưa tồn tại trong repo**. Tiền hoàn là
+   việc của sprint khác; duyệt xong mà lượt hoàn còn chưa chạy là chuyện bình thường.
+
+**Nhánh `Rejected`:** lật `status` + ghi `rejectReason` + `reviewedAt`/`reviewedByUserId`/`updatedAt`.
+**Không đụng dòng vé** — vé giữ `Paid`, ghế vẫn của khách, không khoản tiền nào di chuyển.
+
+### Duyệt / từ chối yêu cầu ĐỔI — `PATCH /ticket-changes/{id}`
+
+Cùng quyền, cùng body, cùng hình dạng response.
+
+**Nhánh `Approved` — ba việc, không phải hai:**
+1. 🔴 **Kiểm lại ghế mới còn trống NGAY LÚC DUYỆT.** Lúc khách gửi, ghế mới **chưa bị giữ** (không có
+   dòng `SeatHolds` nào cho nó — xem `TicketChangeStatus.Pending`), nên giữa hai thời điểm đó người
+   khác hoàn toàn có thể đã mua mất. Tin dữ liệu đã kiểm lúc gửi là **bán trùng ghế**. Ghế đã có
+   người → **409**, màn duyệt nói rõ để quản lý từ chối và mời khách chọn chuyến khác.
+2. **Huỷ vé cũ**: `Ticket.Status` → `Cancelled` + `UpdatedAt` (ghế cũ về chợ).
+3. **Phát hành vé MỚI** cho chuyến mới: `TripId = newTripId`, `SeatId = newSeatId`, `UserId` = chủ vé
+   gốc, `Status = Paid`, `Price = newPrice` (đúng con số khách đã nhìn thấy và đã đồng ý — **không
+   tra lại `Fares`**), `Code = ITicketQrService.GenerateCode(newTicketId)`. Rồi ghi `NewTicketId` vào
+   dòng yêu cầu.
+
+> 🔴 **Vì sao HUỶ vé cũ chứ không SỬA nó** (chốt 12/10/2026, `docs/32` §3.1): sửa thẳng `Trips`/`Seats`
+> trên dòng vé cũ là viết lại lịch sử — chuyến CŨ mất dòng đó khỏi báo cáo doanh thu (US 19) dù tiền
+> đã thực thu, và hoá đơn đã xuất theo `Payments.TicketId` không còn khớp (US 7). Vé cũ phải giữ
+> nguyên con số của nó.
+
+**Nhánh `Rejected`:** không đụng vé, không kiểm ghế, `NewTicketId` vẫn null.
+
+> ⚠️ **Vé mới phát hành ở đây KHÔNG đi qua bảng `Payments`.** Chênh lệch giá (`newPrice - price`) do
+> Kiên tính ở `POST /ticket-changes` (dòng 4), và tiền chênh đi qua `Payments` (thu thêm) hoặc
+> `Refunds` (hoàn lại) — hai bảng đã có, không phải việc của endpoint duyệt. Endpoint này chỉ phát
+> hành vé đúng theo con số đã chốt trong dòng yêu cầu.
+
+### Trạng thái HTTP — giống nhau ở cả hai endpoint
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Xử lý xong — trả dòng yêu cầu đã cập nhật |
+| 400 | `status` thiếu / sai giá trị; `rejectReason` quá dài |
+| 401 | Không có token |
+| 403 | Có token nhưng không phải Admin/Manager |
+| 404 | Không có yêu cầu với `{id}` đó |
+| 409 | Yêu cầu **không còn `Pending`** (đã có người xử lý) — xem dưới |
+| 409 | Vé của yêu cầu **không còn `Paid`** (đã bị huỷ, hoặc đã soát ở cổng) — xem dưới |
+| 409 | *(chỉ `/ticket-changes`)* Chuyến xin đổi sang **đã huỷ hoặc đã chạy xong** |
+| 409 | *(chỉ `/ticket-changes`)* Ghế mới đã có người đặt trong lúc chờ duyệt |
+
+### Hai lớp chống xử lý trùng — cùng lối A6
+
+Hai quản lý cùng mở một yêu cầu `Pending` rồi cùng bấm Duyệt là chuyện xảy ra được. Chỉ mục duy nhất
+điều kiện (`WHERE "Status" = 'Pending'`) **không cứu được** lượt này: lúc cả hai ghi thì cả hai đều
+đã rời khỏi tập `Pending`. Nên có hai lớp:
+
+1. **Kiểm trước**: đọc thấy `status != Pending` → **409** kèm câu nói rõ yêu cầu đã được xử lý.
+2. **Khoá lạc hậu `xmin`**: hai bảng này có concurrency token (khác `Tickets` — bảng vé cố ý không
+   có, xem `AppDbContext.Ticket.cs`). Lượt thua nhận `DbUpdateConcurrencyException`; service bắt và
+   trả **cùng một câu 409** — ⛔ **tuyệt đối không để nó thành 500**. Đây chính là điều `docs/32` §6
+   dặn riêng cho task này.
+
+Cùng lối, lượt duyệt đổi vé đâm vào chỉ mục A6 của bảng `Tickets` sẽ ném `DbUpdateException`; bắt và
+trả **409** "ghế đã có người đặt", không phải 500.
+
+### Hai phép kiểm mà CSDL không làm hộ
+
+Lượt duyệt còn phải tự kiểm hai điều dưới đây — **không chỉ mục nào chặn được chúng**, nên bỏ qua là
+ghi ra dữ liệu sai chứ không phải ném lỗi:
+
+- **Vé gốc còn `Paid` không** (cả hai endpoint). Hai đường dẫn tới cùng chỗ hỏng:
+  1. Một vé có thể có **đồng thời** một yêu cầu huỷ `Pending` và một yêu cầu đổi `Pending` — chỉ mục
+     duy nhất điều kiện nằm *trong từng bảng*, không với được sang bảng kia; luật "một vé chỉ một yêu
+     cầu đang chờ" là việc của service (chú thích ngay tại `AppDbContext.CancellationRequest.cs`).
+     Duyệt cả hai thì vé bị huỷ lần thứ hai và lượt đổi **phát hành vé mới cho một vé đã chết**.
+  2. Vé bị **soát ở cổng** trong lúc yêu cầu nằm chờ duyệt: huỷ một vé đã dùng là hoàn tiền cho
+     chuyến khách đã đi.
+- **Chuyến xin đổi sang chưa huỷ và chưa chạy xong** (`/ticket-changes`). Vé mới là vé thật, in QR
+  được — phát hành nó cho một chuyến không bao giờ chạy là bán một chỗ không tồn tại.
+
+Cả hai đều trả **409** với câu nói rõ đường lui ("hãy từ chối yêu cầu và mời khách chọn chuyến/ghế
+khác"), không phải 400: yêu cầu gửi lên hợp lệ, chỉ có thế giới đã đổi kể từ lúc khách gửi.
+
+> ⚠️ **Bộ test chạy EF InMemory KHÔNG dựng unique index lẫn khoá ngoại** (`docs/32` §4.4), nên hai
+> nhánh `xmin` và A6 **chỉ chạy thật trên PostgreSQL**. Test xanh trên InMemory không chứng minh hai
+> nhánh đó đúng — muốn kiểm phải dựng DDL bằng `GenerateCreateScript()` với chuỗi kết nối Npgsql giả.
+
+### Thông báo cho khách — việc nối tiếp, không phải việc của endpoint
+
+Duyệt/từ chối xong thì gọi `ITicketRequestResultNotifier` (`NotifyCancellationReviewedAsync` /
+`NotifyTicketChangeReviewedAsync`) — hợp đồng đầy đủ ở mục `/hubs/notifications` phía trên. Ba điều
+bắt buộc ở chỗ gọi:
+
+1. Gọi **SAU khi đã lưu** trạng thái — hàm tự kiểm và bỏ qua kèm cảnh báo nếu còn `Pending`.
+2. Hàm **không bao giờ ném** và **không nhận `CancellationToken`**; nó mở lượt lưu riêng, không chung
+   transaction với lượt PATCH. Thông báo hỏng không được làm hỏng lượt duyệt đã thành công.
+3. Nội dung thông báo **không chứa số tiền** — lý do ở mục `/hubs/notifications`.
 
 ## Thanh toán — `/payments`
 
