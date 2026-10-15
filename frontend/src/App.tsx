@@ -37,6 +37,7 @@ import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AdminRefundPage from './pages/AdminRefundPage';
+import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
@@ -339,6 +340,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <AdminRefundPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /admin-ticket-requests là màn hình duyệt yêu cầu huỷ/đổi vé (US 5, Sprint 4, task
+                  của Dương Thị Hạnh) — hàng đợi các yêu cầu huỷ vé / đổi chuyến cho Admin và
+                  Manager duyệt hoặc từ chối (khớp nhóm endpoint PATCH của Hoàng trong docs 32).
+                  Backend huỷ/đổi chưa có nên màn hình đang chạy dữ liệu giả
+                  (ticketRequestAdminApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn hình
+                  cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã
+                  ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/admin-ticket-requests"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <AdminTicketRequestPage />
                   </RouteGuard>
                 }
               />

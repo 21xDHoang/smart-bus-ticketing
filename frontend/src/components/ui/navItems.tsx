@@ -14,6 +14,7 @@ import {
   EditOutlined,
   EnvironmentOutlined,
   FieldTimeOutlined,
+  FileDoneOutlined,
   FundOutlined,
   GiftOutlined,
   HistoryOutlined,
@@ -265,6 +266,12 @@ const NAV: NavEntry[] = [
         label: 'Quản lý hoàn tiền',
         roles: ADMIN_MANAGER,
         icon: <DollarOutlined />,
+      },
+      {
+        to: '/admin-ticket-requests',
+        label: 'Duyệt huỷ/đổi vé',
+        roles: ADMIN_MANAGER,
+        icon: <FileDoneOutlined />,
       },
       {
         to: '/admin-users',
