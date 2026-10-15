@@ -550,6 +550,35 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
     provider.GetRequiredService<AppDbContext>(),
     provider.GetRequiredService<ISeatMapNotifier>()));
 
+// Hoàn tiền (US 8, Sprint 4): MỘT lượt gọi cổng hoàn tiền cho một khoản — kiểm điều kiện theo
+// trigger, GIÀNH DÒNG bằng xmin TRƯỚC khi gọi cổng (docs/35 §4.2), ghi kết quả + đúng một dòng
+// RefundLog. Task "Xử lý hoàn tiền thất bại + retry theo lịch" — Phùng Duy Hoàng (file này cũng
+// của Hoàng).
+// Ba người gọi phân biệt bằng trigger (chi tiết ở IRefundAttemptService): service hoàn tiền tự
+// động khi duyệt huỷ vé (dòng 28 — Kiên, chưa dựng) → Initial; nút "Thử lại" của màn Admin
+// (dòng 35 — Băng, chưa nối) → ManualRetry; job theo lịch ngay dưới → ScheduledRetry.
+// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu — chưa dựng), nên hôm nay
+// IRefundGatewayCaller trỏ vào Placeholder: mọi lượt gọi trả Unresolved → khoản giữ nguyên Pending,
+// TUYỆT ĐỐI không ghi Succeeded giả. Khi dòng 29 vào thì đổi ĐÚNG MỘT dòng đăng ký dưới đây sang
+// client thật.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
+builder.Services.AddScoped<IRefundGatewayCaller, PlaceholderRefundGatewayCaller>();
+builder.Services.AddScoped<IRefundAttemptService, RefundAttemptService>();
+
+// Job thử lại hoàn tiền theo lịch (US 8, Sprint 4): mỗi phút quét khoản Failed tới mốc NextRetryAt
+// rồi gọi lại cổng theo nấc thang RefundRetryPolicy (5' → 30' → 2h → 12h → 24h; hết thang thì dừng,
+// khoản chờ quản trị bấm thử tay). Task "Xử lý hoàn tiền thất bại + retry theo lịch" — Phùng Duy
+// Hoàng (file này cũng của Hoàng).
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// IRefundRetryService đăng ký ngay trên — hosted service là singleton còn AppDbContext là scoped
+// nên nó mở scope riêng cho mỗi lượt quét, và RefundRetryService mở thêm scope riêng cho TỪNG
+// khoản; giải thích đầy đủ ở đầu RefundRetryBackgroundService.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
+builder.Services.AddScoped<IRefundRetryService, RefundRetryService>();
+builder.Services.AddHostedService<RefundRetryBackgroundService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
