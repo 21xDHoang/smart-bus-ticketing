@@ -23,6 +23,7 @@ import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
+import MyRefundsPage from './pages/MyRefundsPage';
 import MyTicketRequestsPage from './pages/MyTicketRequestsPage';
 import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
@@ -36,6 +37,7 @@ import AdminUserListPage from './pages/AdminUserListPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AdminRefundPage from './pages/AdminRefundPage';
+import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -215,6 +217,15 @@ function App() {
                   Backend TicketChanges / CancellationRequests chưa có nên màn hình đang chạy
                   dữ liệu giả (ticketRequestApi.ts). */}
               <Route path="/my-ticket-requests" element={<MyTicketRequestsPage />} />
+              {/* /my-refunds là màn hình theo dõi trạng thái hoàn tiền của hành khách (US 8
+                  "Hoàn tiền tự động", Sprint 4, task của Dương Thị Hạnh) — danh sách các khoản
+                  hoàn tiền của chính người dùng kèm trạng thái xử lý. Chỉ XEM, không có nút thử
+                  lại (việc thử lại khoản lỗi thuộc màn quản trị /admin-refunds của Băng). Mọi
+                  người đã đăng nhập đều dùng được, mỗi người chỉ thấy khoản hoàn của chính mình.
+                  Backend Refunds chưa có nên màn hình đang chạy dữ liệu giả (myRefundApi.ts).
+                  Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx
+                  là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route path="/my-refunds" element={<MyRefundsPage />} />
               {/* /ticket-scan là màn hình soát vé bằng camera (US 15, Sprint 4 — task "Màn hình
                   quét QR bằng camera thiết bị di động" của Nguyễn Đình Băng): dành cho TÀI XẾ,
                   bật camera sau quét mã QR trên vé để kiểm tra hợp lệ. Vai trò khác nhận 403.
@@ -328,6 +339,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <AdminRefundPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /revenue-dashboard là màn hình dashboard doanh thu (US 19 "Doanh thu", Sprint 5,
+                  task của Dương Thị Hạnh): tổng quan doanh thu theo khoảng thời gian — dải thẻ
+                  số liệu + biểu đồ theo ngày và theo tuyến. Báo cáo tài chính nên chỉ Admin và
+                  Manager vào được. Backend thống kê doanh thu chưa có nên màn hình đang chạy dữ
+                  liệu giả (revenueDashboardApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ:
+                  màn hình cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình
+                  Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/revenue-dashboard"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <RevenueDashboardPage />
                   </RouteGuard>
                 }
               />

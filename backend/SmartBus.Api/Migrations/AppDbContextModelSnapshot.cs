@@ -321,6 +321,44 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("FeedbackReplies");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.Invoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PdfUrl")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("Invoices");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.MonthlyPass", b =>
                 {
                     b.Property<Guid>("Id")
@@ -416,6 +454,43 @@ namespace SmartBus.Api.Migrations
                     b.HasIndex("UserId", "CreatedAt");
 
                     b.ToTable("Notifications");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.NotificationTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Type")
+                        .IsUnique();
+
+                    b.ToTable("NotificationTemplates");
                 });
 
             modelBuilder.Entity("SmartBus.Api.Entities.PassType", b =>
@@ -1030,6 +1105,43 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("Stops");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.Subscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RouteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("StopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RouteId");
+
+                    b.HasIndex("StopId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "RouteId")
+                        .IsUnique()
+                        .HasFilter("\"StopId\" IS NULL");
+
+                    b.HasIndex("UserId", "RouteId", "StopId")
+                        .IsUnique()
+                        .HasFilter("\"StopId\" IS NOT NULL");
+
+                    b.ToTable("Subscriptions");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.Ticket", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1568,6 +1680,25 @@ namespace SmartBus.Api.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.Invoice", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Payment", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.MonthlyPass", b =>
                 {
                     b.HasOne("SmartBus.Api.Entities.PassType", "PassType")
@@ -1767,6 +1898,32 @@ namespace SmartBus.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("SeatHold");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.Subscription", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Route", "Route")
+                        .WithMany()
+                        .HasForeignKey("RouteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.Stop", "Stop")
+                        .WithMany()
+                        .HasForeignKey("StopId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Route");
+
+                    b.Navigation("Stop");
 
                     b.Navigation("User");
                 });

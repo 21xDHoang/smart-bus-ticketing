@@ -82,6 +82,10 @@ public class AuditLogCoverageTests
         // (PATCH → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
         ("PATCH",  "/api/trips/{id:guid}/assignment",            CachGhi.Middleware),
 
+        // Cập nhật vị trí chuyến — story 10, Trần Trung Hiếu. Middleware tự ghi
+        // (PUT → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
+        ("PUT",    "/api/trips/{id:guid}/location",              CachGhi.Middleware),
+
         // Gán tài xế vào chuyến theo lô — story 14, Nguyễn Duy Kiên. Cũng do AuditLogMiddleware tự
         // ghi (PATCH → Update). Tên bảng suy ra là "Trips": route có tham số {routeId} nên tài
         // nguyên là đoạn tĩnh đầu tiên sau tham số cuối, đúng luật AuditLogMiddleware.ResourceSegmentIndex
@@ -181,6 +185,21 @@ public class AuditLogCoverageTests
         ("POST",   "/api/vouchers",                               CachGhi.Middleware),
         ("PUT",    "/api/vouchers/{id:guid}",                     CachGhi.Middleware),
         ("PATCH",  "/api/vouchers/{id:guid}/status",              CachGhi.Middleware),
+
+        // Duyệt / từ chối yêu cầu huỷ - đổi vé — story 5, Phùng Duy Hoàng. Hai endpoint đều do
+        // AuditLogMiddleware tự ghi (PATCH → Update); {id} đặt tên đúng để tên bảng suy từ đoạn
+        // trước nó là "CancellationRequests" / "TicketChanges", Target "CancellationRequests:{id}" /
+        // "TicketChanges:{id}". Id trong Target là id YÊU CẦU trên đường dẫn, không phải id vé mới
+        // mà lượt duyệt đổi phát hành: PATCH không đệm response nên middleware không đọc body, và
+        // cũng không cần — cả hai lượt đều tác động lên chính dòng yêu cầu.
+        //
+        // KHÔNG khai là TuGhi: service duyệt không gọi IAuditLogService, verb đã nói đủ hành động.
+        // Test hành vi của hai dòng này nằm ở TicketRequestReviewWiringTests chứ không ở Phần 2
+        // dưới đây — lượt duyệt ĐỔI phát hành vé mới nên cần TicketQrService, mà TestAppFactory của
+        // lớp này không đặt TicketQr:SigningKey; dựng nó ở đây là phải đổi cả lớp sang
+        // WithWebHostBuilder, kéo theo toàn bộ helper seed/token của file.
+        ("PATCH",  "/api/cancellation-requests/{id:guid}",       CachGhi.Middleware),
+        ("PATCH",  "/api/ticket-changes/{id:guid}",              CachGhi.Middleware),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>
