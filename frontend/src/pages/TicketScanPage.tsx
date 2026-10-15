@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Alert, Button, Descriptions, Result, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Result, Spin, Tag, Typography, theme } from 'antd';
 import { ReloadOutlined, ScanOutlined } from '@ant-design/icons';
 import ticketValidationApi from '../api/ticketValidationApi';
 import type { TicketValidationResult } from '../api/ticketValidationApi';
 import { getTicketValidationReasonMeta } from '../api/ticketValidationApi';
 import type { AppError } from '../api/axiosClient';
+import ManualTicketCodeInput from '../components/ManualTicketCodeInput';
 import { useQrScanner } from '../components/useQrScanner';
 import type { QrScannerStatus } from '../components/useQrScanner';
 import { PageCard, PageHeader } from '../components/ui';
@@ -96,10 +97,15 @@ function ScanResult({
 // của Nguyễn Đình Băng): dành cho TÀI XẾ, bật camera sau quét mã QR trên vé điện tử của khách,
 // gửi mã lên backend soát rồi hiện kết quả hợp lệ/không. Backend soát vé chưa có nên phần kiểm
 // tra chạy dữ liệu giả (ticketValidationApi.ts); phần QUÉT CAMERA là thật (useQrScanner + jsQR).
+// Kèm đường lùi NHẬP MÃ THỦ CÔNG (task "Component nhập mã vé thủ công khi camera không quét
+// được"): camera hỏng hoặc mã khó quét thì tài xế gõ/dán mã vé — đi CHUNG luồng soát với quét.
 export default function TicketScanPage() {
   const [phase, setPhase] = useState<ScanPhase>('scanning');
   const [result, setResult] = useState<TicketValidationResult | null>(null);
   const [validateError, setValidateError] = useState<string | null>(null);
+  // Tài xế tự mở ô nhập thủ công trong lúc camera còn chạy (mã mờ, màn khách nứt…).
+  const [manualOpen, setManualOpen] = useState(false);
+  const { token } = theme.useToken();
 
   // Camera chỉ chạy khi đang ở pha quét — bắt được mã hoặc vào pha kết quả thì tắt để nhả camera.
   const { videoRef, status, error, restart } = useQrScanner(onScanned, phase === 'scanning');
@@ -140,6 +146,9 @@ export default function TicketScanPage() {
   }
 
   const cameraFailed = status === 'denied' || status === 'unavailable' || status === 'error';
+  // Camera hỏng hẳn thì ô nhập thủ công là đường chính (hiện sẵn); camera còn chạy thì nằm sau
+  // nút gợi ý để khung quét vẫn là đường chính.
+  const manualVisible = cameraFailed || (status === 'scanning' && manualOpen);
 
   return (
     <div>
@@ -194,8 +203,11 @@ export default function TicketScanPage() {
             </div>
           )}
 
-          {/* Lớp phủ trạng thái: đang mở camera / đang soát / camera hỏng. */}
-          {status !== 'scanning' && (
+          {/* Lớp phủ trạng thái: đang mở camera / đang soát / camera hỏng.
+              Vì sao phải thêm `|| phase === 'validating'`: khi pha quét tắt, useQrScanner
+              dọn dẹp mà không đổi `status`, nên nó GIỮ NGUYÊN 'scanning' suốt lúc đang soát —
+              chỉ nhìn `status` thì lớp phủ "Đang kiểm tra mã vé…" không bao giờ hiện. */}
+          {(status !== 'scanning' || phase === 'validating') && (
             <div
               style={{
                 position: 'absolute',
@@ -229,13 +241,39 @@ export default function TicketScanPage() {
         {/* Dòng gợi ý khi đang quét + nút thử lại khi camera hỏng. */}
         <div style={{ textAlign: 'center', marginTop: 16 }}>
           {status === 'scanning' ? (
-            <Text type="secondary">Đưa mã QR vào giữa khung — hệ thống tự nhận diện.</Text>
+            <>
+              <Text type="secondary">Đưa mã QR vào giữa khung — hệ thống tự nhận diện.</Text>
+              <div style={{ marginTop: 4 }}>
+                <Button type="link" size="small" onClick={() => setManualOpen((open) => !open)}>
+                  {manualOpen ? 'Ẩn nhập mã thủ công' : 'Không quét được? Nhập mã thủ công'}
+                </Button>
+              </div>
+            </>
           ) : cameraFailed ? (
             <Button icon={<ReloadOutlined />} onClick={restart}>
               Thử lại
             </Button>
           ) : null}
         </div>
+
+        {/* Ô nhập mã thủ công — hiện sẵn khi camera hỏng hẳn, hoặc khi tài xế tự mở lúc camera còn chạy.
+            Mã nhập tay đi về CHÍNH `onScanned` của luồng quét: một đường soát duy nhất. */}
+        {manualVisible && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              border: `1px dashed ${token.colorBorder}`,
+              borderRadius: token.borderRadiusLG,
+            }}
+          >
+            <Text strong>Nhập mã vé thủ công</Text>
+            <div style={{ margin: '2px 0 8px' }}>
+              <Text type="secondary">Mã in ngay dưới mã QR trên vé của hành khách.</Text>
+            </div>
+            <ManualTicketCodeInput onSubmit={onScanned} disabled={phase === 'validating'} />
+          </div>
+        )}
 
         {validateError && (
           <Alert
