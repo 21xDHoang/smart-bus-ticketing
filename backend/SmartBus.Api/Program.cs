@@ -456,6 +456,16 @@ builder.Services.AddScoped<ITicketEmailService, TicketEmailService>();
 // (Hoàng) và tra cứu vé của tôi (endpoint này) đứng liền một mạch.
 builder.Services.AddScoped<IMyTicketsService, MyTicketsService>();
 
+// Khung giờ cao điểm theo mật độ hành khách: GET /api/reports/peak-hours (US 20 "Tỷ lệ lấp đầy",
+// Sprint 4). Task "API phân tích khung giờ cao điểm theo mật độ hành khách" — Trần Trung Hiếu.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Nền là bảng Tickets (vé Paid/Used của các chuyến khởi hành trong kỳ), trục cố định 24 giờ theo
+// giờ Việt Nam UTC+7, mật độ = khách trung bình mỗi chuyến — giờ có mật độ ≥ trung bình cả kỳ là
+// cao điểm. Đặt sau khối vé điện tử vì cùng họ "đọc tổng hợp từ bảng Tickets/Trips" — báo cáo
+// không ghi dữ liệu, và KHÔNG chèn vào đúng khe sau khối voucher mà nhánh feature/19 (báo cáo
+// doanh thu, cũng của Hiếu) đang thêm dòng.
+builder.Services.AddScoped<IPeakHoursReportService, PeakHoursReportService>();
+
 // Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
 // sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).
 // Task "Đồng bộ trạng thái ghế realtime giữa các phiên (SignalR)" (dòng 11 Sprint 3) — Hoàng Văn Thịnh.
