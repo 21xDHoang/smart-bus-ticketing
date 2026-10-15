@@ -6,7 +6,7 @@ namespace SmartBus.Api.Entities;
 ///
 /// Vì sao cần cột này chứ không chỉ <see cref="Notification.RelatedEntityId"/> trần: màn danh sách
 /// thông báo (Sprint 5 — "Hiển thị danh sách thông báo trong ứng dụng" của Nguyễn Đình Băng) phải
-/// biết bấm vào một dòng thì mở màn nào. Với bốn giá trị của <see cref="NotificationType"/> hiện tại
+/// biết bấm vào một dòng thì mở màn nào. Với sáu giá trị của <see cref="NotificationType"/> hiện tại
 /// thì loại thông báo đã nói được điều đó, nhưng Sprint 5 sẽ có loại trỏ vào bảng khác hẳn
 /// (<c>Trips</c> cho "xe sắp đến trạm", <c>Incidents</c> cho sự cố) — lúc đó chỉ nhìn
 /// <see cref="Notification.Type"/> là không đủ, và thêm cột sau tốn một migration.
@@ -25,5 +25,11 @@ public enum NotificationTarget
     CancellationRequest,
 
     /// <summary>Trỏ tới một dòng <c>TicketChanges</c> — yêu cầu đổi chuyến (US 5).</summary>
-    TicketChange
+    TicketChange,
+
+    /// <summary>
+    /// Trỏ tới một dòng <c>Refunds</c> — khoản hoàn tiền (US 8). Mang thông báo kết quả cuối do task
+    /// dòng 34 phát (hai loại <c>Refund…</c>), màn đến là "Hoàn tiền của tôi" của khách.
+    /// </summary>
+    Refund
 }

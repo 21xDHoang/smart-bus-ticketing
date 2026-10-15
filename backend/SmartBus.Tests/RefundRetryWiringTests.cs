@@ -7,7 +7,9 @@ namespace SmartBus.Tests;
 /// <summary>
 /// Ghim chỗ nối job thử lại hoàn tiền vào app — phần mà <see cref="RefundRetryServiceTests"/> và
 /// <see cref="RefundAttemptServiceTests"/> không nhìn tới (chúng dựng service tay, còn đây là
-/// <c>Program.cs</c> thật: nơi đăng ký).
+/// <c>Program.cs</c> thật: nơi đăng ký). Từ dòng 34 (thông báo kết quả hoàn tiền), file này ghim
+/// luôn LỚP BỌC của chuỗi đó — <see cref="NotifyingRefundAttemptService"/> — cùng một lý do: một
+/// dòng đăng ký DI sai không có triệu chứng nào ở tầng code, chỉ có tính năng im lặng biến mất.
 ///
 /// Viết ra vì một hosted service đăng ký thiếu KHÔNG có triệu chứng nào ở tầng code: app vẫn build,
 /// mọi endpoint vẫn chạy, CI vẫn xanh — chỉ mỗi cái job là im lặng không bao giờ chạy, và mọi khoản
@@ -57,7 +59,14 @@ public class RefundRetryWiringTests
         // Chuỗi của MỘT lượt thử lại: RefundRetryService (scope lượt quét) → mở scope con cho khoản →
         // IRefundAttemptService → IRefundGatewayCaller. Đứt bất kỳ mắt nào thì mọi lượt quét có việc
         // đều ném ngay và bị nuốt như trên — job "chạy" mà không bao giờ gọi được cổng.
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRefundAttemptService>());
+        // Mắt này ghim ĐÚNG lớp bọc của dòng 34 (thông báo kết quả hoàn tiền). Khác
+        // IRefundGatewayCaller ngay dưới — cố ý không ghim tên lớp vì dòng 29 sẽ thay bằng cổng thật —
+        // lớp bọc KHÔNG phải thứ cắm tạm: nó là chỗ nối của tính năng. Ai đăng ký lùi về lớp trần
+        // (RefundAttemptService) thì cổng vẫn được gọi, tiền vẫn về, mọi test khác vẫn xanh — chỉ mỗi
+        // khách là không bao giờ được báo. IsType thay luôn cho NotNull cũ: resolve ra đúng lớp bọc
+        // nghĩa là dòng đăng ký có và chuỗi dựng được.
+        Assert.IsType<NotifyingRefundAttemptService>(
+            scope.ServiceProvider.GetRequiredService<IRefundAttemptService>());
 
         // Cố ý KHÔNG ghim lớp cụ thể (PlaceholderRefundGatewayCaller): dòng 29 (Hiếu) sẽ thay bằng
         // cổng thật — test này giữ chỗ nối còn sống, không giữ tên lớp cắm tạm.

@@ -1773,6 +1773,11 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 > Phùng Duy Hoàng, thêm ở task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4) vì
 > chính hai endpoint PATCH đó là nguồn phát sự kiện. Chi tiết + lý do: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §3.4.
 >
+> Kết quả hoàn tiền đi qua CÙNG hub này: `RefundResultNotifier` (task *"Thông báo kết quả hoàn tiền
+> qua email và trên web"*, dòng 34 Sprint 4, Phùng Duy Hoàng — bản này làm **trên web**, không gửi
+> email, theo quyết định A8.5) phát hai loại `Refund…` từ lớp bọc `NotifyingRefundAttemptService`.
+> Chi tiết + lý do: `docs/41-thong-bao-ket-qua-hoan-tien.md`.
+>
 > Hub KHÔNG phải nguồn dữ liệu: nó chỉ báo "bạn vừa có thông báo mới", còn **danh sách** thông báo
 > sẽ đến từ một endpoint REST (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19
 > Sprint 5 — cùng người làm, **chưa có trong tài liệu này**). Mục này chỉ mô tả kênh đẩy.
@@ -1824,17 +1829,37 @@ gọi** — client chỉ kết nối và lắng nghe.
 
 ### Khi nào sự kiện được phát
 
-Đúng hai nguồn, mỗi nguồn phát **một lần** cho người gửi yêu cầu:
+Đúng ba nguồn, mỗi nguồn phát **một lần** cho đúng người nhận (người gửi yêu cầu, hoặc chủ khoản hoàn):
 
 | Nguồn | Phát khi |
 |---|---|
 | `PATCH /cancellation-requests/{id}` (duyệt / từ chối yêu cầu huỷ) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 | `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
+| Một lượt gọi cổng hoàn tiền (job thử lại theo lịch dòng 30, nút "Thử lại" của màn quản trị dòng 35, lượt hoàn tự động lúc duyệt huỷ dòng 28) | Khoản hoàn có **kết quả cuối đã lưu**: `Succeeded`, hoặc `Failed` và **đã hết lịch thử lại** (`NextRetryAt = null`) |
 
 Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4,
 Phùng Duy Hoàng) — hình dạng request/response đầy đủ ở mục
 **"Huỷ & Đổi vé — `/cancellation-requests` và `/ticket-changes`"**. Mục này chỉ chốt phần thông báo
 của chúng.
+
+> 🔴 **Nguồn thứ ba: kết quả hoàn tiền — chỉ phát ở KẾT QUẢ CUỐI, không phát từng lượt gọi cổng.**
+> Một khoản hoàn có thể bị gọi cổng tới sáu lượt (lượt đầu + năm lượt thử lại theo nấc thang
+> `RefundRetryPolicy`) trước khi ngã ngũ, nên thông báo chỉ đi khi con số đã ngã ngũ:
+>
+> | Kết quả lượt gọi | Phát? | Vì sao |
+> |---|---|---|
+> | `Succeeded` | **Có** | Tiền đã thực sự rời cổng — kết quả cuối |
+> | `Failed`, còn lịch (`NextRetryAt` khác null) | **Không** | Hệ thống còn tự thử lại; báo lúc này là báo một kết quả chưa ngã ngũ, và một khoản hỏng tạm thời sẽ dội tới năm dòng giống hệt nhau |
+> | `Failed`, hết lịch (`NextRetryAt = null`) | **Có** | Hệ thống đã làm hết phần tự động, khoản nằm chờ quản trị bấm thử tay — khách cần biết để liên hệ nhà xe |
+> | `Unresolved` (cổng không trả lời) | **Không** | Chưa có kết quả nào để nói; khoản giữ nguyên `Pending` chờ bước đối soát (dòng 43) — phát ở đây là đoán |
+>
+> Kết quả **cuối cùng nằm trong CSDL mới là thứ được báo**: lượt gọi thua cuộc đua giành dòng
+> (`Claimed = false`) và lượt gọi mà việc ghi dòng `Refunds` bị mất đều **không** phát — không có
+> kết quả đã lưu thì không có gì để báo.
+>
+> Cơ chế: lớp bọc `NotifyingRefundAttemptService` ôm `IRefundAttemptService`, nên **mọi** đường gọi
+> cổng đều đi qua đây (job thử lại dòng 30 đã có; nút "Thử lại" dòng 35 và lượt hoàn tự động dòng 28
+> khi dựng lên sẽ nối vào đúng service đó) — không đường nào tự phát thông báo riêng.
 
 > ⚠️ **Không có sự kiện nào khi khách GỬI yêu cầu.** Gửi yêu cầu là việc của khách, không phải kết
 > quả cần báo cho khách. Thông báo chỉ đi ở bước **duyệt hoặc từ chối**.
@@ -1843,7 +1868,7 @@ của chúng.
 > thông báo cho đúng yêu cầu đó thì lượt gọi sau bị bỏ qua hoàn toàn (không ghi, không đẩy). Nhờ vậy
 > client retry cũng không làm khách thấy hai thông báo giống nhau.
 
-### Bốn loại thông báo
+### Sáu loại thông báo
 
 | `type` | `title` |
 |---|---|
@@ -1851,15 +1876,25 @@ của chúng.
 | `CancellationRejected` | Từ chối yêu cầu huỷ vé |
 | `TicketChangeApproved` | Đã duyệt yêu cầu đổi chuyến |
 | `TicketChangeRejected` | Từ chối yêu cầu đổi chuyến |
+| `RefundSucceeded` | Đã hoàn tiền |
+| `RefundFailed` | Hoàn tiền thất bại |
 
 Hai loại `…Rejected` có lý do từ chối của quản lý **chép nguyên văn** vào cuối `body`; quản lý không
 nêu lý do thì body ghi rõ *"Người duyệt không nêu lý do."* chứ không để cụt.
 
-> 🔴 **Nội dung thông báo KHÔNG chứa số tiền** — không có khoản hoàn nào, không phí huỷ. Việc hoàn
-> tiền do bảng `Refunds` (US 8, sprint khác) thực hiện và có thể thất bại rồi thử lại, nên nêu một
-> con số ở đây là hứa trước một việc hệ thống chưa làm; định dạng tiền cũng là việc của frontend.
-> Frontend cần hiển thị số tiền thì lấy từ chính dòng yêu cầu. Có test ghim điều này (body không
-> được chứa chữ số nào) — chi tiết: `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §6.1.
+Hai loại `Refund…` nhắm vào **chủ khoản hoàn** (không phải người duyệt) và trỏ vào dòng `Refunds`
+qua `RelatedEntityType = Refund` + `RelatedEntityId` — màn danh sách thông báo bấm vào thì mở màn
+*"Hoàn tiền của tôi"* (`/my-refunds`). Khoản hoàn không có màn chi tiết riêng: dòng trong danh sách
+đã đủ để đọc một mình (số tiền, trạng thái, lý do hỏng).
+
+> 🔴 **Nội dung thông báo KHÔNG chứa số tiền** — không có khoản hoàn nào, không phí huỷ; hai loại
+> `Refund…` cũng vậy. Với thông báo huỷ/đổi: việc hoàn tiền do bảng `Refunds` (US 8) thực hiện và có
+> thể thất bại rồi thử lại, nên nêu một con số ở đó là hứa trước một việc hệ thống chưa làm. Với
+> thông báo hoàn tiền: số tiền nằm ở chính dòng `Refunds` (cột `Amount` — con số **đã thực sự gửi
+> lên cổng**), chép vào thông báo là dựng bản sao thứ hai có thể lệch; định dạng tiền cũng là việc
+> của frontend. Frontend cần số tiền thì lấy từ chính dòng yêu cầu / dòng khoản hoàn. Có test ghim
+> điều này (body không được chứa chữ số nào) ở cả hai notifier — chi tiết:
+> `docs/33-thong-bao-ket-qua-huy-doi-ve.md` §6.1 và `docs/41-thong-bao-ket-qua-hoan-tien.md` §6.
 
 ### Ví dụ client (frontend)
 
