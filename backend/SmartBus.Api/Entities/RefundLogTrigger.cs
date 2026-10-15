@@ -17,7 +17,7 @@ namespace SmartBus.Api.Entities;
 /// trị, nên nó đã được <c>AuditLogMiddleware</c> ghi vào bảng <c>AuditLogs</c> kèm người thực hiện
 /// (US 23). Chép thêm một cột người-vừa-bấm vào đây là tạo nguồn sự thật thứ hai cho cùng một câu
 /// hỏi — hai chỗ trả lời "ai bấm" thì sớm muộn cũng lệch nhau. Xem
-/// <c>docs/35-csdl-hoan-tien.md</c> §2.5.
+/// <c>docs/40-csdl-hoan-tien.md</c> §2.5.
 /// </summary>
 public enum RefundLogTrigger
 {

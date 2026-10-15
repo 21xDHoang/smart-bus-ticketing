@@ -9,7 +9,7 @@ namespace SmartBus.Api.Data;
 ///
 /// Dựng theo task Sprint 4 *"Migrate bảng Refunds, RefundLogs"* (Vàng Thị Dăm, dòng 38).
 ///
-/// ⚠️ A9 KHÔNG có hai bảng này — xem ghi chú "ngoài A9" ở <c>docs/35-csdl-hoan-tien.md</c> §1. Đây
+/// ⚠️ A9 KHÔNG có hai bảng này — xem ghi chú "ngoài A9" ở <c>docs/40-csdl-hoan-tien.md</c> §1. Đây
 /// là nhóm bảng thứ tư của dự án nằm ngoài danh sách 20 bảng đóng băng, sau
 /// <c>CancellationRequests</c> + <c>TicketChanges</c> (<c>docs/32</c> §1), <c>Notifications</c>
 /// (<c>docs/33</c> §1) và <c>TicketValidations</c> (<c>docs/34</c> §1).
@@ -175,7 +175,7 @@ public partial class AppDbContext
             // an toàn. Job vẫn phải giành dòng bằng một lượt UPDATE khoá phiên bản (đọc → sửa trạng
             // thái → SaveChanges) TRƯỚC khi gọi cổng, để lượt thua nhận DbUpdateConcurrencyException
             // và thoát ra mà chưa gọi gì. Chốt này phải nằm ở tầng service — xem
-            // docs/35-csdl-hoan-tien.md §4.2.
+            // docs/40-csdl-hoan-tien.md §4.2.
             //
             // xmin là cột hệ thống của PostgreSQL — KHÔNG sinh cột mới trong migration.
             e.Property<uint>("xmin").HasColumnName("xmin").IsRowVersion();
@@ -230,7 +230,7 @@ public partial class AppDbContext
             //
             // Hệ quả: nhật ký có thể có NHIỀU dòng cho một lượt gọi nếu tầng service ghi log hai lần.
             // Đó là lý do phép đếm retryCount phải đếm theo Trigger chứ không đếm thô số dòng — xem
-            // docs/35-csdl-hoan-tien.md §4.4.
+            // docs/40-csdl-hoan-tien.md §4.4.
         });
     }
 }

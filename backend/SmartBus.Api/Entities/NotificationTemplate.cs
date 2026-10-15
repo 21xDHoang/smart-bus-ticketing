@@ -10,7 +10,7 @@ namespace SmartBus.Api.Entities;
 ///
 /// ⚠️ <b>Bảng này KHÔNG có trong A9.</b> A9 (#15) chỉ có <c>Notifications</c>. Cùng tình trạng với
 /// <c>TicketChanges</c>/<c>CancellationRequests</c> (<c>docs/32</c> §1), <c>TicketValidations</c>
-/// (<c>docs/34</c> §1) và <c>Refunds</c>/<c>RefundLogs</c> (<c>docs/35</c> §1): tên bảng có thật
+/// (<c>docs/34</c> §1) và <c>Refunds</c>/<c>RefundLogs</c> (<c>docs/40</c> §1): tên bảng có thật
 /// trong bảng phân công, A9 thì không. Cách xử lý vẫn như cũ — <b>dựng theo phân công, rồi báo nhóm
 /// bổ sung A9</b>; chủ CSDL không tự thêm bảng ngoài A9 mà im lặng.
 ///

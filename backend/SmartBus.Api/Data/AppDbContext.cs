@@ -137,6 +137,6 @@ public partial class AppDbContext : DbContext
     // SeatHolds + SeatHoldLogs ở ConfigureSeat.
     //
     // A9 KHÔNG có hai bảng này — lần thứ tư việc "A9 lệch thực tế" được nhắc, xem
-    // docs/35-csdl-hoan-tien.md §1. Xem AppDbContext.Refund.cs.
+    // docs/40-csdl-hoan-tien.md §1. Xem AppDbContext.Refund.cs.
     partial void ConfigureRefund(ModelBuilder modelBuilder);
 }

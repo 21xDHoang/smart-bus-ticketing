@@ -32,7 +32,7 @@ public enum RefundLogResult
     /// 🔴 Khoản hoàn của lượt này <b>giữ nguyên <see cref="RefundStatus.Pending"/></b> và KHÔNG được
     /// xếp vào lịch thử lại — gọi lại một lượt chưa rõ kết quả là đúng đường dẫn tới hoàn hai lần.
     /// Việc tra cho ra nhẽ thuộc bước đối soát (dòng 43): đối chiếu với sao kê cổng rồi mới chốt
-    /// trạng thái. Lý do đầy đủ: <c>docs/35-csdl-hoan-tien.md</c> §4.3.
+    /// trạng thái. Lý do đầy đủ: <c>docs/40-csdl-hoan-tien.md</c> §4.3.
     /// </summary>
     Unresolved,
 
