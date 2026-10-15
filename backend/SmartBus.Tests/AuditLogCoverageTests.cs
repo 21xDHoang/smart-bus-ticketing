@@ -178,6 +178,19 @@ public class AuditLogCoverageTests
         // xử lý chung thay vì mỗi task thêm một dòng ngoại lệ.
         ("POST",   "/api/vouchers/validate",                     CachGhi.KhongGhi),
 
+        // Soát vé — story 15, Trần Trung Hiếu (Sprint 4, dòng 15 + 19). POST CÓ đổi dữ liệu: mỗi
+        // lượt quét ghi một dòng TicketValidations qua ITicketValidationRecorder, nên middleware tự
+        // ghi AuditLogs (Create) chứ KHÔNG KhongGhi như /vouchers/validate ngay trên — phép đọc thuần
+        // đằng kia không ghi gì, lượt soát bên này ghi thật.
+        // ⚠️ GHI NHẬN — Target chỉ là "Validate", KHÔNG phải "TicketValidations:<id>": route không
+        // có tham số {id} nên ResolveTableName rơi về đoạn tĩnh cuối (giới hạn đã được nhắc trước
+        // trong doc-comment của AuditLogMiddleware), và response của hợp đồng không có trường "id"
+        // ở nóc để ghép. Nhật ký thật của lượt soát nằm ở bảng TicketValidations; dòng AuditLogs
+        // này chỉ chứng minh "có người đã gọi endpoint soát vé lúc nào". Cùng nhóm giới hạn với hai
+        // dòng {sessionCode} của /seat-holds — nhóm cần chốt MỘT cách xử lý chung; test ghim sự thật
+        // này nằm ở TicketValidationApiTests.
+        ("POST",   "/api/tickets/validate",                     CachGhi.Middleware),
+
         // CRUD voucher — story 18, Trần Trung Hiếu. Ba endpoint đều do AuditLogMiddleware tự ghi
         // (POST → Create, PUT/PATCH → Update); tên bảng suy ra là "Vouchers" — POST không có tham số
         // nào nên lấy đoạn tĩnh cuối, PUT/PATCH lấy đoạn trước {id}. Target của POST là id voucher

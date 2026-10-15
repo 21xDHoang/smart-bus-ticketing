@@ -534,6 +534,13 @@ builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewServi
 // docs/39-hang-doi-ngoai-tuyen-soat-ve.md. Không có factory/decorator nào bọc interface này.
 builder.Services.AddScoped<ITicketValidationRecorder, TicketValidationRecorder>();
 
+// Soát vé — POST /api/tickets/validate (US 15, dòng 15 + dòng 19 Sprint 4 — Trần Trung Hiếu):
+// xác thực chữ ký QR (ITicketQrService, đã đăng ký ở trên) → tra vé → tính kết quả → ghi nhật ký
+// qua ITicketValidationRecorder (khối ngay trên). Hợp đồng ở mục "Soát vé QR" của
+// docs/api-contract.md; luồng ở docs/41-api-soat-ve-qr.md.
+// ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
+builder.Services.AddScoped<ITicketValidationService, TicketValidationService>();
+
 builder.Services.AddScoped<SeatHoldCreateService>();
 builder.Services.AddScoped<ISeatHoldCreateService>(provider => new NotifyingSeatHoldCreateService(
     provider.GetRequiredService<SeatHoldCreateService>(),
