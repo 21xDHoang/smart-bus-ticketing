@@ -8,7 +8,6 @@ import {
   Input,
   Result,
   Segmented,
-  Select,
   Space,
   Typography,
   message,
@@ -32,6 +31,7 @@ import {
 } from '../api/ticketRequestApi';
 import type { TicketRequestStatus, TicketRequestType } from '../api/ticketRequestApi';
 import type { AppError } from '../api/axiosClient';
+import NewTripSelector from '../components/NewTripSelector';
 import TicketStatusTag from '../components/TicketStatusTag';
 import { getTicketStatus, isTicketUsable } from '../components/ticketStatus';
 import {
@@ -316,14 +316,11 @@ export default function TicketChangeRequestPage() {
                   rules={[{ required: true, message: 'Vui lòng chọn chuyến mới.' }]}
                   extra="Ghế trống được chọn sẵn trong dữ liệu giả — khi nối API thật sẽ cho chọn ghế cụ thể."
                 >
-                  <Select
-                    placeholder="Chọn chuyến muốn đổi sang"
-                    options={MOCK_NEW_TRIPS.map((trip) => ({
-                      value: trip.id,
-                      label: `${trip.routeCode} — ${trip.routeName} · ${formatDateTime(
-                        trip.departureTime,
-                      )} · Ghế ${trip.seatNumber} · ${formatVnd(trip.price)}`,
-                    }))}
+                  <NewTripSelector
+                    currentDepartureTime={ticket.departureTime}
+                    currentPrice={ticket.price}
+                    options={MOCK_NEW_TRIPS}
+                    disabled={submitting}
                   />
                 </Form.Item>
               )}
