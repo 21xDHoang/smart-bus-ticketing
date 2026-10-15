@@ -4480,3 +4480,79 @@ dotnet ef database update
 
 Checklist soát migration, danh sách file đã có sẵn, và các chốt cần đối chiếu: xem
 **`docs/27-huong-dan-migrate-vouchers.md`**.
+
+## Khung giờ cao điểm — `/reports/peak-hours`
+
+> Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có (`PeakHoursReportController` — Trần Trung Hiếu,
+> task *"API phân tích khung giờ cao điểm theo mật độ hành khách"*, Sprint 4). Mục này trả lời
+> câu hỏi **"giờ nào trong ngày đông khách nhất"**; **tỷ lệ lấp đầy theo chuyến/tuyến/khung giờ**
+> (Kiên) và **đề xuất tần suất** (Hoàng) là các task khác cùng story. Mục "Báo cáo doanh thu —
+> /reports/revenue" (US 19, nhánh `feature/19-api-bao-cao-doanh-thu` — chưa merge lúc viết mục
+> này) là mục chị em trên cùng bề mặt `/reports`. Chốt nghiệp vụ đầy đủ: `docs/38-api-khung-gio-cao-diem.md`.
+
+**Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 20 là nghiệp vụ của quản lý). Người đã
+đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+#### `GET /reports/peak-hours` — khung giờ cao điểm theo mật độ hành khách
+
+Query — **mọi tham số bỏ trống được**:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+```json
+// PeakHoursReport — ví dụ khoảng 14 ngày
+{
+  "from": "2026-10-01",
+  "to": "2026-10-14",
+  "totalPassengers": 5230,
+  "totalTrips": 412,
+  "averagePassengersPerTrip": 12.69,
+  "peakHours": [7, 8, 17, 18],
+  "hours": [
+    { "hour": 0,  "passengers": 0,   "trips": 0,  "averagePassengersPerTrip": 0,    "isPeak": false },
+    { "hour": 7,  "passengers": 780, "trips": 41, "averagePassengersPerTrip": 19.02, "isPeak": true },
+    { "hour": 8,  "passengers": 902, "trips": 44, "averagePassengersPerTrip": 20.5,  "isPeak": true },
+    { "hour": 12, "passengers": 205, "trips": 31, "averagePassengersPerTrip": 6.61,  "isPeak": false }
+    // … đủ 24 giờ, giờ rỗng vẫn hiện diện với số 0 …
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `totalPassengers` / `totalTrips` | Tổng lượt khách / tổng chuyến khởi hành cả kỳ |
+| `averagePassengersPerTrip` | Mật độ trung bình cả kỳ, làm tròn 2 chữ số — **chính là ngưỡng** đánh dấu cao điểm |
+| `hours[]` | **Đủ 24 phần tử** (giờ 0–23, tăng dần) — trục biểu đồ cột theo khung giờ |
+| `hours[].hour` | Giờ trong ngày (**giờ Việt Nam**), 0–23 |
+| `hours[].passengers` / `trips` | Tổng lượt khách / số chuyến **khác nhau** khởi hành trong giờ đó |
+| `hours[].averagePassengersPerTrip` | Mật độ giờ = passengers / trips, làm tròn 2 chữ số — 0 khi giờ không có chuyến |
+| `hours[].isPeak` | `true` khi giờ **có chuyến**, cả kỳ **có khách**, và mật độ ≥ `averagePassengersPerTrip` |
+| `peakHours` | Danh sách giờ có `isPeak = true`, tăng dần — lọc nhanh cho FE |
+
+- **Nền số liệu là bảng `Tickets`, đếm vé `Paid`/`Used` của các chuyến KHỞI HÀNH trong kỳ.** Mật
+  độ hành khách = khách đã trả tiền và lên xe, không phải số ghế hay số chuyến. Vé `Cancelled`
+  bỏ (khách không lên xe); vé đã soát (`Used`) vẫn tính (người đó đã đi thật).
+- **Khung giờ = giờ khởi hành của chuyến, theo giờ Việt Nam (UTC+7).** Chuyến 00:30 giờ VN thuộc
+  giờ 0 của ngày HÔM ĐÓ; trục là giờ chạy chứ không phải giờ bán vé — báo cáo phục vụ điều chỉnh
+  tần suất chạy xe.
+- **Mật độ = khách trung bình mỗi chuyến.** Hai giờ cùng 100 khách nhưng một giờ có 20 chuyến,
+  giờ kia có 4 — chỗ đông là giờ 4 chuyến. Chia cho số chuyến khiến "cao điểm" phản ánh độ chật
+  của xe.
+- **So sánh trên giá trị ĐÃ LÀM TRÒN 2 chữ số** — con số hiển thị chính là con số được so sánh,
+  người đọc phản hồi tự kiểm lại được. Kỳ không có chuyến hoặc không có khách nào → `peakHours`
+  rỗng (không đánh dấu cao điểm khi ngưỡng bằng 0).
+- Khoảng `from` → `to` tối đa **366 ngày** · `to` trước `from` → **400** — lỗi gắn ở cả
+  `errors.from` lẫn `errors.to` · `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
+
+> **Cho task "API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ" (Kiên):** mục này đã gộp
+> khách theo giờ KHỞI HÀNH; tỷ lệ lấp đầy cần thêm mẫu số **sức chứa** (ghế của xe) — đơn vị
+> khác hẳn (phần trăm), đừng đổi ngữ nghĩa của `passengers` ở đây, mở endpoint riêng trên bề mặt
+> `/reports` (ví dụ `GET /reports/fill-rate`).
+>
+> **Cho task "API đề xuất tăng/giảm tần suất" (Hoàng):** đọc thẳng `peakHours` của mục này —
+> giờ cao điểm là giờ nên tăng chuyến, không cần dựng lại nền tính.
