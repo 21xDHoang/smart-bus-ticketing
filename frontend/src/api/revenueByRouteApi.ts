@@ -1,8 +1,14 @@
+import dayjs from 'dayjs';
+
 // -----------------------------------------------------------------------------
 // API BẢNG DOANH THU THEO TUYẾN — phục vụ màn hình "Doanh thu theo tuyến" (US 19
-// "Doanh thu", Sprint 4, task *"Bảng chi tiết doanh thu theo tuyến + sắp xếp, phân
-// trang"* của Nguyễn Đình Băng). Màn quản trị/vận hành: Admin và Manager xem doanh
-// thu bán vé gom theo từng tuyến, sắp xếp và phân trang phía server.
+// "Doanh thu", Sprint 4). Hai task liền kề của Nguyễn Đình Băng gộp trong một màn:
+//   * "Bảng chi tiết doanh thu theo tuyến + sắp xếp, phân trang" (nhánh
+//     feature/19-bang-chi-tiet-doanh-thu-theo-tuyen);
+//   * "Bộ lọc khoảng thời gian và tuyến cho báo cáo" (nhánh này) — thêm `from`/`to`
+//     (khoảng thời gian) và `routeId` (lọc tuyến) cho cùng bảng.
+// Màn quản trị/vận hành: Admin và Manager xem doanh thu bán vé gom theo từng tuyến,
+// lọc theo khoảng thời gian + tuyến, sắp xếp và phân trang phía server.
 //
 // Backend CHƯA có endpoint "theo tuyến" trong docs/api-contract.md — task *"API
 // doanh thu theo tuyến / theo xe / theo phương thức"* của Nguyễn Duy Kiên chưa làm,
@@ -12,8 +18,8 @@
 //
 // Hình dạng endpoint DỰ KIẾN (theo ghi chú ở mục "Báo cáo doanh thu — /reports/revenue"
 // của docs/api-contract.md — CHƯA cam kết, để Kiên chốt):
-//   GET /api/reports/revenue/by-route?from=&to=&sortBy=revenue&sortOrder=descend&page=1&pageSize=10
-//      → { items, total, totalRevenue, totalPayments }
+//   GET /api/reports/revenue/by-route?from=&to=&routeId=&sortBy=revenue&sortOrder=descend&page=1&pageSize=10
+//      → { items, total, totalRevenue, totalPayments, from, to, periodDays }
 // -----------------------------------------------------------------------------
 
 /** Trường có thể sắp xếp của bảng — giá trị khớp tham số query `sortBy` dự kiến. */
@@ -22,9 +28,16 @@ export type RouteRevenueSortField = 'routeName' | 'payments' | 'revenue';
 /** Chiều sắp xếp — dùng lại giá trị `order` của AntD Table (`ascend`/`descend`). */
 export type RouteRevenueSortOrder = 'ascend' | 'descend';
 
+/** Một tuyến để chọn trong bộ lọc — giá trị `routeId` khớp khoá dòng của bảng. */
+export interface RouteOption {
+  routeId: string;
+  routeCode: string;
+  routeName: string;
+}
+
 /** Một dòng doanh thu của một tuyến trong khoảng đã chọn. */
 export interface RouteRevenueRow {
-  /** Khóa chính của tuyến (Guid) — chỉ để `rowKey`, không hiển thị. */
+  /** Khóa chính của tuyến (Guid) — chỉ để `rowKey` và lọc, không hiển thị. */
   routeId: string;
   /** Mã tuyến (ví dụ "01", "B10"). */
   routeCode: string;
@@ -34,7 +47,7 @@ export interface RouteRevenueRow {
   revenue: number;
   /** Số giao dịch Success của tuyến trong khoảng. */
   payments: number;
-  /** Tỉ trọng doanh thu của tuyến so với tổng toàn kỳ (%). */
+  /** Tỉ trọng doanh thu của tuyến so với tổng của tập ĐANG LỌC (%). */
   sharePct: number;
 }
 
@@ -42,12 +55,18 @@ export interface RouteRevenueRow {
 export interface RouteRevenuePage {
   /** Các dòng thuộc trang hiện tại (đã sắp xếp). */
   items: RouteRevenueRow[];
-  /** Tổng số tuyến (trước khi cắt trang). */
+  /** Tổng số tuyến (trước khi cắt trang, sau khi lọc). */
   total: number;
-  /** Tổng doanh thu toàn kỳ (VND) — dùng cho thẻ số liệu. */
+  /** Tổng doanh thu của tập đang lọc (VND) — dùng cho thẻ số liệu. */
   totalRevenue: number;
-  /** Tổng giao dịch Success toàn kỳ. */
+  /** Tổng giao dịch Success của tập đang lọc. */
   totalPayments: number;
+  /** Ngày bắt đầu kỳ đã áp dụng (yyyy-MM-dd, lịch Việt Nam). */
+  from: string;
+  /** Ngày kết thúc kỳ đã áp dụng (yyyy-MM-dd), TÍNH CẢ. */
+  to: string;
+  /** Tổng số ngày trong kỳ. */
+  periodDays: number;
 }
 
 /** Tham số truy vấn của bảng. */
@@ -60,11 +79,19 @@ export interface RouteRevenueQuery {
   sortBy?: RouteRevenueSortField;
   /** Chiều sắp xếp — mặc định `descend` khi có `sortBy`. */
   sortOrder?: RouteRevenueSortOrder;
+  /** Ngày bắt đầu (yyyy-MM-dd) — trống = 29 ngày trước `to`. */
+  from?: string;
+  /** Ngày kết thúc (yyyy-MM-dd) — trống = hôm nay (giờ Việt Nam). */
+  to?: string;
+  /** Chỉ tính tuyến này — trống = toàn công ty. */
+  routeId?: string;
 }
 
 export interface RevenueByRouteApi {
-  /** Tải một trang doanh thu theo tuyến đã sắp xếp. */
+  /** Tải một trang doanh thu theo tuyến đã lọc + sắp xếp. */
   getByRoute: (query: RouteRevenueQuery) => Promise<RouteRevenuePage>;
+  /** Danh sách tuyến để đổ vào ô chọn của bộ lọc. */
+  listRoutes: () => Promise<RouteOption[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,11 +107,17 @@ const api: RevenueByRouteApi = {
   async getByRoute() {
     throw new Error('Backend báo cáo doanh thu theo tuyến chưa có — chưa thể tải bảng thật.');
   },
+  async listRoutes() {
+    throw new Error('Backend báo cáo doanh thu theo tuyến chưa có — chưa thể tải danh sách tuyến.');
+  },
 };
 
 // -------- Dữ liệu giả (dùng khi USE_MOCK_DATA = true) --------
 /** Giá vé trung bình giả (~12,5k) — cùng hằng số của revenueDashboardApi để hai màn khớp nhau. */
 const AVG_TICKET_PRICE = 12_500;
+
+/** Số ngày làm mốc của công thức doanh thu — doanh thu các kỳ khác co giãn theo độ dài kỳ. */
+const BASELINE_DAYS = 30;
 
 /** Danh sách tuyến giả — đủ dài để phân trang (mặc định 10 dòng/trang) có ý nghĩa. */
 const ROUTES: { routeCode: string; routeName: string }[] = [
@@ -123,11 +156,23 @@ function seeded01(seed: number): number {
   return x - Math.floor(x);
 }
 
-/** Toàn bộ dòng doanh thu theo tuyến (chưa sắp xếp, chưa cắt trang) — nền của mọi trang. */
-function buildAllRows(): RouteRevenueRow[] {
+/** Số ngày giữa hai mốc yyyy-MM-dd, TÍNH CẢ hai đầu — tối thiểu 1 để tránh chia 0. */
+function daysInRange(from: string, to: string): number {
+  const start = dayjs(from);
+  const end = dayjs(to);
+  return end.isBefore(start) ? 1 : Math.max(1, end.diff(start, 'day') + 1);
+}
+
+/**
+ * Toàn bộ dòng doanh thu theo tuyến (chưa sắp xếp, chưa cắt trang) — nền của mọi trang.
+ * Doanh thu 30 ngày làm mốc rồi co giãn theo `periodDays` để bộ lọc khoảng thời gian thực
+ * sự đổi số liệu (kỳ dài thu nhiều hơn, kỳ ngắn thu ít hơn).
+ */
+function buildAllRows(periodDays: number): RouteRevenueRow[] {
   const base = ROUTES.map((route, index) => {
     const frac = seeded01(index + 1);
-    const revenue = Math.round(15_000_000 + frac * 85_000_000);
+    const revenue30d = Math.round(15_000_000 + frac * 85_000_000);
+    const revenue = Math.round((revenue30d * periodDays) / BASELINE_DAYS);
     return {
       routeId: `route-${route.routeCode}`,
       routeCode: route.routeCode,
@@ -160,7 +205,16 @@ const mock: RevenueByRouteApi = {
   async getByRoute(query) {
     await delay(400);
 
-    const rows = buildAllRows();
+    const to = query.to ?? dayjs().format('YYYY-MM-DD');
+    const from = query.from ?? dayjs().subtract(BASELINE_DAYS - 1, 'day').format('YYYY-MM-DD');
+    const periodDays = daysInRange(from, to);
+
+    // Lọc theo tuyến trước khi tính tổng — tổng thẻ số liệu và dòng bảng phải khớp tập đang lọc.
+    let rows = buildAllRows(periodDays);
+    if (query.routeId) {
+      rows = rows.filter((row) => row.routeId === query.routeId);
+    }
+
     const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
     const totalPayments = rows.reduce((sum, row) => sum + row.payments, 0);
 
@@ -176,7 +230,17 @@ const mock: RevenueByRouteApi = {
     const start = (query.page - 1) * query.pageSize;
     const items = sorted.slice(start, start + query.pageSize);
 
-    return { items, total: rows.length, totalRevenue, totalPayments };
+    return { items, total: rows.length, totalRevenue, totalPayments, from, to, periodDays };
+  },
+
+  async listRoutes() {
+    await delay(200);
+    // Sắp theo mã tuyến có số trước chữ, cùng thứ tự hiển thị của ô chọn.
+    return ROUTES.map((route) => ({
+      routeId: `route-${route.routeCode}`,
+      routeCode: route.routeCode,
+      routeName: route.routeName,
+    })).sort((a, b) => a.routeCode.localeCompare(b.routeCode, undefined, { numeric: true }));
   },
 };
 
