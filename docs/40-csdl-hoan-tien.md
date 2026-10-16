@@ -13,9 +13,9 @@
 > 🟢 **Trạng thái:** entity `Refund` + `RefundLog`, bốn enum (`RefundSource`, `RefundStatus`,
 > `RefundLogResult`, `RefundLogTrigger`), cấu hình `AppDbContext.Refund.cs`, và migration
 > `Sprint4_Refunds_RefundLogs` (Vàng Thị Dăm, task Sprint 4 dòng 38) — **đã sinh và đã soát, xem §8**.
-> **Chưa merge, chưa áp lên CSDL chung**: bảng chỉ có thật sau khi PR được merge rồi chạy
-> `database update` (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4). Trước bước đó, endpoint nào chạm
-> chúng sẽ lỗi `relation "Refunds" does not exist`.
+> **Đã merge** vào `main` qua PR #203 và **đã áp lên CSDL chung** — kiểm lại 17/10/2026:
+> `dotnet ef migrations list` liệt kê **18/18** migration, **0** dòng `(Pending)`. Endpoint nào chạm
+> hai bảng này nay chạy thật (bề mặt đọc: `docs/41`).
 >
 > ⚠️ **Vì sao số 40 mà không phải 35:** tài liệu này mang số `35` từ lúc viết, nhưng khi gộp `main`
 > thì `main` **đã có** `docs/35-service-xuat-pdf-bao-cao.md` (US 21), và `36`–`39` cũng đã bị chiếm —
@@ -507,8 +507,8 @@ thêm khi có câu truy vấn thật. Ai cần thì nhắn Dăm.
    `feature/8-api-tra-cuu-hoan-tien` (API tra cứu hoàn tiền, dòng 42) **đã hết đụng** kể từ 15/10/2026:
    khi gộp nhánh migrate vào, nó đổi `docs/36-api-tra-cuu-hoan-tien.md` →
    **`docs/41-api-tra-cuu-hoan-tien.md`** (nhường `36` cho `docs/36-api-cap-nhat-vi-tri-chuyen.md`) và
-   kéo bản `docs/35-csdl-hoan-tien.md` cũ của nó về khớp `docs/40`. Nhánh đó vẫn **chưa merge vào
-   `main`**, nhưng **không còn chờ đổi số**. Nguyên nhân chung: các nhánh chọn số **độc lập với nhau**,
+   kéo bản `docs/35-csdl-hoan-tien.md` cũ của nó về khớp `docs/40`. Nhánh đó **đã vào `main`** qua
+   **PR #205** (kiểm lại 17/10/2026), nhưng **không còn chờ đổi số**. Nguyên nhân chung: các nhánh chọn số **độc lập với nhau**,
    còn `main` nhận số theo **thứ tự merge** — và git **không** báo xung đột vì tên file khác nhau. Đề
    nghị: hoặc chốt một bảng số hiệu, hoặc **bỏ hẳn số ở tên file** (chỉ giữ tên mô tả) để hết đụng.
    Chi tiết: `docs/37-csdl-mau-thong-bao-va-theo-doi.md` §8.6 mục 6.
@@ -615,10 +615,14 @@ bảng, **không** sửa `SeatHolds` / `SeatHoldLogs` / `SeatHoldRaceFlowApiTest
 
 ### 8.4 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
 
-1. PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge** vào `main`.
-2. **Sau khi merge** mới áp lên CSDL chung:
-   `dotnet ef database update --project backend/SmartBus.Api`.
-   Trước bước đó, endpoint nào chạm hai bảng này sẽ lỗi `relation "Refunds" does not exist`.
+✅ **Cả hai bước đã xong** (kiểm lại 17/10/2026) — giữ nguyên hai dòng dưới làm mốc lịch sử:
+
+1. ~~PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge** vào `main`.~~
+   ✅ Đã merge qua **PR #203** (`feature/8-migrate-refunds-refundlogs`).
+2. ~~**Sau khi merge** mới áp lên CSDL chung:
+   `dotnet ef database update --project backend/SmartBus.Api`.~~
+   ✅ Đã chạy. Kiểm lại 17/10/2026: **18/18** migration đã áp, **0** `(Pending)` — và lượt kiểm đó
+   nối tới `13.237.241.81:5432`, tức **CSDL chung**, không phải bản Docker ở máy.
 
 ### 8.5 ⚠️ Phân tích đồ thị (GitNexus) KHÔNG chạy được trên máy này
 

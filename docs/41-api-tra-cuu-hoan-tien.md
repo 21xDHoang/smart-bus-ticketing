@@ -9,15 +9,17 @@
 > **Giàng A Vàng** (test, dòng 48–49).
 >
 > 🟢 **Trạng thái:** hai endpoint **đã code xong** trên nhánh `feature/8-api-tra-cuu-hoan-tien`,
-> `dotnet build` 0/0 và `dotnet test` **1460/1460** sau lượt gộp `main` thứ hai (§8.5). **Chưa merge
-> vào `main`.** Nhánh này từng **xếp trên** `feature/8-migrate-refunds-refundlogs` (task dòng 38) vì
+> `dotnet build` 0/0 và `dotnet test` **1460/1460** sau lượt gộp `main` thứ hai (§8.5). **Đã merge
+> vào `main`** qua **PR #205** (kiểm lại 17/10/2026). Nhánh này từng **xếp trên**
+> `feature/8-migrate-refunds-refundlogs` (task dòng 38) vì
 > API không biên dịch được nếu thiếu entity `Refund`/`RefundLog` — **nhánh đó nay đã vào `main`**
 > (PR #203), nên **base của PR đổi sang `main`**.
 >
-> 🔴 **Chưa áp lên CSDL chung.** Bảng `Refunds` / `RefundLogs` có thật sau khi chạy `database update`
-> (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4) — nhánh dòng 38 đã vào `main` nên bước đó nay
-> **đã chạy được**, nhưng **chưa ai chạy**. Trước bước đó, gọi hai endpoint này sẽ lỗi
-> `relation "Refunds" does not exist` — **không** phải lỗi của service.
+> 🟢 **Đã áp lên CSDL chung** (kiểm lại 17/10/2026). Bảng `Refunds` / `RefundLogs` có thật sau khi
+> chạy `database update` (thứ tự ở `docs/25-huong-dan-csdl-chung.md` §4) — bước đó **đã chạy**:
+> `dotnet ef migrations list` liệt kê **18/18** migration, **0** dòng `(Pending)`, và lượt kiểm nối
+> tới `13.237.241.81:5432` (**CSDL chung**, không phải bản Docker ở máy). Hai endpoint dưới đây
+> nay chạy thật.
 >
 > 🔢 **Số hiệu tài liệu — bản này từng là `docs/36`.** Ngày 15/10/2026, khi nhánh này gộp nhánh
 > `feature/8-migrate-refunds-refundlogs` vào, `main` đã có `docs/36-api-cap-nhat-vi-tri-chuyen.md`
@@ -346,18 +348,21 @@ dotnet test  SmartBus.Tests   → 1460/1460 ✅
 
 ### 8.6 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
 
-1. **Đổi base của PR sang `main`** rồi mới xin approve (⛔ luật 7: phải có người khác approve). Base
-   cũ là nhánh dòng 38 — nhánh đó **đã vào `main`**, để nguyên base thì GitHub tự đóng PR khi nhánh
-   nền bị xoá.
+✅ **Mục 1–3 đã xong** (kiểm lại 17/10/2026). Mục 4 còn chờ sandbox chạy thật.
+
+1. ~~**Đổi base của PR sang `main`** rồi mới xin approve (⛔ luật 7: phải có người khác approve).~~
+   ✅ Đã xong — **PR #205** đã merge vào `main`.
 2. ✅ **Không phải dựng lại nhánh.** Cảnh báo cũ ở đây lo `main` nhận nội dung dòng 38 dưới **commit
    hash khác** (squash) — điều đó **đã không xảy ra**: PR #203 là **merge commit**, `de18017` nằm
-   nguyên trong lịch sử `main`. Nên diff của PR chỉ còn **4 commit** của nhánh này.
-3. `dotnet ef database update --project backend/SmartBus.Api` — nhánh dòng 38 đã vào `main` nên bước
-   này nay **chạy được**; sau đó hai endpoint mới chạy thật. Trước đó chúng trả 500 kèm
-   `relation "Refunds" does not exist`. **Chỉ Dăm chạy** (⛔ luật 3).
+   nguyên trong lịch sử `main`.
+3. ~~`dotnet ef database update --project backend/SmartBus.Api` — nhánh dòng 38 đã vào `main` nên bước
+   này nay **chạy được**; sau đó hai endpoint mới chạy thật.~~ ✅ **Đã chạy** — 18/18 migration,
+   0 `(Pending)` trên CSDL chung.
 4. Kiểm thử chéo (**Giàng A Vàng**) chỉ có nghĩa khi bước 3 xong **và** có service ghi vào `Refunds`.
-   Nhánh dòng 30 đã cắm `PlaceholderRefundGatewayCaller` — mọi lượt ra `Unresolved`, nên **chưa** có
-   lượt nào ghi `Succeeded`; test tích hợp ở §8.2 vì vậy vẫn seed thẳng dữ liệu.
+   Bước 3 nay đã xong, và cổng hoàn tiền **không còn là placeholder**: PR #214 đã thay
+   `PlaceholderRefundGatewayCaller` bằng `RefundGatewayCaller` thật (`docs/43`). ⚠️ Nhưng sandbox
+   **chưa được chạy thật** (nhóm chưa có khoá đối tác MoMo/ZaloPay — `docs/43` §đầu), nên vẫn chưa
+   chắc có lượt nào ra `Succeeded`; test tích hợp ở §8.2 vì vậy vẫn seed thẳng dữ liệu.
 5. ✅ **Va chạm số hiệu tài liệu — ĐÃ DỌN 15/10/2026.** `main` từng có **hai** `docs/40-*`:
    `40-csdl-hoan-tien.md` (của Dăm, vào trước qua PR #203) và bản retry của Hoàng (vào sau qua
    PR #202). Theo lối nhóm *"người viết sau nhường số"* thì bản sau nhường — **Hoàng đã đồng ý**, nên

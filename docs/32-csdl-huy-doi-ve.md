@@ -10,9 +10,10 @@
 > 🟢 **Trạng thái 12/10/2026:** entity `CancellationRequest` + `TicketChange`, cấu hình
 > `AppDbContext.CancellationRequest.cs` / `AppDbContext.TicketChange.cs`, và migration
 > `20261012023745_Sprint4_CancellationRequests_TicketChanges` (Vàng Thị Dăm, task Sprint 4 dòng 2)
-> **đã xong và đã soát** — xem §8. **Chưa merge, chưa áp lên CSDL chung**: hai bảng chỉ có thật sau
-> khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp vẫn chạy được trên EF
-> InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem §4.
+> **đã xong và đã soát** — xem §8. **Đã merge** vào `main` và **đã áp lên CSDL chung** — kiểm lại
+> 17/10/2026: `dotnet ef migrations list` liệt kê **18/18** migration, **0** dòng `(Pending)`. Cảnh báo
+> ở cuối câu cũ **vẫn giữ nguyên giá trị**: test tích hợp chạy trên EF InMemory, mà InMemory
+> **không** cưỡng chế chỉ mục/FK — xem §4.
 
 ## 1. Hai bảng này KHÔNG nằm trong A9 — phải báo nhóm
 
@@ -321,7 +322,10 @@ file này. Xoá dòng đó đi thì mất concurrency token của §4.3.
 
 **Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4:**
 
-1. PR nhánh này → có người khác approve → **Squash and merge** vào `main`.
-2. **Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.
-   Trước bước đó, CSDL chung **chưa có** hai bảng — endpoint nào chạm chúng sẽ lỗi
-   `relation "…" does not exist`.
+✅ **Cả hai bước đã xong** (kiểm lại 17/10/2026) — giữ nguyên hai dòng dưới làm mốc lịch sử:
+
+1. ~~PR nhánh này → có người khác approve → **Squash and merge** vào `main`.~~
+   ✅ Đã merge.
+2. ~~**Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.~~
+   ✅ Đã chạy. CSDL chung nay **đã có** `CancellationRequests` và `TicketChanges` — **18/18** migration
+   đã áp, **0** dòng `(Pending)`.
