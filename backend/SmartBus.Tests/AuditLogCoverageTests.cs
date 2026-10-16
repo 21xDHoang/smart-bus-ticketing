@@ -213,6 +213,15 @@ public class AuditLogCoverageTests
         // WithWebHostBuilder, kéo theo toàn bộ helper seed/token của file.
         ("PATCH",  "/api/cancellation-requests/{id:guid}",       CachGhi.Middleware),
         ("PATCH",  "/api/ticket-changes/{id:guid}",              CachGhi.Middleware),
+
+        // Đăng ký / huỷ theo dõi thông báo — story 10, Trần Trung Hiếu (Sprint 5 dòng 17). Hai
+        // endpoint đều do AuditLogMiddleware tự ghi (POST → Create, DELETE → Delete); tên bảng suy
+        // ra là "Subscriptions" — POST không có tham số nào nên lấy đoạn tĩnh cuối, DELETE lấy đoạn
+        // trước {id}. Target của POST là id dòng theo dõi mới đọc từ body trả về (response có trường
+        // "id") — cùng lối POST /api/monthly-passes. Huỷ theo dõi là XOÁ dòng chứ không lật cờ
+        // (docs/37 §3.2) nên DELETE ghi Delete, không có PATCH nào.
+        ("POST",   "/api/subscriptions",                          CachGhi.Middleware),
+        ("DELETE", "/api/subscriptions/{id:guid}",                CachGhi.Middleware),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>

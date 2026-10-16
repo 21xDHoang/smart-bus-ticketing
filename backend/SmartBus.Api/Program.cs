@@ -616,6 +616,16 @@ builder.Services.AddHostedService<RefundRetryBackgroundService>();
 // chèn vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
 builder.Services.AddScoped<IRefundLookupService, RefundLookupService>();
 
+// Đăng ký / huỷ theo dõi thông báo theo tuyến và trạm: GET/POST/DELETE /api/subscriptions.
+// Task "API đăng ký / huỷ theo dõi thông báo theo tuyến và trạm" (US 10, Sprint 5 dòng 17) —
+// Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Bảng Subscriptions đứng NGOÀI danh sách A9 nên service đọc thẳng DbSet (docs/37); hai service
+// của Kiên (bắn tin khi xe cách trạm <500m, đẩy sự cố theo tuyến) và component công tắc của Thịnh
+// sẽ đọc cùng bảng này ở Sprint 5.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR ghế, trước phần hạ tầng JWT/RBAC/CORS) để không
+// chèn vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
