@@ -564,13 +564,19 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
 // Ba người gọi phân biệt bằng trigger (chi tiết ở IRefundAttemptService): service hoàn tiền tự
 // động khi duyệt huỷ vé (dòng 28 — Kiên, chưa dựng) → Initial; nút "Thử lại" của màn Admin
 // (dòng 35 — Băng, chưa nối) → ManualRetry; job theo lịch ngay dưới → ScheduledRetry.
-// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu — chưa dựng), nên hôm nay
-// IRefundGatewayCaller trỏ vào Placeholder: mọi lượt gọi trả Unresolved → khoản giữ nguyên Pending,
-// TUYỆT ĐỐI không ghi Succeeded giả. Khi dòng 29 vào thì đổi ĐÚNG MỘT dòng đăng ký dưới đây sang
-// client thật.
+// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu) — đã dựng: RefundGatewayCaller tra client
+// theo MethodCode của giao dịch gốc (docs/40 §2.5) và bọc lỗi vận chuyển thành Unresolved, TUYỆT ĐỐI
+// không đoán. Thay chỗ đăng ký Placeholder trước đây (class Placeholder vẫn nằm ở Services/ — file
+// của Hoàng, nhờ Hoàng xem qua PR này).
+// Ba client đăng ký qua AddHttpClient (transient) và chỉ được dựng khi có lời gọi — máy cấu hình
+// thiếu cổng nào thì cổng đó không kéo sập dây chuyền (cùng lối PaymentGatewayResolver).
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
-builder.Services.AddScoped<IRefundGatewayCaller, PlaceholderRefundGatewayCaller>();
+builder.Services.Configure<VnPayRefundOptions>(builder.Configuration.GetSection(VnPayRefundOptions.SectionName));
+builder.Services.AddScoped<IRefundGatewayCaller, RefundGatewayCaller>();
+builder.Services.AddHttpClient<MoMoRefundClient>();
+builder.Services.AddHttpClient<VnPayRefundClient>();
+builder.Services.AddHttpClient<ZaloPayRefundClient>();
 // Thông báo kết quả hoàn tiền cho khách (US 8, dòng 34 Sprint 4 — Phùng Duy Hoàng): từ đây
 // IRefundAttemptService resolve ra LỚP BỌC NotifyingRefundAttemptService thay vì lớp trần, nên CẢ BA
 // đường gọi cổng ở trên đi qua chỗ báo tin mà không đường nào phải tự nhớ — kể cả hai đường chưa
