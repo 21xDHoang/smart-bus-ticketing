@@ -5197,7 +5197,7 @@ liệu của người khác. Danh sách toàn hệ thống là việc của `GET
 | Câu hỏi | Hiện trạng |
 |---|---|
 | **Thông báo kết quả hoàn tiền đi kênh nào?** Bảng phân công dòng 45 ghi *"qua **email** và trên web"*, nhưng A8.5 chốt thông báo **chỉ in-app qua SignalR** + bảng `Notifications`, không email/SMS/Web Push | **Chưa cài.** Cùng dạng xung đột đã gặp ở dòng 7 (docs/33 §1) — nhóm nên chốt **một lần** cho cả hai |
-| **Cổng sandbox nào hoàn tiền được?** Dòng 40 (Hiếu) gọi cổng để hoàn; MoMo/VNPay/ZaloPay sandbox có API hoàn hay không chưa ai kiểm | Chưa kiểm — chặn dòng 40 |
+| **Cổng sandbox nào hoàn tiền được?** Dòng 40 (Hiếu) gọi cổng để hoàn; MoMo/VNPay/ZaloPay sandbox có API hoàn hay không chưa ai kiểm | ✅ **Đã kiểm** (dòng 40 đã dựng, xem `docs/43-api-goi-cong-hoan-tien.md` §4): MoMo/ZaloPay sandbox CÓ API hoàn (khoá test công khai); **VNPay sandbox HẠN CHẾ** hoàn tiền — cần liên hệ VNPAY mở. Nhóm vẫn cần chốt cách xử lý với VNPay |
 | **`Refunds` + `RefundLogs` bổ sung vào A9?** | Nhóm cần chốt — lần thứ **tư** việc "A9 lệch thực tế" được nhắc |
 | **Ai làm `GET /admin/refunds`?** Bảng phân công có màn (dòng 46–47) nhưng **không có dòng nào** giao API danh sách ở tầng backend | Chưa có chủ |
 
