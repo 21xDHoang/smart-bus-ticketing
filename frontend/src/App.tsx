@@ -40,6 +40,7 @@ import AdminRefundPage from './pages/AdminRefundPage';
 import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
 import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
+import RevenueByRoutePage from './pages/RevenueByRoutePage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -386,6 +387,19 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <RevenueDashboardPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /revenue-by-route là màn hình bảng chi tiết doanh thu theo tuyến (US 19
+                  "Doanh thu", Sprint 4, task của Nguyễn Đình Băng): doanh thu bán vé gom theo
+                  từng tuyến, sắp xếp và phân trang. Báo cáo tài chính nên chỉ Admin và Manager
+                  vào được. Backend "theo tuyến" chưa có nên màn hình đang chạy dữ liệu giả
+                  (revenueByRouteApi.ts). */}
+              <Route
+                path="/revenue-by-route"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <RevenueByRoutePage />
                   </RouteGuard>
                 }
               />
