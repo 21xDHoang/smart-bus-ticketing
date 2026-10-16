@@ -318,6 +318,12 @@ const NAV: NavEntry[] = [
         roles: ADMIN_MANAGER,
         icon: <FundOutlined />,
       },
+      {
+        to: '/ticket-validation-stats',
+        label: 'Thống kê lượt soát',
+        roles: ADMIN_MANAGER,
+        icon: <ScanOutlined />,
+      },
     ],
   },
 ];
