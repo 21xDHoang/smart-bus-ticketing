@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, DatePicker, Flex, Table, Typography, theme } from 'antd';
+import { Button, Card, Table, Typography, theme } from 'antd';
 import type { TableProps } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
-import dayjs, { type Dayjs } from 'dayjs';
-import fillRateReportApi from '../api/fillRateReportApi';
-import type { FillRateReport, TripFillRate } from '../api/fillRateReportApi';
+import fillRateReportApi, { defaultFillRateFilter } from '../api/fillRateReportApi';
+import type { FillRateFilterValue, FillRateReport, TripFillRate } from '../api/fillRateReportApi';
 import type { AppError } from '../api/axiosClient';
-import { ErrorState, LoadingState, PageCard, PageHeader, RouteBadge } from '../components/ui';
-import { PAGE_SIZE_OPTIONS, formatTime } from '../components/ui/format';
+import FillRateFilter from '../components/FillRateFilter';
+import { ErrorState, FilterBar, LoadingState, PageCard, PageHeader, RouteBadge } from '../components/ui';
+import { PAGE_SIZE_OPTIONS, formatDate, formatDateTime } from '../components/ui/format';
 
 const { Text } = Typography;
 
@@ -69,12 +69,12 @@ function FillRateBar({ percent }: { percent: number }) {
 
 const COLUMNS: TableProps<TripFillRate>['columns'] = [
   {
-    title: 'Giờ khởi hành',
+    title: 'Khởi hành',
     dataIndex: 'departureTime',
     key: 'departureTime',
-    width: 120,
+    width: 150,
     render: (departureTime: string) => (
-      <span style={{ fontWeight: 600 }}>{formatTime(departureTime)}</span>
+      <span style={{ fontWeight: 600 }}>{formatDateTime(departureTime)}</span>
     ),
   },
   {
@@ -130,13 +130,14 @@ const COLUMNS: TableProps<TripFillRate>['columns'] = [
 ];
 
 // Màn hình "Thống kê tỷ lệ lấp đầy theo chuyến" (US 20 "Tỷ lệ lấp đầy", task của Dương Thị
-// Hạnh) — màn quản trị/vận hành, chỉ Admin và Manager vào được (route guard ở App.tsx). Chọn
-// một ngày rồi xem từng chuyến đầy/trống tới đâu: dải thẻ tóm tắt + bảng chuyến có thanh màu.
+// Hạnh) — màn quản trị/vận hành, chỉ Admin và Manager vào được (route guard ở App.tsx). Lọc
+// theo tuyến + khung giờ + khoảng ngày rồi xem từng chuyến đầy/trống tới đâu: dải thẻ tóm tắt
+// + bảng chuyến có thanh màu.
 //
 // Backend thống kê tỷ lệ lấp đầy chưa có nên màn hình đang chạy dữ liệu giả
 // (fillRateReportApi.ts) — cùng lối dashboard doanh thu (revenueDashboardApi.ts).
 export default function FillRateReportPage() {
-  const [date, setDate] = useState<Dayjs>(() => dayjs());
+  const [filter, setFilter] = useState<FillRateFilterValue>(() => defaultFillRateFilter());
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -149,7 +150,7 @@ export default function FillRateReportPage() {
     setState({ status: 'loading' });
 
     fillRateReportApi
-      .getReport(date.format('YYYY-MM-DD'))
+      .getReport(filter)
       .then((report) => {
         if (cancelled) return;
         setState({ status: 'done', report });
@@ -166,110 +167,96 @@ export default function FillRateReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [date, reloadKey]);
+  }, [filter, reloadKey]);
 
-  if (state.status === 'loading') {
-    return (
-      <div>
-        <PageHeader
-          title="Tỷ lệ lấp đầy theo chuyến"
-          subtitle="Xem từng chuyến trong ngày đầy/trống tới đâu để điều chỉnh tần suất chạy xe."
-        />
+  // Bộ lọc + nút làm mới luôn hiển thị (kể cả lúc đang tải hay lỗi) để người dùng đổi lọc ngay.
+  return (
+    <div>
+      <PageHeader
+        title="Tỷ lệ lấp đầy theo chuyến"
+        subtitle="Xem từng chuyến đầy/trống tới đâu để điều chỉnh tần suất chạy xe."
+      />
+
+      <FilterBar
+        actions={
+          <Button icon={<ReloadOutlined />} onClick={() => setReloadKey((key) => key + 1)}>
+            Làm mới
+          </Button>
+        }
+      >
+        <FillRateFilter value={filter} onChange={setFilter} disabled={state.status === 'loading'} />
+      </FilterBar>
+
+      {state.status === 'loading' ? (
         <LoadingState description="Đang tải số liệu tỷ lệ lấp đầy…" />
-      </div>
-    );
-  }
-
-  if (state.status === 'error') {
-    return (
-      <div>
-        <PageHeader
-          title="Tỷ lệ lấp đầy theo chuyến"
-          subtitle="Xem từng chuyến trong ngày đầy/trống tới đâu để điều chỉnh tần suất chạy xe."
-        />
+      ) : state.status === 'error' ? (
         <ErrorState
           title="Không tải được báo cáo tỷ lệ lấp đầy"
           description={state.message}
           onRetry={() => setReloadKey((key) => key + 1)}
         />
-      </div>
-    );
-  }
+      ) : (
+        <>
+          {/* Dải thẻ số liệu — tự co về 2 cột/1 cột khi màn hình hẹp. */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: 16,
+              marginBottom: 16,
+            }}
+          >
+            <StatTile
+              label="Tổng chuyến"
+              value={state.report.summary.totalTrips.toLocaleString('vi-VN')}
+            />
+            <StatTile
+              label="Lấp đầy trung bình"
+              value={`${state.report.summary.averageFillRatePct}%`}
+              note="Trung bình khách trên tổng sức chứa ghế"
+            />
+            <StatTile
+              label="Chuyến đầy"
+              value={state.report.summary.fullTrips.toLocaleString('vi-VN')}
+              note="Lấp đầy ≥ 80% sức chứa"
+            />
+            <StatTile
+              label="Chuyến trống"
+              value={state.report.summary.emptyTrips.toLocaleString('vi-VN')}
+              note="Lấp đầy dưới 50% sức chứa"
+            />
+          </div>
 
-  const { summary, trips } = state.report;
-
-  return (
-    <div>
-      <PageHeader
-        title="Tỷ lệ lấp đầy theo chuyến"
-        subtitle="Xem từng chuyến trong ngày đầy/trống tới đâu để điều chỉnh tần suất chạy xe."
-      />
-
-      {/* Bộ lọc ngày — một hàng, nằm trên mọi thẻ và bảng để tất cả cùng đổi theo. */}
-      <Flex align="center" gap={12} wrap style={{ marginBottom: 16 }}>
-        <Text type="secondary">Ngày:</Text>
-        <DatePicker
-          value={date}
-          format="DD/MM/YYYY"
-          allowClear={false}
-          onChange={(value) => setDate(value ?? dayjs())}
-        />
-        <Button icon={<ReloadOutlined />} onClick={() => setReloadKey((key) => key + 1)}>
-          Làm mới
-        </Button>
-      </Flex>
-
-      {/* Dải thẻ số liệu — tự co về 2 cột/1 cột khi màn hình hẹp. */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 16,
-          marginBottom: 16,
-        }}
-      >
-        <StatTile label="Tổng chuyến" value={summary.totalTrips.toLocaleString('vi-VN')} />
-        <StatTile
-          label="Lấp đầy trung bình"
-          value={`${summary.averageFillRatePct}%`}
-          note="Trung bình khách trên tổng sức chứa ghế"
-        />
-        <StatTile
-          label="Chuyến đầy"
-          value={summary.fullTrips.toLocaleString('vi-VN')}
-          note="Lấp đầy ≥ 80% sức chứa"
-        />
-        <StatTile
-          label="Chuyến trống"
-          value={summary.emptyTrips.toLocaleString('vi-VN')}
-          note="Lấp đầy dưới 50% sức chứa"
-        />
-      </div>
-
-      <PageCard
-        title={`Các chuyến ngày ${date.format('DD/MM/YYYY')}`}
-        extra={
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Xanh: ≥80% · Vàng: 50–79% · Đỏ: &lt;50%
-          </Text>
-        }
-      >
-        <Table<TripFillRate>
-          rowKey="tripId"
-          columns={COLUMNS}
-          dataSource={trips}
-          scroll={{ x: 920 }}
-          locale={{ emptyText: 'Không có chuyến nào trong ngày này' }}
-          // Dữ liệu đã tải hết về client (mock), nên phân trang để AntD tự quản — không dùng
-          // tablePagination (dành cho phân trang phía server, cần state `page` riêng).
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            pageSizeOptions: PAGE_SIZE_OPTIONS,
-            showTotal: (total, range) => `Hiển thị ${range[0]}–${range[1]} trên ${total} chuyến`,
-          }}
-        />
-      </PageCard>
+          <PageCard
+            title={
+              state.report.from === state.report.to
+                ? `Các chuyến ngày ${formatDate(state.report.from)}`
+                : `Các chuyến từ ${formatDate(state.report.from)} đến ${formatDate(state.report.to)}`
+            }
+            extra={
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                Xanh: ≥80% · Vàng: 50–79% · Đỏ: &lt;50%
+              </Text>
+            }
+          >
+            <Table<TripFillRate>
+              rowKey="tripId"
+              columns={COLUMNS}
+              dataSource={state.report.trips}
+              scroll={{ x: 960 }}
+              locale={{ emptyText: 'Không có chuyến nào khớp bộ lọc' }}
+              // Dữ liệu đã tải hết về client (mock), nên phân trang để AntD tự quản — không dùng
+              // tablePagination (dành cho phân trang phía server, cần state `page` riêng).
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                pageSizeOptions: PAGE_SIZE_OPTIONS,
+                showTotal: (total, range) => `Hiển thị ${range[0]}–${range[1]} trên ${total} chuyến`,
+              }}
+            />
+          </PageCard>
+        </>
+      )}
     </div>
   );
 }
