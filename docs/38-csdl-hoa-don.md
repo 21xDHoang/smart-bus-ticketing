@@ -40,9 +40,10 @@ luận *"chưa ai làm"* từ đó là **SAI**. Repo này cố ý **không** đ�
 **Đừng bao giờ kết luận từ tên bảng.** Sáu dòng US 17 (50–55) vẫn nằm nguyên ở sheet Sprint 4 trong
 khi sheet Sprint 2 không có dòng nào của US 17 — đó là **dòng ma**, không phải việc còn nợ.
 
-> Bản dài của phát hiện này ở `docs/37-csdl-mau-thong-bao-va-theo-doi.md` §8.1 — nhưng `docs/37` nằm ở
-> nhánh `feature/10-migrate-notificationtemplates-subscriptions`, **chưa merge**. Ghi lại đủ ở đây để
-> tài liệu này **đứng một mình được**, không phụ thuộc một nhánh khác có merge hay không.
+> Bản dài của phát hiện này ở `docs/37-csdl-mau-thong-bao-va-theo-doi.md` §8.1 — `docs/37` nay **đã ở
+> trên `main`** (PR #195, `081cec9`), nên trích được; câu "`docs/37` … **chưa merge**" trước đây ở đây
+> đã hết đúng. Ghi lại đủ ở đây để tài liệu này **đứng một mình được**, không phụ thuộc một tài liệu
+> khác có đọc được từ `main` hay không.
 
 ## 1. Bảng này KHÔNG nằm trong A9 — lần thứ sáu
 
