@@ -14,8 +14,8 @@ public interface INotificationClient
     /// Báo cho client rằng tài khoản này VỪA có một thông báo mới. Payload CHỈ có id, KHÔNG kèm tiêu đề
     /// và nội dung — cùng nguyên tắc "hub không bao giờ là nguồn dữ liệu thứ hai" đã chốt cho
     /// <see cref="ISeatMapClient.SeatMapChanged"/>: client nhận id rồi tự gọi lại
-    /// <c>GET /api/notifications</c> (Sprint 5 — *"API lịch sử thông báo đã nhận của hành khách"*,
-    /// dòng 19) để lấy nội dung.
+    /// <c>GET /api/notifications/me</c> (Sprint 5 — *"API lịch sử thông báo đã nhận của hành khách"*,
+    /// dòng 19, Vàng Thị Dăm) để lấy nội dung.
     ///
     /// Vì sao vẫn gửi kèm id dù client lấy được cả danh sách: id cho phép client tô đậm/hiện toast
     /// đúng dòng vừa tới mà không phải so sánh nội dung, và cho phép bỏ qua sự kiện trùng khi client
