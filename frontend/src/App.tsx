@@ -40,6 +40,7 @@ import AdminRefundPage from './pages/AdminRefundPage';
 import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
 import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
+import OverloadAlertPage from './pages/OverloadAlertPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -386,6 +387,20 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <RevenueDashboardPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /overload-alerts là màn hình cảnh báo các chuyến định kỳ bị quá tải lặp lại
+                  (US 20 "Tỷ lệ lấp đầy", Sprint 4, task của Nguyễn Đình Băng). Khác với
+                  /fill-rate chỉ xem một ngày: màn này gộp nhiều ngày để bắt chuyến "thường
+                  xuyên" quá tải. Báo cáo vận hành nên chỉ Admin và Manager vào được. Backend
+                  cảnh báo quá tải chưa có nên màn hình đang chạy dữ liệu giả
+                  (overloadAlertApi.ts). */}
+              <Route
+                path="/overload-alerts"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <OverloadAlertPage />
                   </RouteGuard>
                 }
               />

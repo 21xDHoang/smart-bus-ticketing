@@ -33,6 +33,7 @@ import {
   TagsOutlined,
   TeamOutlined,
   UserOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 
 // Bảng điều hướng của cả app — NGUỒN DUY NHẤT cho: menu ngang (khách), Sider/Drawer (quản
@@ -298,6 +299,12 @@ const NAV: NavEntry[] = [
         label: 'Tỷ lệ lấp đầy theo chuyến',
         roles: ADMIN_MANAGER,
         icon: <PercentageOutlined />,
+      },
+      {
+        to: '/overload-alerts',
+        label: 'Cảnh báo chuyến quá tải',
+        roles: ADMIN_MANAGER,
+        icon: <WarningOutlined />,
       },
       {
         to: '/revenue-dashboard',
