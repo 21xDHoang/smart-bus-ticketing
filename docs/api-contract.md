@@ -5535,3 +5535,137 @@ Query — **mọi tham số bỏ trống được**:
 >
 > **Cho task "API đề xuất tăng/giảm tần suất" (Hoàng):** đọc thẳng `peakHours` của mục này —
 > giờ cao điểm là giờ nên tăng chuyến, không cần dựng lại nền tính.
+## Theo dõi thông báo — `/subscriptions`
+
+> Story 10 *"Thông báo trạm"*. 🟢 **Bảng `Subscriptions` — migration ĐÃ SINH, ĐÃ SOÁT** (nhánh
+> `feature/8-migrate-notification-templates-subscriptions`, Vàng Thị Dăm — task *"Migrate bảng
+> Notifications, NotificationTemplates, Subscriptions"*, Sprint 5 dòng 14). Chi tiết CSDL:
+> `docs/37-csdl-mau-thong-bao-va-theo-doi.md` (bảng này **không** nằm trong A9 — nhóm cần bổ sung).
+>
+> Mục này chốt bề mặt REST của task *"API đăng ký / huỷ theo dõi thông báo theo tuyến và trạm"*
+> (Sprint 5 dòng 17 — Trần Trung Hiếu): một khách đăng ký nhận thông báo khi xe sắp đến **một
+> trạm**, hoặc **cả tuyến** (`stopId` bỏ trống) — cùng một hành động, chỉ khác độ chi tiết
+> (docs/37 §3.1). Người tiêu thụ dòng `Subscriptions`:
+> - service bắn thông báo khi xe cách trạm dưới 500m (dòng 15 — Kiên, chưa làm);
+> - component bật/tắt nhận thông báo theo trạm (dòng 20 — Thịnh, chưa làm) — đọc/ghi **chính**
+>   ba endpoint dưới đây;
+> - service tự động đẩy sự cố đến khách theo dõi tuyến (dòng 29 — Kiên, chưa làm).
+
+### Hình dạng `Subscription`
+
+```json
+// Một lượt theo dõi — stopId null nghĩa là theo dõi CẢ TUYẾN (mọi trạm + sự cố của tuyến)
+{
+  "id": "9d5f1e2c-0000-0000-0000-000000000000",
+  "routeId": "3c7b2a1d-0000-0000-0000-000000000000",
+  "routeCode": "08",
+  "routeName": "Cầu Giấy — Bờ Hồ Hoàn Kiếm",
+  "stopId": "6a1f0b2e-0000-0000-0000-000000000000",
+  "stopName": "Bờ Hồ",
+  "createdAt": "2026-10-16T08:00:00Z"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | string (GUID) | khoá của lượt theo dõi — dùng cho `DELETE /subscriptions/{id}` |
+| `routeId` | string (GUID) | tuyến được theo dõi — luôn có (mọi lượt theo dõi đều gắn một tuyến) |
+| `routeCode` / `routeName` | string | chép từ bảng `Routes` để công tắc hiển thị được một mình, không phải gọi thêm |
+| `stopId` | string (GUID) `\|` null | `null` = theo dõi **cả tuyến** (docs/37 §3.1) |
+| `stopName` | string `\|` null | tên trạm; `null` cùng `stopId` |
+| `createdAt` | string (ISO 8601 UTC) | thời điểm bấm theo dõi — sắp danh sách mới nhất trước |
+
+- `routeCode`/`routeName`/`stopName` là **bản chép để hiển thị** — khoá nghiệp vụ vẫn là
+  `routeId`/`stopId`. Khoá ngoại `Restrict` (docs/37 §3.4) bảo đảm tuyến/trạm được trỏ tới luôn
+  còn, nên ba trường này không bao giờ null.
+- Một khách có thể **vừa** theo dõi cả tuyến **vừa** theo dõi riêng một trạm của tuyến đó — hai
+  dòng khác nhau, không xung đột. Service gửi thông báo (dòng 15) phải tự khử trùng để khách
+  không nhận hai thông báo cho một lượt xe (docs/37 §7).
+
+| Method | Endpoint | Trạng thái |
+|---|---|---|
+| GET | `/subscriptions` | ✅ đã làm (dòng 17) |
+| POST | `/subscriptions` | ✅ đã làm (dòng 17) |
+| DELETE | `/subscriptions/{id}` | ✅ đã làm (dòng 17) |
+
+Cả ba endpoint **yêu cầu đăng nhập** (`[Authorize]` trần, **không** policy vai trò — thông báo
+trạm là tính năng của hành khách, còn chuyện *"chỉ quản lý mới được"* không đúng với ai) và
+**chỉ chạm lượt theo dõi của chính người gọi** — phạm vi "của tôi" nằm ngay trong truy vấn theo
+`Subscriptions.UserId`, cùng lối `/refunds`, `/tickets/me`. Không có tham số nào để đọc lượt
+theo dõi của người khác, và ca "của người khác" trả **404** chứ không phải 403 — không để lộ
+lượt theo dõi nào đang tồn tại.
+
+#### `GET /subscriptions` — danh sách theo dõi của tôi
+
+```json
+// 200 — mảng trần, mới nhất trước
+[
+  { "id": "…", "routeId": "…", "routeCode": "08", "routeName": "…",
+    "stopId": "…", "stopName": "Bờ Hồ", "createdAt": "2026-10-16T08:00:00Z" },
+  { "id": "…", "routeId": "…", "routeCode": "01", "routeName": "…",
+    "stopId": null, "stopName": null, "createdAt": "2026-10-15T07:30:00Z" }
+]
+```
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Luôn trả về — chưa theo dõi gì thì mảng rỗng, **không** phải 404 |
+| 401 | Không có token |
+
+- **Không phân trang** — một khách có vài lượt theo dõi, phân trang là nghi thức thừa (cùng lối
+  `/refunds`, `/tickets/me`).
+
+#### `POST /subscriptions` — đăng ký theo dõi
+
+```json
+// Request — stopId bỏ trống hoặc null = theo dõi cả tuyến
+{ "routeId": "3c7b2a1d-0000-0000-0000-000000000000", "stopId": "6a1f0b2e-0000-0000-0000-000000000000" }
+```
+
+```json
+// 201 — trả nguyên dòng vừa tạo (hình dạng Subscription ở trên)
+{ "id": "9d5f1e2c-0000-0000-0000-000000000000", "routeId": "…", "routeCode": "08",
+  "routeName": "…", "stopId": "…", "stopName": "Bờ Hồ", "createdAt": "…" }
+```
+
+```json
+// 400 — trạm tồn tại nhưng KHÔNG thuộc tuyến đã chọn (khoá ngoại không lo hộ — docs/37 §3.1)
+{ "message": "Trạm dừng không thuộc tuyến đã chọn", "errors": { "stopId": ["Trạm dừng không thuộc tuyến đã chọn"] } }
+```
+
+| Mã | Khi nào |
+|---|---|
+| 201 | Đã tạo dòng theo dõi |
+| 400 | Thiếu `routeId`, hoặc `stopId` không thuộc tuyến đã chọn — lỗi gắn ở `errors.stopId` |
+| 401 | Không có token |
+| 404 | Tuyến không tồn tại, hoặc trạm không tồn tại — hai ca **khác nhau về lời**, cùng mã |
+| 409 | Đã theo dõi đúng tuyến/trạm này rồi — bấm hai lần không tạo dòng thứ hai |
+
+- **`stopId` không thuộc tuyến → 400 chứ không phải 404**: trạm CÓ tồn tại, cái sai nằm ở dữ liệu
+  gửi lên (chọn nhầm tuyến) — cùng lối `PUT /trips/{id}/location` (`currentStopId` không thuộc
+  tuyến → 400 theo trường).
+- **Chống trùng ở cả hai tầng**: tầng nghiệp vụ kiểm trước rồi trả 409 kèm lời rõ; tầng CSDL có
+  hai chỉ mục duy nhất bộ phận (docs/37 §3.3) chặn cuộc đua thật — lượt thua nhận lỗi chỉ mục và
+  **cũng được dịch thành 409**, không bao giờ nổi lên thành 500. Trên PostgreSQL `NULL` không
+  bằng `NULL` nên phải là chỉ mục CÓ điều kiện, không phải UNIQUE thường.
+- **"Huỷ theo dõi" là xoá dòng**, không phải lật cờ — xem `DELETE` dưới đây và docs/37 §3.2.
+  Bấm theo dõi lại sau khi huỷ thì ghi dòng mới, `createdAt` mang nghĩa *"theo dõi từ khi nào"*.
+
+#### `DELETE /subscriptions/{id}` — huỷ theo dõi
+
+| Mã | Khi nào |
+|---|---|
+| 204 | Đã xoá dòng theo dõi |
+| 401 | Không có token |
+| 404 | Lượt theo dõi không tồn tại **hoặc** thuộc người khác — cùng một câu, không phân biệt |
+
+- **Không có cờ `IsActive`**: tắt công tắc (dòng 20) và huỷ theo dõi (dòng 17) đều là xoá dòng —
+  bảng không có cột nào sửa được, không có `UpdatedAt` (docs/37 §3.2).
+- Gọi lại DELETE cùng id lần nữa → **404** (không idempotent, cố ý: 404 là câu trả lời đúng của
+  "không còn gì để xoá", và nó không lộ dòng của người khác).
+- Ghi nhật ký: `POST /subscriptions` và `DELETE /subscriptions/{id}` đi qua `AuditLogMiddleware`
+  (POST → Create với Target là id dòng mới; DELETE → Delete với Target `Subscriptions:{id}`).
+
+> **Cho task "API lịch sử thông báo đã nhận" (dòng 19 — Dăm):** endpoint `GET /notifications/me`
+> mà `frontend/src/api/notificationApi.ts` đã draft KHÔNG thuộc mục này — bề mặt `/subscriptions`
+> chỉ trả lời *"đang theo dõi gì"*, không trả lời *"đã nhận những gì"*.
