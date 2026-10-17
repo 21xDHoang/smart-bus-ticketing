@@ -2374,6 +2374,10 @@ Authorization: Bearer <JWT>
 | `busType` | `string` | Loại xe — "Xe buýt 45 chỗ", "Xe buýt điện" |
 | `capacity` | `number` | Sức chứa theo số ghế |
 | `status` | `string` | `Active` = đang khai thác · `Maintenance` = bảo dưỡng · `Inactive` = ngừng khai thác (lưu dạng chuỗi — quy ước A3) |
+| `assignedRoutes` | `BusRouteAssignment[]` | Các tuyến xe đang chạy hoặc sẽ chạy trong **7 ngày tới**. Mảng rỗng khi xe chưa được xếp chuyến |
+| `currentTrip` | `BusTripSummary \| null` | Chuyến đang chạy (`Running`) của xe — `null` khi xe không chạy |
+| `nextTrip` | `BusTripSummary \| null` | Chuyến `Scheduled` gần nhất trong 7 ngày tới — `null` khi không có |
+| `seatSummary` | `BusSeatSummary` | Số ghế thật đã sinh so với sức chứa, kèm sơ đồ ghế của loại xe |
 | `createdAt` | `string` (ISO 8601, UTC) | Thời điểm tạo |
 | `updatedAt` | `string \| null` | `null` khi xe chưa được sửa lần nào |
 
@@ -2385,10 +2389,84 @@ Authorization: Bearer <JWT>
   "busType": "Xe buýt 45 chỗ",
   "capacity": 45,
   "status": "Active",
+  "assignedRoutes": [
+    {
+      "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+      "routeCode": "01",
+      "routeName": "Bến Thành — Chợ Lớn",
+      "tripCount": 5,
+      "nextDepartureTime": "2026-10-17T07:30:00Z"
+    }
+  ],
+  "currentTrip": {
+    "tripId": "a1c7f0e2-0000-0000-0000-000000000000",
+    "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+    "routeCode": "01",
+    "routeName": "Bến Thành — Chợ Lớn",
+    "departureTime": "2026-10-17T06:00:00Z",
+    "driverId": "b2d8e1f3-0000-0000-0000-000000000000",
+    "driverName": "Nguyễn Văn An",
+    "status": "Running",
+    "currentStopName": "Trạm Bến Thành"
+  },
+  "nextTrip": {
+    "tripId": "c3e9f2a4-0000-0000-0000-000000000000",
+    "routeId": "7b4c2d1e-0000-0000-0000-000000000000",
+    "routeCode": "B10",
+    "routeName": "Bến xe Mỹ Đình — Bến xe Gia Lâm",
+    "departureTime": "2026-10-17T14:30:00Z",
+    "driverId": null,
+    "driverName": null,
+    "status": "Scheduled",
+    "currentStopName": null
+  },
+  "seatSummary": {
+    "seatsCreated": 45,
+    "capacity": 45,
+    "isComplete": true,
+    "layout": {
+      "numberOfFloors": 1,
+      "rowsPerFloor": 9,
+      "columnsPerRow": 5,
+      "totalSeats": 45,
+      "vipSeatCount": 6
+    }
+  },
   "createdAt": "2026-09-29T08:00:00Z",
   "updatedAt": null
 }
 ```
+
+**Kiểu con của `Bus`:**
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `routeId` | `string` (GUID) | Tuyến |
+| `routeCode` | `string` | Mã tuyến hiển thị — "01", "B10" |
+| `routeName` | `string` | Tên tuyến |
+| `tripCount` | `number` | Số chuyến của xe trên tuyến trong cửa sổ 7 ngày (kể cả chuyến đang chạy) |
+| `nextDepartureTime` | `string \| null` | Giờ khởi hành gần nhất còn ở trạng thái `Scheduled`; `null` khi tuyến chỉ còn chuyến đang chạy |
+
+`BusTripSummary` (dùng cho `currentTrip` và `nextTrip`):
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `tripId` | `string` (GUID) | Chuyến |
+| `routeId` / `routeCode` / `routeName` | `string` | Tuyến của chuyến |
+| `departureTime` | `string` (ISO 8601, UTC) | Giờ khởi hành |
+| `driverId` | `string \| null` | Tài xế được phân công — `null` khi chưa phân công |
+| `driverName` | `string \| null` | Họ tên tài xế, `null` đúng khi `driverId` null |
+| `status` | `string` | `Scheduled` \| `Running` \| `Completed` \| `Cancelled` |
+| `currentStopName` | `string \| null` | Trạm gần nhất xe đã qua — chỉ có nghĩa với `currentTrip`, `null` ở `nextTrip` |
+
+`BusSeatSummary`:
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `seatsCreated` | `number` | Số dòng `Seats` thật đã sinh cho xe |
+| `capacity` | `number` | Sức chứa khai báo trên xe |
+| `isComplete` | `boolean` | `true` khi `seatsCreated >= capacity` — `false` = xe chưa được sinh đủ ghế |
+| `layout` | `object \| null` | Sơ đồ ghế của loại xe: `numberOfFloors`, `rowsPerFloor`, `columnsPerRow`, `totalSeats`, `vipSeatCount`. `null` khi loại xe chưa cấu hình sơ đồ |
 
 ### Endpoints
 
@@ -2426,6 +2504,21 @@ Tham số query (đều không bắt buộc):
 - `page` hoặc `pageSize` ngoài khoảng hợp lệ → **400**.
 - `status` không khớp ba mã trên → danh sách rỗng (không báo lỗi — cùng lối bộ lọc `status`
   của `/routes`).
+
+> **Thông tin phân công (`assignedRoutes`, `currentTrip`, `nextTrip`, `seatSummary`) là chỉ đọc.**
+> Hệ thống **không có bảng gán xe ↔ tuyến** — quan hệ này suy ra từ `Trips` (`BusId` + `RouteId` +
+> `DepartureTime`). Vì vậy:
+>
+> - `assignedRoutes` gồm các tuyến có chuyến `Running` **hoặc** `Scheduled` khởi hành trong
+>   **[bây giờ, bây giờ + 7 ngày)**. Chuyến `Completed`/`Cancelled` và chuyến quá 7 ngày không tính.
+>   Thứ tự: `nextDepartureTime` tăng dần (tuyến chỉ có chuyến đang chạy xếp sau), rồi `routeCode`.
+> - `currentTrip` là chuyến `Running` của xe (nhiều dòng bất thường thì lấy chuyến khởi hành sớm
+>   nhất). `nextTrip` là chuyến `Scheduled` sớm nhất trong cùng cửa sổ 7 ngày.
+> - `seatSummary` đếm `Seats` thật của xe; `layout` tra `SeatLayouts` theo `busType` (mỗi loại xe
+>   một sơ đồ). Xe chưa sinh ghế vẫn trả `seatSummary` với `seatsCreated = 0`.
+> - Bốn trường này có mặt ở **mọi response trả `Bus`** (kể cả POST/PUT/DELETE), tính lại ngay sau
+>   thao tác ghi.
+> - Cửa sổ 7 ngày là mốc cố định ở backend, không phải tham số của endpoint.
 
 #### `POST /buses`
 
