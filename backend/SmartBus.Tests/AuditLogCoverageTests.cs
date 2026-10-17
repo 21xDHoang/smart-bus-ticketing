@@ -236,6 +236,19 @@ public class AuditLogCoverageTests
         ("POST",   "/api/subscriptions",                          CachGhi.Middleware),
         ("DELETE", "/api/subscriptions/{id:guid}",                CachGhi.Middleware),
 
+        // Thiết bị Web Push — story 10, Trần Trung Hiếu (Sprint 4 dòng 42). Ba endpoint đều do
+        // AuditLogMiddleware tự ghi (POST → Create, DELETE → Delete). Tên tài nguyên đặt là
+        // "devices" chứ không phải "subscriptions" để Target KHÔNG đụng bảng Subscriptions thật
+        // (theo dõi tuyến/trạm, docs/37) — "Devices" là tên bảng CHƯA tồn tại: store thiết bị hiện
+        // ở trong bộ nhớ chờ migration của Dăm (docs/54 §6), dòng nhật ký là vết DUY NHẤT còn lại
+        // sau khi backend khởi động lại. POST /devices trả body có id nên Target là "Devices:{id}"
+        // đọc từ body; POST /devices/{id}/test là ca "POST nhưng chỉ đọc" (như /tickets/validate)
+        // — vẫn ghi Create CÓ CHỦ ĐÍCH vì gửi thông báo là hành động đáng lưu vết, Target lấy id
+        // từ đường dẫn. Test hành vi ở WebPushApiTests.
+        ("POST",   "/api/web-push/devices",                       CachGhi.Middleware),
+        ("POST",   "/api/web-push/devices/{id:guid}/test",        CachGhi.Middleware),
+        ("DELETE", "/api/web-push/devices/{id:guid}",             CachGhi.Middleware),
+
         // Màn quản lý mẫu thông báo — story 10, Dương Thị Hạnh (Sprint 5 dòng 24). PUT tự ghi qua
         // AuditLogMiddleware (Update). Khoá trên đường dẫn là {type} chứ không phải {id} nên tên bảng
         // suy ra là "NotificationTemplates" nhưng Target KHÔNG kèm id — đủ biết "có người sửa mẫu

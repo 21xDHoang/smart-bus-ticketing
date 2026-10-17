@@ -9,6 +9,12 @@
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <!-- Lib.Net.Http.WebPush — mã hoá + gửi Web Push chuẩn RFC 8291/8292 kèm VAPID đầy đủ claim
+         "sub" (Web Push PWA, US 10, Sprint 4 dòng 42 — Trần Trung Hiếu). Bản 2.2.0 được chọn thay
+         web-push-csharp vì nhận HttpClient qua constructor (test thay được handler giả), nhận
+         CancellationToken và có sẵn TimeToLive/Urgency trên PushMessage. File csproj này của
+         Hoàng nên nhờ Hoàng xem qua trong PR. -->
+    <PackageReference Include="Lib.Net.Http.WebPush" Version="2.2.0" />
     <PackageReference Include="MailKit" Version="4.18.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
