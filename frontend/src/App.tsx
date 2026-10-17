@@ -39,6 +39,7 @@ import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AdminRefundPage from './pages/AdminRefundPage';
 import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
+import NotificationTemplateManagePage from './pages/NotificationTemplateManagePage';
 import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OverloadAlertPage from './pages/OverloadAlertPage';
@@ -447,6 +448,20 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <RevenueByRoutePage />
+                  </RouteGuard>
+                }
+              />
+              {/* /notification-templates là màn hình Admin quản lý mẫu thông báo (US 10, Sprint 5,
+                  dòng 24, task của Dương Thị Hạnh) — soạn câu chữ cho từng loại thông báo; mẫu là
+                  phần GHI ĐÈ câu mặc định (docs/37 §2.1), loại chưa soạn hoặc đang tắt vẫn gửi bằng
+                  câu mặc định. Chỉ Admin và Manager vào được (cùng nhóm các màn cấu hình dữ liệu).
+                  Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file
+                  dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/notification-templates"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <NotificationTemplateManagePage />
                   </RouteGuard>
                 }
               />
