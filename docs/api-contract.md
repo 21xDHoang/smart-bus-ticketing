@@ -1830,13 +1830,15 @@ gọi** — client chỉ kết nối và lắng nghe.
 
 ### Khi nào sự kiện được phát
 
-Đúng ba nguồn, mỗi nguồn phát **một lần** cho đúng người nhận (người gửi yêu cầu, hoặc chủ khoản hoàn):
+Có bốn nguồn, mỗi **sự kiện** phát **một lần** cho đúng người nhận (người gửi yêu cầu, chủ khoản
+hoàn, hoặc hành khách đã mua vé của chuyến):
 
 | Nguồn | Phát khi |
 |---|---|
 | `PATCH /cancellation-requests/{id}` (duyệt / từ chối yêu cầu huỷ) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 | `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 | Một lượt gọi cổng hoàn tiền (job thử lại theo lịch dòng 30, nút "Thử lại" của màn quản trị dòng 35, lượt hoàn tự động lúc duyệt huỷ dòng 28) | Khoản hoàn có **kết quả cuối đã lưu**: `Succeeded`, hoặc `Failed` và **đã hết lịch thử lại** (`NextRetryAt = null`) |
+| `PUT /routes/{routeId}/trips/{id}` (quản lý sửa lịch trình chuyến — dòng 44 Sprint 4) | Giờ khởi hành hoặc giờ tới dự kiến **thực sự đổi** và chuyến đã lưu còn ở `Scheduled` hoặc `Running` |
 
 Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4,
 Phùng Duy Hoàng) — hình dạng request/response đầy đủ ở mục
@@ -1862,6 +1864,28 @@ của chúng.
 > cổng đều đi qua đây (job thử lại dòng 30 đã có; nút "Thử lại" dòng 35 và lượt hoàn tự động dòng 28
 > khi dựng lên sẽ nối vào đúng service đó) — không đường nào tự phát thông báo riêng.
 
+> 🚌 **Nguồn thứ tư: sửa lịch trình chuyến — báo theo TỪNG LẦN ĐỔI THẬT, không báo theo lượt PUT.**
+> Lớp bọc `NotifyingRouteTripsService` ôm `IRouteTripsService`, nên mọi đường sửa chuyến qua
+> `PUT /routes/{routeId}/trips/{id}` đều đi qua đây. Người nhận là **mọi hành khách có vé `Paid`
+> của chuyến** (mỗi người một thông báo), trỏ về dòng `Trips` qua `RelatedEntityType = Trip`.
+>
+> | Thay đổi trong lượt PUT | Phát? | Loại |
+> |---|---|---|
+> | `departureTime` hoặc `arrivalTime` đổi, mọi mốc đổi đều **lùi ra sau** | **Có** | `TripDelayed` |
+> | Có mốc **sớm hơn**, hoặc `arrivalTime` từ null thành có / từ có thành null | **Có** | `TripScheduleChanged` |
+> | Giờ giữ nguyên (chỉ đổi xe, chỉ đổi `status`, hoặc PUT lại đúng dữ liệu cũ) | **Không** | — |
+> | Chuyến đã lưu ở `Cancelled` hoặc `Completed` | **Không** | — |
+>
+> "Từng lần đổi thật" khác "mỗi quyết định một thông báo" của hai endpoint PATCH: một chuyến bị dời
+> giờ hai lần là **hai sự kiện**, khách phải nhận cả hai — chốt đọc-trước-khi-ghi của hai notifier
+> kia sẽ nuốt mất lần thứ hai nếu áp vào đây. Vì vậy notifier này so **giờ cũ (chụp trước khi sửa)
+> với giờ mới (đọc lại từ CSDL)**, và không có khoá chống trùng trong bảng `Notifications`.
+>
+> ⚠️ **Huỷ chuyến qua `DELETE /routes/{routeId}/trips/{id}` KHÔNG phát thông báo.** Đó là nghiệp vụ
+> huỷ chuyến, không phải trễ/đổi lịch trình — bảng phân công không có dòng nào cho thông báo huỷ
+> chuyến, nên không tự đặt ra loại mới. Cùng lý do, đổi `status` sang `Cancelled` bằng PUT cũng im
+> lặng (xem bảng trên).
+
 > ⚠️ **Không có sự kiện nào khi khách GỬI yêu cầu.** Gửi yêu cầu là việc của khách, không phải kết
 > quả cần báo cho khách. Thông báo chỉ đi ở bước **duyệt hoặc từ chối**.
 >
@@ -1869,7 +1893,7 @@ của chúng.
 > thông báo cho đúng yêu cầu đó thì lượt gọi sau bị bỏ qua hoàn toàn (không ghi, không đẩy). Nhờ vậy
 > client retry cũng không làm khách thấy hai thông báo giống nhau.
 
-### Sáu loại thông báo
+### Tám loại thông báo
 
 | `type` | `title` |
 |---|---|
@@ -1879,6 +1903,8 @@ của chúng.
 | `TicketChangeRejected` | Từ chối yêu cầu đổi chuyến |
 | `RefundSucceeded` | Đã hoàn tiền |
 | `RefundFailed` | Hoàn tiền thất bại |
+| `TripDelayed` | Chuyến xe bị trễ |
+| `TripScheduleChanged` | Lịch trình chuyến xe thay đổi |
 
 Hai loại `…Rejected` có lý do từ chối của quản lý **chép nguyên văn** vào cuối `body`; quản lý không
 nêu lý do thì body ghi rõ *"Người duyệt không nêu lý do."* chứ không để cụt.
@@ -1887,6 +1913,15 @@ Hai loại `Refund…` nhắm vào **chủ khoản hoàn** (không phải ngư�
 qua `RelatedEntityType = Refund` + `RelatedEntityId` — màn danh sách thông báo bấm vào thì mở màn
 *"Hoàn tiền của tôi"* (`/my-refunds`). Khoản hoàn không có màn chi tiết riêng: dòng trong danh sách
 đã đủ để đọc một mình (số tiền, trạng thái, lý do hỏng).
+
+Hai loại `Trip…` nhắm vào **hành khách đã mua vé `Paid` của chuyến** và trỏ vào dòng `Trips` qua
+`RelatedEntityType = Trip` + `RelatedEntityId`. Body phải đọc đứng một mình được: có **tên tuyến**
+và **giờ cũ → giờ mới** của các mốc đã đổi, định dạng `dd/MM/yyyy HH:mm` theo **giờ Việt Nam
+(UTC+7)** — cùng lối cố định `VietnamUtcOffsetHours` đã dùng ở vé/PDF, không dùng
+`TimeZoneInfo.FindSystemTimeZoneById` (id vùng khác nhau giữa Windows và Linux, CI chạy ubuntu).
+Cả hai loại nêu **mốc cũ và mốc mới** để khách đối chiếu — không suy ra "trễ bao lâu" hay "sớm bao
+lâu" thành câu riêng, vì chuyến có thể đổi cả hai mốc. Không có số tiền nào trong body — cùng luật
+với các loại trên.
 
 > 🔴 **Nội dung thông báo KHÔNG chứa số tiền** — không có khoản hoàn nào, không phí huỷ; hai loại
 > `Refund…` cũng vậy. Với thông báo huỷ/đổi: việc hoàn tiền do bảng `Refunds` (US 8) thực hiện và có
@@ -1966,10 +2001,10 @@ API đăng ký/huỷ theo dõi trạm (dòng 17, Trần Trung Hiếu), màn qu�
 | Trường | Kiểu | Mô tả |
 |---|---|---|
 | `id` | `string` (GUID) | Khoá chính |
-| `type` | `string` | Một trong **sáu** loại — bảng "Sáu loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
+| `type` | `string` | Một trong **tám** loại — bảng "Tám loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
 | `title` | `string` | Dòng tiêu đề ngắn — dòng đầu của mỗi mục trong danh sách |
 | `body` | `string` | Nội dung đầy đủ, **có thể xuống dòng**. Lý do từ chối của quản lý được chép nguyên văn vào đây |
-| `relatedEntityType` | `string \| null` | Bảng mà `relatedEntityId` trỏ tới: `CancellationRequest`, `TicketChange` hoặc `Refund`. `null` với thông báo không gắn bản ghi nào |
+| `relatedEntityType` | `string \| null` | Bảng mà `relatedEntityId` trỏ tới: `CancellationRequest`, `TicketChange`, `Refund` hoặc `Trip`. `null` với thông báo không gắn bản ghi nào |
 | `relatedEntityId` | `string \| null` | Id bản ghi mà thông báo nói về; `null` cùng lúc với `relatedEntityType` |
 | `createdAt` | `string` (ISO 8601, UTC) | Thời điểm thông báo được sinh — cũng là cột sắp xếp của danh sách |
 
@@ -2050,11 +2085,19 @@ Authorization: Bearer <JWT>
 > sở hữu kiểm bằng chính điều kiện truy vấn ở trên, mạnh hơn một policy vai trò vì nó chặt theo *từng
 > dòng* chứ không theo *loại tài khoản*.
 
-> ✅ **Frontend đã khớp (Băng đồng ý cho sửa `src/api/notificationApi.ts`).**
+> ✅ **Frontend đã khớp sáu loại / ba target (Băng đồng ý cho sửa `src/api/notificationApi.ts`).**
 > `NotificationType` khai đủ **sáu** giá trị (thêm `RefundSucceeded`, `RefundFailed`),
 > `NotificationTarget` đủ **ba** (thêm `Refund`), và `notificationApi.listMine()` gọi thẳng
 > `GET /notifications/me` — `USE_MOCK_DATA` cùng nhánh dữ liệu giả đã bỏ. `NotificationBell` xếp
 > `RefundSucceeded` vào nhóm "thành công" để thông báo hoàn tiền thành công không hiện dấu đỏ.
+>
+> ⚠️ **Còn thiếu hai loại của dòng 44 — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
+> Backend phát đủ **tám** loại và **bốn** target: hai loại `TripDelayed`/`TripScheduleChanged` do
+> `TripScheduleChangeNotifier` phát (mục trên), target `Trip`. `notificationApi.ts` mới khai sáu loại
+> / ba target nên union TypeScript chưa phủ hai loại này. `NotificationBell.isPositiveOutcome` xếp mọi
+> loại ngoài ba loại "tốt" vào nhóm đỏ — `TripDelayed` sẽ hiện dấu X đỏ "bị từ chối", sai nghĩa; cần
+> ánh xạ biểu tượng riêng cho nhóm `Trip…` và điều hướng `relatedEntityType = Trip` (Băng/Hạnh, dòng
+> 47–48).
 
 ## Xe buýt — `/buses`
 
@@ -2716,6 +2759,13 @@ Body gồm đủ 2 trường bắt buộc của `CreateTrip` **cộng thêm `sta
 - Đây cũng là cách **mở lại chuyến đã huỷ**: PUT với `status: "Scheduled"`.
 - Đổi xe thì xe mới phải đang `Active` → nếu không **409**. Giữ nguyên xe thì không kiểm tra lại:
   xe chuyển sang bảo dưỡng sau khi sinh chuyến không chặn việc sửa giờ của chuyến đã tồn tại.
+- **Sửa `departureTime` / `arrivalTime` sẽ báo cho hành khách đã mua vé `Paid` của chuyến** — mỗi
+  lần giờ **thực sự đổi** là một thông báo in-app + một sự kiện SignalR: `TripDelayed` khi mọi mốc
+  đổi đều lùi ra sau, `TripScheduleChanged` khi có mốc sớm hơn hoặc `arrivalTime` đổi giữa null và
+  có giá trị. Chuyến đã lưu ở `Cancelled`/`Completed` thì im lặng. Chỉ đổi xe / chỉ đổi `status`
+  hoặc PUT lại đúng dữ liệu cũ thì không phát. Chi tiết ở mục **"Khi nào sự kiện được phát"** của
+  phần thông báo.
+- **Huỷ chuyến bằng `DELETE` không phát thông báo** — xem ghi chú ở mục thông báo.
 
 #### `DELETE /routes/{routeId}/trips/{id}` — huỷ chuyến (xoá mềm)
 

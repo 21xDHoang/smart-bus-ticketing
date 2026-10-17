@@ -61,7 +61,21 @@ builder.Services.AddScoped<ITripService, TripService>();
 // Task story 13 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 // Đặt tên RouteTrips để tránh đụng ITripService/TripService của API chi tiết chuyến /trips/{id}
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
-builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
+// Thông báo trễ/đổi lịch trình (US 10, dòng 44 Sprint 4 — Phùng Duy Hoàng): từ đây
+// IRouteTripsService resolve ra LỚP BỌC NotifyingRouteTripsService thay vì lớp trần, nên mọi lượt
+// sửa chuyến qua PUT /routes/{routeId}/trips/{id} đều đi qua chỗ báo tin mà RouteTripsService (file
+// của Hiếu — luật E1) không phải sửa. Cùng lối RefundAttemptService bên dưới: lớp trần trước, lớp bọc
+// sau; DI lấy bản đăng ký sau cùng nên ai thêm dòng IRouteTripsService nữa ở dưới sẽ thay thế im lặng
+// (TripScheduleChangeWiringTests ghim đúng chỗ nối này). Notifier tự quyết định "có gì để báo" bằng
+// cách so ảnh chụp giờ cũ với dữ liệu đã lưu; hợp đồng không-bao-giờ-ném-lỗi + lý do bọc decorator ở
+// Services/ITripScheduleChangeNotifier.cs và NotifyingRouteTripsService.cs.
+builder.Services.AddScoped<RouteTripsService>();
+builder.Services.AddScoped<ITripScheduleChangeNotifier, TripScheduleChangeNotifier>();
+builder.Services.AddScoped<IRouteTripsService>(provider => new NotifyingRouteTripsService(
+    provider.GetRequiredService<RouteTripsService>(),
+    provider.GetRequiredService<ITripScheduleChangeNotifier>(),
+    provider.GetRequiredService<AppDbContext>(),
+    provider.GetRequiredService<ILogger<NotifyingRouteTripsService>>()));
 
 // Job sinh chuyến tự động cho những ngày sắp tới (US 13).
 // Task "BackgroundService sinh chuyến tự động từ lịch trình theo ngày" — Nguyễn Duy Kiên.
