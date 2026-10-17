@@ -3,14 +3,13 @@
 > Task **"Xử lý xuất file lớn bất đồng bộ + thông báo khi xong"** — US 24 *"Xuất dữ liệu"*,
 > **Sprint 5 dòng 64**, mức **Trung bình**, **4 điểm**, người làm: **Vàng Thị Dăm**.
 >
-> 🟢 **Trạng thái trên nhánh:** code API + service + job nền + notifier + test đã xong, build sạch.
-> Hợp đồng đã ghi vào `docs/api-contract.md` (mục **"Xuất file bất đồng bộ — /exports"**) và bảng
-> thông báo đã mở rộng lên **mười một loại**.
+> 🟢 **Trạng thái trên nhánh:** code API + service + job nền + notifier + test + migration đã xong,
+> build sạch. Hợp đồng đã ghi vào `docs/api-contract.md` (mục **"Xuất file bất đồng bộ — /exports"**)
+> và bảng thông báo đã mở rộng lên **mười một loại**.
 >
-> ⚠️ **Còn đúng một bước phải chạy trên máy Dăm:** migration `Sprint5_AsyncExportJobs` chưa được
-> sinh trong nhánh này. Lệnh `dotnet ef migrations add` bị `.claude/settings.json` chặn (deny rule
-> của repo), nên migration phải do Dăm tự chạy — xem §8. **Không merge/deploy trước khi có
-> migration**, nếu không mọi endpoint `/api/exports` sẽ lỗi "relation ExportJobs does not exist".
+> Migration `20261017060210_Sprint5_AsyncExportJobs` đã được Dăm sinh tay (lệnh `dotnet ef
+> migrations add` bị deny rule của repo chặn) và đã rà theo checklist §8. Cần chạy
+> `dotnet ef database update` trên CSDL đích trước khi deploy.
 
 ## 1. Vì sao cần task này
 
@@ -152,9 +151,14 @@ Hai loại mới trong bảng `Notifications`:
 - Notifier nằm trong `try/catch` riêng ở processor: nó vỡ cũng **không** được biến job đã
   `Succeeded` thành `Failed`.
 
-## 8. Migration — bước còn thiếu trên nhánh
+## 8. Migration
 
-Bảng `ExportJobs` + hai giá trị enum mới chỉ cần **một** migration. Trên máy Dăm, chạy:
+Bảng `ExportJobs` + hai giá trị enum mới chỉ cần **một** migration:
+`Migrations/20261017060210_Sprint5_AsyncExportJobs.cs` (+ `.Designer.cs`) và phần thêm vào
+`AppDbContextModelSnapshot.cs`. Đã rà theo checklist ngay dưới — đạt. Trước khi deploy CSDL đích,
+chạy `dotnet ef database update --project backend/SmartBus.Api`.
+
+Nếu cần sinh lại từ đầu, trên máy Dăm chạy:
 
 ```powershell
 $env:Jwt__Key = "local-design-time-only-key-at-least-32-chars-long"
@@ -201,7 +205,7 @@ dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj --filter "FullyQualifie
 
 | Giới hạn | Lý do / hướng xử lý |
 |---|---|
-| **Chưa có migration trong nhánh** | Deny rule chặn `dotnet ef migrations add`; Dăm chạy tay — §8 |
+| **Migration do Dăm sinh tay** | Deny rule chặn `dotnet ef migrations add` trong phiên Claude; đã sinh + rà tay, xem §8. Squad chỉ cần `dotnet ef database update` trên CSDL đích |
 | **Chưa có màn hình frontend** | Task dòng 64 chỉ giao backend; component xuất báo cáo thuộc task khác. `api-contract.md` đã đủ để Băng nối |
 | **Chưa map hai loại thông báo ở `notificationApi.ts`** | File của Băng; đã ghi ghi chú trong `api-contract.md`. Chưa map thì rơi vào nhánh mặc định, không vỡ |
 | **Nhận job không nguyên tử** | Đọc job rồi ghi trạng thái, không dùng `UPDATE … WHERE Status='Pending'`/`SKIP LOCKED`. Đúng với một instance; nếu deploy nhiều instance phải đổi sang claim nguyên tử. Job bị hai instance cùng nhận sẽ dựng file hai lần (vô hại về dữ liệu, tốn CPU) |
@@ -215,6 +219,10 @@ dotnet test backend/SmartBus.Tests/SmartBus.Tests.csproj --filter "FullyQualifie
   có sẵn ở `SubscriptionApiTests.cs`, không liên quan nhánh này.
 - `dotnet test … --filter "FullyQualifiedName~ExportJob|…"` → **43/43 xanh**; chạy cả
   `AuditLogCoverageTests` → **40/40 xanh** sau khi khai `POST /api/exports` vào bảng phủ sóng.
+- Migration `Sprint5_AsyncExportJobs` đã sinh và rà: `ExportJobs` có đủ cột, `UserId` FK
+  **`Restrict`**, ba chỉ mục đúng, `ReportType`/`Status` là `varchar(20)`, `Content` là `bytea`,
+  các cột thời gian là `timestamp with time zone`. Snapshot chỉ **thêm** 94 dòng, không có lệch
+  ngoài phạm vi.
 - Chạy toàn bộ test suite (1.911 ca): **1.910 xanh, 1 đỏ** — ca đỏ là
   `ReportPdfServiceTests.GeneratePdf_cung_model_ra_cung_file`, **có sẵn từ trước, không liên quan
   nhánh này**: nó so sánh byte của hai file PDF sinh liên tiếp, mà QuestPDF nhúng mốc thời gian
