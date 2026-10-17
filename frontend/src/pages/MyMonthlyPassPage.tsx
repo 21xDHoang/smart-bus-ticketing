@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Button, List, Popconfirm, Space, Typography, message, theme } from 'antd';
+import { Button, List, Popconfirm, Space, Typography, message, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import myMonthlyPassApi from '../api/myMonthlyPassApi';
 import type { MonthlyPass } from '../api/monthlyPassApi';
-import { fetchRoutes } from '../api/routeApi';
 import type { AppError } from '../api/axiosClient';
 import MonthlyPassExpiryReminder from '../components/MonthlyPassExpiryReminder';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
@@ -14,12 +13,6 @@ import { formatDate, formatVnd } from '../components/ui/format';
 
 const { Text } = Typography;
 
-/** Trần `pageSize` của GET /routes là 100 — cùng con số monthlyPassApi.ts đang dùng. */
-const ROUTE_PAGE_SIZE = 100;
-
-/** Tên + mã tuyến đã tra được, khoá theo `routeId` của vé. */
-type RouteLookup = Record<string, { code: string; name: string }>;
-
 /** Mảng rỗng dùng chung — giữ nguyên tham chiếu để không sinh mảng mới mỗi lần render. */
 const NO_PASSES: MonthlyPass[] = [];
 
@@ -27,8 +20,8 @@ const NO_PASSES: MonthlyPass[] = [];
  * Rút mã tuyến từ mã vé tháng.
  *
  * Hợp đồng chốt khuôn mã vé là `MP-{mã tuyến}-{6 ký tự A–Z/0–9}`, nên đoạn giữa hai dấu gạch
- * chính là mã tuyến. Dùng khi chưa tra được tên tuyến (xem ghi chú ở effect tra tuyến): vé
- * vẫn còn căn cứ để hành khách đối chiếu mình đang đi tuyến nào, thay vì một dòng trống.
+ * chính là mã tuyến. Chỉ là lưới dự phòng khi response thiếu `routeCode` (hợp đồng luôn trả kèm
+ * mã + tên tuyến): vé vẫn còn căn cứ để hành khách đối chiếu mình đang đi tuyến nào.
  * Mã không đúng khuôn → trả `null` để chỗ gọi biết là không rút được gì.
  */
 function routeCodeFromPassCode(code: string): string | null {
@@ -65,22 +58,22 @@ function viewOf(state: LoadState): PassView {
 }
 
 /**
- * Dòng tuyến của một vé — có tên tuyến thì hiện mã + tên, chưa tra được thì lùi về mã tuyến
- * rút từ mã vé. Không hiện `routeId` thô: một GUID không nói gì với hành khách.
+ * Dòng tuyến của một vé — mã + tên lấy thẳng từ `GET /monthly-passes/me` (backend trả kèm
+ * `routeCode`/`routeName` đọc từ bảng Routes). Không gọi `GET /routes`: endpoint đó sau policy
+ * ManagerOrAbove nên hành khách nhận 403. Mã vé vẫn là lưới dự phòng nếu response thiếu mã tuyến.
+ * Không hiện `routeId` thô: một GUID không nói gì với hành khách.
  */
-function RouteLine({ pass, route }: { pass: MonthlyPass; route?: { code: string; name: string } }) {
-  if (route) {
-    return (
-      <Space size={8} wrap>
-        <RouteBadge code={route.code} />
-        <Text strong>{route.name}</Text>
-      </Space>
-    );
-  }
+function RouteLine({ pass }: { pass: MonthlyPass }) {
+  const routeCode = pass.routeCode || routeCodeFromPassCode(pass.code);
 
-  const routeCode = routeCodeFromPassCode(pass.code);
+  if (!routeCode) return <Text strong>Vé tháng</Text>;
 
-  return <Text strong>{routeCode ? `Tuyến ${routeCode}` : 'Vé tháng'}</Text>;
+  return (
+    <Space size={8} wrap>
+      <RouteBadge code={routeCode} />
+      <Text strong>{pass.routeName || `Tuyến ${routeCode}`}</Text>
+    </Space>
+  );
 }
 
 // Màn hình quản lý vé tháng của tôi + nút gia hạn — story 16 "Đăng ký và gia hạn vé tháng
@@ -101,10 +94,6 @@ export default function MyMonthlyPassPage() {
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
-
-  // Tên tuyến chỉ để hiển thị thêm — xem effect bên dưới.
-  const [routes, setRoutes] = useState<RouteLookup>({});
-  const [routesFailed, setRoutesFailed] = useState(false);
 
   // Vé đang gia hạn (một lượt ghi tại một thời điểm) và kỳ kế tiếp đã tạo, khoá theo id vé cũ.
   const [renewingId, setRenewingId] = useState<string | null>(null);
@@ -137,36 +126,6 @@ export default function MyMonthlyPassPage() {
       cancelled = true;
     };
   }, [reloadToken]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    // Tra tên tuyến là bước "có thì tốt", chạy SONG SONG và KHÔNG chặn danh sách vé: vé phải
-    // hiện được kể cả khi bước này hỏng. Hợp đồng (docs/api-contract.md, mục
-    // GET /monthly-passes/me) chỉ định ghép routeId → tên tuyến bằng GET /routes, nhưng
-    // endpoint đó chỉ dành cho Admin/Manager — hành khách nhận 403 (đã đo trong
-    // docs/bao-cao-kiem-thu-cheo-ve-thang.md). Nên với hành khách, tên tuyến sẽ không có và
-    // màn hình lùi về mã tuyến rút từ mã vé, kèm một dòng giải thích ở đầu danh sách.
-    //
-    // Không lọc status=Active: đây là tra TÊN, tuyến tạm ngưng vẫn cần tên để hiển thị.
-    fetchRoutes({ page: 1, pageSize: ROUTE_PAGE_SIZE })
-      .then(({ items }) => {
-        if (cancelled) return;
-        setRoutes(
-          Object.fromEntries(items.map((route) => [route.id, { code: route.code, name: route.name }])),
-        );
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // 403 với hành khách là chuyện đã biết, không phải lỗi của màn hình — đánh dấu để
-        // hiện một dòng giải thích, không báo lỗi.
-        setRoutesFailed(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const view = viewOf(state);
   const passes = view.kind === 'passes' ? view.passes : NO_PASSES;
@@ -235,17 +194,6 @@ export default function MyMonthlyPassPage() {
         }
       >
 
-        {/* Nói một lần ở đầu danh sách thay vì lặp ở từng dòng vé. */}
-        {routesFailed && view.kind === 'passes' && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="Chưa tra được tên tuyến"
-            description="Danh sách chỉ hiện được mã tuyến. Vé tháng của bạn vẫn dùng bình thường."
-          />
-        )}
-
         {/* Đang tải — spinner riêng, không mượn danh sách của lượt trước và không hiện số đếm. */}
         {view.kind === 'loading' && <LoadingState description="Đang tải danh sách vé tháng…" />}
 
@@ -294,7 +242,7 @@ export default function MyMonthlyPassPage() {
                     {/* Tuyến + trạng thái + loại vé + khoảng hiệu lực + mã vé */}
                     <div style={{ flex: 1, minWidth: 240 }}>
                       <Space size={8} wrap>
-                        <RouteLine pass={pass} route={routes[pass.routeId]} />
+                        <RouteLine pass={pass} />
                         <MonthlyPassStatusTag pass={pass} />
                       </Space>
 

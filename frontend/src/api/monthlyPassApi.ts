@@ -82,6 +82,10 @@ export interface MonthlyPass {
 
   routeId: string;
 
+  /** Mã và tên tuyến do backend trả kèm — hiển thị thẳng, không gọi GET /routes (403 với hành khách). */
+  routeCode: string;
+  routeName: string;
+
   passTypeCode: PassTypeCode;
 
   /** Tên loại vé đọc từ bảng PassTypes — hiển thị thẳng, không tra bảng hằng ở client. */

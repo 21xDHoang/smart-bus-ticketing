@@ -3491,6 +3491,8 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
   "id": "3f2a1b0c-0000-0000-0000-000000000000",
   "code": "MP-01-A1B2C3",
   "routeId": "9d8c7b6a-0000-0000-0000-000000000000",
+  "routeCode": "01",
+  "routeName": "Bến Thành — Chợ Lớn",
   "passTypeCode": "OneMonth",
   "passTypeName": "Vé tháng 1 tháng",
   "price": 200000,
@@ -3506,6 +3508,7 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 | `id` | GUID | |
 | `code` | string | Mã vé tháng = nội dung mã QR soát vé. Duy nhất toàn hệ thống, khuôn `MP-{mã tuyến}-{6 ký tự A–Z/0–9}` |
 | `routeId` | GUID | Tuyến mà vé cho phép đi lại |
+| `routeCode` / `routeName` | string | Mã và tên tuyến, đọc từ bảng `Routes` tại thời điểm trả về — trả kèm để màn hành khách hiển thị thẳng, **không gọi `GET /routes`** (endpoint đó chỉ dành cho Admin/Quản lý) |
 | `passTypeCode` | string | Mã loại vé trong bảng `PassTypes` — quyết định thời hạn và giá gói |
 | `passTypeName` | string | Tên hiển thị của loại vé, đọc từ bảng `PassTypes` tại thời điểm trả về — client hiển thị thẳng, **không giữ bảng loại vé riêng** |
 | `price` | number | Số tiền THỰC TRẢ lúc đăng ký/gia hạn — **ảnh chụp**, không tra lại bảng giá |
@@ -3650,8 +3653,9 @@ Vé của **kỳ sau** (dòng gia hạn có `validFrom` ở tương lai) chưa "
 trong kết quả cho tới ngày hiệu lực — cố ý: đây là câu hỏi lúc lên xe, không phải lịch sử đăng ký.
 
 Sắp theo `validTo` **tăng dần** (vé sắp hết hạn đứng đầu — màn hình nhắc gia hạn đọc dòng đầu),
-phụ theo `code` cho ổn định. Mỗi phần tử đúng hình dạng `MonthlyPass` ở trên; frontend ghép
-`routeId` → tên tuyến bằng `GET /routes` như các màn hình khác.
+phụ theo `code` cho ổn định. Mỗi phần tử đúng hình dạng `MonthlyPass` ở trên, **kèm sẵn
+`routeCode`/`routeName`** để màn hình hiển thị thẳng — không ghép qua `GET /routes`, endpoint đó
+nằm sau policy `ManagerOrAbove` nên hành khách sẽ nhận 403.
 
 > **Vì sao mảng trần mà không `{ items, total }` như các danh sách khác?** Một người chỉ có vài vé
 > đang hoạt động (mỗi tuyến một vé) — phân trang là nghi thức thừa, và màn hình chỉ cần đúng mảng.

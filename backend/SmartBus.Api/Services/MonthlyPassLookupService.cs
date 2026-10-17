@@ -43,12 +43,17 @@ public class MonthlyPassLookupService : IMonthlyPassLookupService
             .Select(p => new
             {
                 Pass = p,
+                RouteCode = p.Route!.Code,
+                RouteName = p.Route!.Name,
                 PassTypeCode = p.PassType!.Code,
                 PassTypeName = p.PassType!.Name,
             })
             .ToListAsync(cancellationToken);
 
-        return rows.Select(row => ToResponse(row.Pass, row.PassTypeCode, row.PassTypeName)).ToList();
+        return rows
+            .Select(row => ToResponse(
+                row.Pass, row.RouteCode, row.RouteName, row.PassTypeCode, row.PassTypeName))
+            .ToList();
     }
 
     /// <summary>
@@ -57,12 +62,16 @@ public class MonthlyPassLookupService : IMonthlyPassLookupService
     /// </summary>
     private static MonthlyPassResponse ToResponse(
         MonthlyPass pass,
+        string routeCode,
+        string routeName,
         string passTypeCode,
         string passTypeName) => new()
     {
         Id = pass.Id,
         Code = pass.Code,
         RouteId = pass.RouteId,
+        RouteCode = routeCode,
+        RouteName = routeName,
         PassTypeCode = passTypeCode,
         PassTypeName = passTypeName,
         Price = pass.Price,

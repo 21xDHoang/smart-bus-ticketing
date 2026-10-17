@@ -17,8 +17,9 @@ import { fetchRoutes } from './routeApi';
 //   PUT    /pass-types/{id}   → PassTypeRecord
 //   DELETE /pass-types/{id}   → PassTypeRecord
 //
-// Cả bốn endpoint vé tháng lẫn bốn endpoint loại vé đều sau policy ManagerOrAbove — chỉ Admin và
-// Quản lý gọi được; vai trò khác nhận 403.
+// Bốn endpoint vé tháng ở trên đều sau policy ManagerOrAbove — chỉ Admin và Quản lý gọi được; vai
+// trò khác nhận 403. Riêng GET /pass-types chỉ cần đăng nhập (màn đăng ký vé tháng của hành khách
+// đọc danh mục thật); POST/PUT/DELETE vẫn sau ManagerOrAbove.
 // -----------------------------------------------------------------------------
 
 /** Trạng thái LƯU của vé tháng — khớp enum MonthlyPassStatus của backend. */
