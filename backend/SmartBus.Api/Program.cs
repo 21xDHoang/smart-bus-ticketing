@@ -540,6 +540,14 @@ builder.Services.AddScoped<ITicketRequestResultNotifier, TicketRequestResultNoti
 // khác (luật E1), chứ bản thân lớp bọc không có ích gì. Interface này không có factory nào bọc.
 builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewService>();
 
+// Gửi yêu cầu đổi chuyến — POST /api/ticket-changes (US 5, dòng 4 Sprint 4 — Nguyễn Duy Kiên):
+// kiểm vé thuộc người gọi + còn Paid, kiểm không có yêu cầu chờ trên cùng vé (ràng buộc liên bảng
+// với CancellationRequests), kiểm chuyến/ghế mới, chụp NewPrice từ Fares rồi ghi một dòng Pending.
+// KHÔNG đụng dòng vé và KHÔNG giữ ghế mới — hai việc đó thuộc nửa duyệt ở trên. Chênh lệch giá là
+// trường suy ra trong response, không ghi cột nào (docs/32 §6). Không có factory/decorator nào bọc.
+// ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
+builder.Services.AddScoped<ITicketChangeSubmissionService, TicketChangeSubmissionService>();
+
 // Ghi nhật ký soát vé + chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (US 15, dòng 18 Sprint 4 —
 // Phùng Duy Hoàng). Endpoint soát vé POST /tickets/validate (dòng 15, Trần Trung Hiếu) tiêm interface
 // này rồi gọi SAU khi đã xác thực chữ ký và tính xong kết quả — cả lượt online lẫn lượt đồng bộ đều đi

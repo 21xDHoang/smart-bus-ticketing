@@ -4,7 +4,7 @@
 >
 > Việc này là **dòng 44** sheet Sprint 4 — *"Service thông báo trễ chuyến / thay đổi lịch trình"* (Cao · 5 điểm · Hoàng). Các dòng chung quanh trong cùng cụm thông báo: **40** Hiếu (API cập nhật vị trí chuyến) · **41** Kiên (service báo khi xe cách trạm <500 m) · **42** Hiếu (Web Push PWA) · **43** Hiếu (API theo dõi thông báo theo tuyến/trạm) · **45** Dăm (API lịch sử thông báo đã nhận) · **46** Dăm (component bật/tắt nhận thông báo theo trạm) · **47** Băng (chuông + badge) · **48** Hạnh (màn chi tiết + đánh dấu đã đọc).
 >
-> 🟢 **Trạng thái**: nhánh `feature/44-thong-bao-tre-chuyen-doi-lich-trinh` đứng trên main `d5ee43f`. **3 file mới + `Program.cs` + 2 file entity (thêm hộ Dăm) + `api-contract.md` + 3 file test mới (23 ca)**; toàn bộ backend **1615/1615 xanh** (lượt đầy đủ 1614/1615, bài ghế SQLite chập chờn đã biết chạy lại một mình xanh). Không mở endpoint nào — thông báo đi qua hub `notifications` và endpoint `GET /api/notifications/me` đã có. PR này **không đụng `Migrations/`**, **không đụng `frontend/`**.
+> 🟢 **Trạng thái**: nhánh `feature/44-thong-bao-tre-chuyen-doi-lich-trinh` đã gộp main `3563c0c` (17/10/2026 — PR #219–#224). **3 file mới + `Program.cs` + 2 file entity (thêm hộ Dăm) + `api-contract.md` + 3 file test mới (23 ca)**. Không mở endpoint nào — thông báo đi qua hub `notifications` và endpoint `GET /api/notifications/me` đã có. PR này **không đụng `Migrations/`**, **không đụng `frontend/`**.
 
 ---
 
@@ -146,12 +146,12 @@ Token vẫn chuyển tiếp nguyên vẹn qua **sáu phương thức** của `IR
 
 Đây là **thay đổi hợp đồng**:
 
-- `NotificationType` từ bốn giá trị (thực tế backend đã phát sáu) thành **tám**: thêm `TripDelayed`, `TripScheduleChanged`.
+- `NotificationType` đi từ **sáu** giá trị (mức frontend đã khớp ở PR #220) lên **tám**: thêm `TripDelayed`, `TripScheduleChanged`.
 - `NotificationTarget` thêm **`Trip`** — bấm vào thông báo mở chi tiết chuyến / vé của khách, dùng `RelatedEntityId` làm id chuyến.
 
-`frontend/src/api/notificationApi.ts` hiện mới khai bốn loại + hai target và vẫn `USE_MOCK_DATA = true`; `NotificationBell.isApproved` chỉ biết `CancellationApproved`/`TicketChangeApproved`, nên **mọi loại khác bị vẽ bằng biểu tượng đỏ "bị từ chối"** — `TripDelayed` sẽ hiện dấu X đỏ, sai nghĩa. Cần:
+`frontend/src/api/notificationApi.ts` hiện khai sáu loại + ba target và đã nối API thật (PR #220) — còn thiếu đúng hai loại `Trip…` và target `Trip`. `NotificationBell.isPositiveOutcome` xếp mọi loại ngoài ba loại "tốt" vào nhóm đỏ, nên **`TripDelayed` sẽ bị vẽ bằng dấu X đỏ "bị từ chối"**, sai nghĩa. Cần:
 
-- khai thêm bốn giá trị vào union TypeScript (hai `Refund…` của dòng 34 cũng đang thiếu) và target `Refund`/`Trip`;
+- khai thêm `TripDelayed`/`TripScheduleChanged` vào union TypeScript và `Trip` vào target;
 - ánh xạ biểu tượng riêng cho nhóm `Trip…` (gợi ý: đồng hồ/cảnh báo cho `TripDelayed`, đồng hồ/thông tin cho `TripScheduleChanged` — không phải dấu X đỏ);
 - điều hướng `RelatedEntityType = Trip` về màn chi tiết chuyến hoặc vé tương ứng.
 
@@ -220,7 +220,7 @@ Chuyến xe Bến Thành — Chợ Lớn bị trễ. Khởi hành: 17/10/2026 15
 
 **`TripScheduleChangeWiringTests.cs` (69 dòng, 3 ca)** — resolve qua scope như request thật: `IRouteTripsService` đúng là `NotifyingRouteTripsService`; `ITripScheduleChangeNotifier` đúng là `TripScheduleChangeNotifier`; lớp trần vẫn resolve được.
 
-**Bộ backend đầy đủ: 1615/1615 xanh** (trước nhánh: 1592). Lượt chạy đầy đủ có 1 bài đỏ là `SeatHoldRaceFlowApiTests.Nam_muoi_khach_cung_giu_mot_ghe_thi_dung_mot_nguoi_thang` — lỗi SQLite `Error 5` chập chờn đã biết ở bước mở kết nối (`JwtMiddleware.cs:185`), chạy lại một mình xanh; không liên quan diff này.
+**Bộ backend đầy đủ: 1639/1639 xanh** sau khi gộp main `3563c0c` — 23 ca của nhánh này nằm trong đó; main trước khi gộp nhánh có 1616. Lượt chạy trước khi gộp main từng có 1 bài đỏ là `SeatHoldRaceFlowApiTests.Nam_muoi_khach_cung_giu_mot_ghe_thi_dung_mot_nguoi_thang` — lỗi SQLite `Error 5` chập chờn đã biết ở bước mở kết nối (`JwtMiddleware.cs:185`), chạy lại một mình xanh; lượt sau khi gộp main không đỏ bài nào. Không liên quan diff này.
 
 **Không có test nào chạm CSDL thật** — InMemory; đường này không có tranh chấp ghi nên không cần test đua.
 
