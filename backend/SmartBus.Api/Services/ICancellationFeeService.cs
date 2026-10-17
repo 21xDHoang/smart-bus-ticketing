@@ -16,6 +16,11 @@ namespace SmartBus.Api.Services;
 /// Các mốc tính CẢ biên: đúng 24 giờ là miễn phí, đúng 12 giờ là 30%, đúng 2 giờ là 50%. Mốc 2 giờ
 /// là <b>điều kiện được huỷ</b>, không phải một mức phí thứ ba.
 ///
+/// <b>Ngoại lệ 10 phút (chốt 17/10/2026):</b> vé được tạo chưa quá 10 phút thì được huỷ tự động,
+/// miễn phí, không cần quản lý duyệt (<see cref="CancellationFeeQuote.AutoApprove"/>). Cửa sổ này
+/// <b>thắng mốc 2 giờ</b> nhưng <b>không thắng</b> trạng thái chuyến đã khởi hành: xe đã chạy thì
+/// không còn gì để huỷ.
+///
 /// <b>Dùng ở đâu:</b> Hiếu (dòng 3) gọi service này trong <c>POST /api/cancellation-requests</c> để
 /// lấy cả điều kiện thời gian lẫn con số phí, rồi ghi <c>Fee</c> vào
 /// <c>CancellationRequest.CancellationFee</c> (không null, <c>0</c> = miễn phí). Endpoint KHÔNG được
@@ -44,8 +49,15 @@ public interface ICancellationFeeService
     /// <param name="now">
     /// Thời điểm khách bấm gửi, UTC — thường là <c>DateTime.UtcNow</c> ở controller/service gọi.
     /// </param>
+    /// <param name="ticketBookedAt">
+    /// Thời điểm vé được tạo (<c>Ticket.CreatedAt</c>), UTC — mốc của cửa sổ tự huỷ 10 phút.
+    /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
     /// <paramref name="ticketPrice"/> âm — dữ liệu hỏng, không phải một ca nghiệp vụ để trả lời.
     /// </exception>
-    CancellationFeeQuote GetCancellationFee(decimal ticketPrice, DateTime departureAt, DateTime now);
+    CancellationFeeQuote GetCancellationFee(
+        decimal ticketPrice,
+        DateTime departureAt,
+        DateTime now,
+        DateTime ticketBookedAt);
 }
