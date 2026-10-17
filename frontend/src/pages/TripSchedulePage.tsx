@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type Key } from 'react';
 import { Button, DatePicker, Popconfirm, Select, Space, Table, message } from 'antd';
 import type { TableProps } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -19,6 +19,7 @@ import {
 import type { BusOption, CreateTripPayload, UpdateTripPayload } from '../api/tripScheduleApi';
 import type { AppError } from '../api/axiosClient';
 import TripScheduleFormModal from '../components/TripScheduleFormModal';
+import TripStopTimesPanel from '../components/TripStopTimesPanel';
 import {
   EmptyState,
   FilterBar,
@@ -60,6 +61,9 @@ export default function TripSchedulePage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(false);
+  // Dòng nào đang mở dòng thời gian giờ đến từng trạm. Mặc định đóng để mỗi lần mở
+  // chỉ gọi API của đúng chuyến đó, không tải giờ trạm cho cả trang.
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
   // Tăng giá trị để tải lại danh sách sau khi thêm/sửa/huỷ thành công.
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -128,6 +132,14 @@ export default function TripSchedulePage() {
 
   const handleRefresh = () => setReloadKey((key) => key + 1);
 
+  const toggleStopTimes = (tripId: string) => {
+    setExpandedRowKeys((current) =>
+      current.includes(tripId)
+        ? current.filter((key) => key !== tripId)
+        : [...current, tripId],
+    );
+  };
+
   const openCreate = () => {
     setEditing(null);
     setModalOpen(true);
@@ -195,6 +207,19 @@ export default function TripSchedulePage() {
       key: 'arrivalTime',
       width: 110,
       render: (arrivalTime: string | null) => (arrivalTime ? formatTime(arrivalTime) : '—'),
+    },
+    {
+      // Giờ đến của CẢ chuyến không đủ cho điều hành — cột này mở dòng thời gian
+      // từng trạm. Vẫn giữ mũi tên mở rộng mặc định của bảng; nút này để người
+      // dùng thấy ngay là có giờ theo trạm mà không phải đoán.
+      title: 'Giờ trạm',
+      key: 'stopTimes',
+      width: 105,
+      render: (_, trip) => (
+        <Button type="link" size="small" onClick={() => toggleStopTimes(trip.id)}>
+          {expandedRowKeys.includes(trip.id) ? 'Ẩn giờ' : 'Xem giờ'}
+        </Button>
+      ),
     },
     {
       title: 'Biển số xe',
@@ -284,6 +309,8 @@ export default function TripSchedulePage() {
               onChange={(value) => {
                 setSelectedRouteId(value);
                 setPage(1);
+                // Danh sách chuyến đổi hẳn — đóng các dòng đang mở của tuyến cũ.
+                setExpandedRowKeys([]);
               }}
               options={routes.map((route) => ({
                 value: route.id,
@@ -300,6 +327,7 @@ export default function TripSchedulePage() {
                 // Bỏ chọn ngày (allowClear) = xem mọi ngày, không lọc khoảng.
                 setDate(value ?? null);
                 setPage(1);
+                setExpandedRowKeys([]);
               }}
             />
 
@@ -311,6 +339,7 @@ export default function TripSchedulePage() {
               onChange={(value) => {
                 setStatus(value ?? undefined);
                 setPage(1);
+                setExpandedRowKeys([]);
               }}
             />
           </FilterBar>
@@ -324,8 +353,21 @@ export default function TripSchedulePage() {
             columns={columns}
             dataSource={data}
             loading={loading}
-            scroll={{ x: 700 }}
+            scroll={{ x: 860 }}
             locale={{ emptyText: 'Không có chuyến nào khớp bộ lọc' }}
+            expandable={{
+              expandedRowKeys,
+              onExpandedRowsChange: (keys) => setExpandedRowKeys([...keys]),
+              // Panel tự gọi GET khi được mount. Gắn reloadKey vào key để sau khi
+              // thêm/sửa/huỷ chuyến, panel đang mở được dựng lại với giờ mốc mới.
+              expandedRowRender: (trip) => (
+                <TripStopTimesPanel
+                  key={`${trip.id}-${reloadKey}`}
+                  routeId={selectedRouteId!}
+                  trip={trip}
+                />
+              ),
+            }}
             pagination={tablePagination({
               page,
               pageSize,

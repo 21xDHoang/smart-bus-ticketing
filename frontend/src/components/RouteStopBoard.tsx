@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { DragEvent } from 'react';
-import { Button, Empty, Popconfirm, Space, Tooltip, Typography, theme } from 'antd';
+import { Button, Empty, InputNumber, Popconfirm, Space, Tooltip, Typography, theme } from 'antd';
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   DeleteOutlined,
   HolderOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import type { RouteStop } from '../api/routeStopApi';
 import { moveStop } from './routeStopOrder';
@@ -23,6 +24,15 @@ interface RouteStopBoardProps {
 
   /** Gọi khi bấm nút gỡ — cha gọi API rồi nạp lại danh sách. */
   onRemove: (stop: RouteStop) => void;
+
+  /**
+   * Gọi khi sửa khoảng cách của một đoạn. Giá trị là khoảng cách từ TRẠM TRƯỚC đến trạm
+   * này (trạm đầu luôn 0) — đúng nghĩa `RouteStops.DistanceKm` trong hợp đồng API.
+   */
+  onDistanceChange: (stopId: string, distanceKm: number) => void;
+
+  /** Chiều dài toàn tuyến, dùng để cảnh báo đoạn dài bất thường. Bỏ trống = không cảnh báo. */
+  routeDistanceKm?: number;
 }
 
 /**
@@ -33,7 +43,14 @@ interface RouteStopBoardProps {
  * phím và cảm ứng — nên mỗi dòng có thêm cặp nút ↑/↓ làm đường sắp xếp thay thế. Hai
  * đường này gọi chung `moveStop` nên cho ra kết quả y hệt nhau.
  */
-const RouteStopBoard = ({ stops, disabled, onReorder, onRemove }: RouteStopBoardProps) => {
+const RouteStopBoard = ({
+  stops,
+  disabled,
+  onReorder,
+  onRemove,
+  onDistanceChange,
+  routeDistanceKm,
+}: RouteStopBoardProps) => {
   // Màu lấy từ token chung — sáng/tối tự đổi theo chế độ, không viết hex tay trong component.
   const { token } = theme.useToken();
 
@@ -94,6 +111,13 @@ const RouteStopBoard = ({ stops, disabled, onReorder, onRemove }: RouteStopBoard
       {stops.map((stop, index) => {
         const isDragging = stop.id === draggingId;
         const isOver = stop.id === overId && !isDragging;
+        // Một đoạn dài hơn cả tuyến gần như luôn là toạ độ sai hoặc nhập nhầm đơn vị. Vẫn
+        // cho lưu (quản lý có thể cố ý), nhưng tô cảnh báo ngay tại dòng để họ thấy.
+        const isAbnormal =
+          index > 0 &&
+          routeDistanceKm !== undefined &&
+          routeDistanceKm > 0 &&
+          stop.distanceKm > routeDistanceKm;
 
         return (
           <div
@@ -133,6 +157,44 @@ const RouteStopBoard = ({ stops, disabled, onReorder, onRemove }: RouteStopBoard
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 {stop.stopAddress}
               </Typography.Text>
+            </div>
+
+            {/* Khoảng cách gắn với VỊ TRÍ đoạn đường, không gắn với bản thân trạm — đổi
+                thứ tự phải kiểm tra lại (xem cảnh báo ở RouteStopsPage). */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              {index === 0 ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Điểm đầu · 0 km
+                </Typography.Text>
+              ) : (
+                <>
+                  <Tooltip title="Khoảng cách từ trạm trước đến trạm này">
+                    <InputNumber
+                      size="small"
+                      min={0}
+                      max={9999.99}
+                      step={0.1}
+                      precision={2}
+                      value={stop.distanceKm}
+                      disabled={disabled}
+                      status={isAbnormal ? 'warning' : undefined}
+                      style={{ width: 100 }}
+                      aria-label={`Khoảng cách từ trạm trước đến ${stop.stopName} (km)`}
+                      onChange={(value) => onDistanceChange(stop.id, value ?? 0)}
+                    />
+                  </Tooltip>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    km
+                  </Typography.Text>
+                  {isAbnormal && (
+                    <Tooltip
+                      title={`Đoạn này dài hơn cả tuyến (${routeDistanceKm} km) — kiểm tra lại toạ độ hoặc số km đã nhập.`}
+                    >
+                      <WarningOutlined style={{ color: token.colorWarning }} />
+                    </Tooltip>
+                  )}
+                </>
+              )}
             </div>
 
             <Space size={0}>

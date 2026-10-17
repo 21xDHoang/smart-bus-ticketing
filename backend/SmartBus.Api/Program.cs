@@ -62,20 +62,40 @@ builder.Services.AddScoped<ITripService, TripService>();
 // Đặt tên RouteTrips để tránh đụng ITripService/TripService của API chi tiết chuyến /trips/{id}
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
 // Thông báo trễ/đổi lịch trình (US 10, dòng 44 Sprint 4 — Phùng Duy Hoàng): từ đây
-// IRouteTripsService resolve ra LỚP BỌC NotifyingRouteTripsService thay vì lớp trần, nên mọi lượt
-// sửa chuyến qua PUT /routes/{routeId}/trips/{id} đều đi qua chỗ báo tin mà RouteTripsService (file
-// của Hiếu — luật E1) không phải sửa. Cùng lối RefundAttemptService bên dưới: lớp trần trước, lớp bọc
-// sau; DI lấy bản đăng ký sau cùng nên ai thêm dòng IRouteTripsService nữa ở dưới sẽ thay thế im lặng
-// (TripScheduleChangeWiringTests ghim đúng chỗ nối này). Notifier tự quyết định "có gì để báo" bằng
-// cách so ảnh chụp giờ cũ với dữ liệu đã lưu; hợp đồng không-bao-giờ-ném-lỗi + lý do bọc decorator ở
-// Services/ITripScheduleChangeNotifier.cs và NotifyingRouteTripsService.cs.
+// IRouteTripsService resolve ra CHUỖI HAI LỚP BỌC, ngoài cùng là NotifyingRouteTripsService:
+//
+//   IRouteTripsService → NotifyingRouteTripsService → ArrivalEstimatingRouteTripsService
+//                                                                   → RouteTripsService (lớp trần)
+//
+// - Notifying (ngoài cùng) báo tin khi PUT /routes/{routeId}/trips/{id} đổi giờ chạy thật.
+// - ArrivalEstimating (giữa) điền giờ đến cho các chuyến vừa sinh hàng loạt — màn hình "Cấu hình
+//   tần suất" không còn cột Giờ đến trống; job nhân bản ngày sau cũng có mốc để chép sang.
+// Cả hai đều là decorator để RouteTripsService (file của Hiếu — luật E1) không phải sửa. Lớp ước
+// lượng đăng ký bằng KIỂU RIÊNG (không phải IRouteTripsService) để tránh vòng lặp DI; Notifying
+// nhận IRouteTripsService nên đọc được lớp giữa. Cùng lối RefundAttemptService bên dưới: lớp trần
+// trước, lớp bọc sau; DI lấy bản đăng ký sau cùng nên ai thêm dòng IRouteTripsService nữa ở dưới sẽ
+// thay thế im lặng (TripScheduleChangeWiringTests ghim Notifying ở ngoài cùng). Notifier tự quyết
+// định "có gì để báo" bằng cách so ảnh chụp giờ cũ với dữ liệu đã lưu; hợp đồng không-bao-giờ-ném-
+// lỗi + lý do bọc decorator ở Services/ITripScheduleChangeNotifier.cs và NotifyingRouteTripsService.cs.
 builder.Services.AddScoped<RouteTripsService>();
+builder.Services.AddScoped<ArrivalEstimatingRouteTripsService>(provider =>
+    new ArrivalEstimatingRouteTripsService(
+        provider.GetRequiredService<RouteTripsService>(),
+        provider.GetRequiredService<AppDbContext>(),
+        provider.GetRequiredService<ILogger<ArrivalEstimatingRouteTripsService>>()));
 builder.Services.AddScoped<ITripScheduleChangeNotifier, TripScheduleChangeNotifier>();
 builder.Services.AddScoped<IRouteTripsService>(provider => new NotifyingRouteTripsService(
-    provider.GetRequiredService<RouteTripsService>(),
+    provider.GetRequiredService<ArrivalEstimatingRouteTripsService>(),
     provider.GetRequiredService<ITripScheduleChangeNotifier>(),
     provider.GetRequiredService<AppDbContext>(),
     provider.GetRequiredService<ILogger<NotifyingRouteTripsService>>()));
+
+// Giờ đến TỪNG TRẠM của một chuyến: GET/PUT /routes/{routeId}/trips/{id}/stop-times.
+// Giờ dự kiến suy ra từ RouteStops.DistanceKm khi đọc; bảng TripStopTimeOverrides chỉ giữ mốc
+// quản trị viên sửa tay. Service riêng (không bọc IRouteTripsService) vì đây là dòng thời gian
+// của một chuyến, không phải thao tác lịch trình — và để không phải sửa file của Hiếu.
+// Hợp đồng: docs/api-contract.md mục "Giờ đến từng trạm".
+builder.Services.AddScoped<ITripStopTimeService, TripStopTimeService>();
 
 // Job sinh chuyến tự động cho những ngày sắp tới (US 13).
 // Task "BackgroundService sinh chuyến tự động từ lịch trình theo ngày" — Nguyễn Duy Kiên.

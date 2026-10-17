@@ -5,12 +5,20 @@ using SmartBus.Api.Dtos.Trips;
 namespace SmartBus.Api.Services;
 
 /// <summary>
-/// Lớp bọc quanh <see cref="RouteTripsService"/>: chạy đúng lượt sửa chuyến như cũ, rồi báo cho hành
-/// khách của chuyến nếu giờ chạy thực sự đổi — task Sprint 4 *"Service thông báo trễ chuyến / thay đổi
-/// lịch trình"* (dòng 44, Phùng Duy Hoàng). Cùng lối <see cref="NotifyingRefundAttemptService"/> và ba
-/// lớp <c>NotifyingSeatHold*</c>: <c>IRouteTripsService</c> trong DI trỏ vào lớp bọc này (Program.cs),
-/// nên MỌI lượt sửa chuyến qua <c>PUT /routes/{routeId}/trips/{id}</c> đi qua đây mà
+/// Lớp bọc NGOÀI CÙNG của chuỗi <c>IRouteTripsService</c>: chạy đúng lượt sửa chuyến như cũ, rồi báo
+/// cho hành khách của chuyến nếu giờ chạy thực sự đổi — task Sprint 4 *"Service thông báo trễ chuyến /
+/// thay đổi lịch trình"* (dòng 44, Phùng Duy Hoàng). Cùng lối <see cref="NotifyingRefundAttemptService"/>
+/// và ba lớp <c>NotifyingSeatHold*</c>: <c>IRouteTripsService</c> trong DI trỏ vào lớp bọc này
+/// (Program.cs), nên MỌI lượt sửa chuyến qua <c>PUT /routes/{routeId}/trips/{id}</c> đi qua đây mà
 /// <see cref="RouteTripsService.UpdateAsync"/> không phải biết gì về SignalR.
+///
+/// <para>
+/// <b>Chuỗi lớp bọc trong DI:</b> Notifying (lớp này) → <see cref="ArrivalEstimatingRouteTripsService"/>
+/// → <see cref="RouteTripsService"/>. Lớp này nhận <c>IRouteTripsService</c> chứ không nhận lớp trần để
+/// có thể nằm ngoài lớp điền giờ đến; nhờ vậy <c>GenerateAsync</c> vẫn đi qua lớp ước lượng, còn
+/// <c>UpdateAsync</c> vẫn chạy trước khi chụp/so giờ như cũ. Không đổi thứ tự: Notifying phải ngoài
+/// cùng để mọi lượt sửa chuyến — kể cả lượt đi qua lớp ước lượng — đều được báo tin.
+/// </para>
 ///
 /// <para>
 /// <b>Vì sao bọc ở tầng interface chứ không sửa thẳng service:</b> đó là file của Trần Trung Hiếu
@@ -41,7 +49,7 @@ namespace SmartBus.Api.Services;
 /// </summary>
 public class NotifyingRouteTripsService : IRouteTripsService
 {
-    private readonly RouteTripsService _inner;
+    private readonly IRouteTripsService _inner;
 
     private readonly ITripScheduleChangeNotifier _notifier;
 
@@ -50,7 +58,7 @@ public class NotifyingRouteTripsService : IRouteTripsService
     private readonly ILogger<NotifyingRouteTripsService> _logger;
 
     public NotifyingRouteTripsService(
-        RouteTripsService inner,
+        IRouteTripsService inner,
         ITripScheduleChangeNotifier notifier,
         AppDbContext db,
         ILogger<NotifyingRouteTripsService> logger)

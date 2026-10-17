@@ -1487,6 +1487,37 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("Trips");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.TripStopTimeOverride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ArrivalTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StopId");
+
+                    b.HasIndex("TripId", "StopId")
+                        .IsUnique();
+
+                    b.ToTable("TripStopTimeOverrides");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2183,6 +2214,25 @@ namespace SmartBus.Api.Migrations
                     b.Navigation("Driver");
 
                     b.Navigation("Route");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.TripStopTimeOverride", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Stop", "Stop")
+                        .WithMany()
+                        .HasForeignKey("StopId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.Trip", "Trip")
+                        .WithMany()
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Stop");
+
+                    b.Navigation("Trip");
                 });
 
             modelBuilder.Entity("SmartBus.Api.Entities.User", b =>
