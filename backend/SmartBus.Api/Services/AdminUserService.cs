@@ -318,6 +318,40 @@ public class AdminUserService : IAdminUserService
         return ServiceResult<AdminUserResponse>.Ok(ToResponse(user));
     }
 
+    public async Task<ServiceResult<AdminUserResponse>> ResetPasswordAsync(
+        Guid id,
+        ResetAdminUserPasswordRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await FindAsync(id, tracking: true, cancellationToken);
+        if (user is null)
+        {
+            return ServiceResult<AdminUserResponse>.NotFound(UserNotFound);
+        }
+
+        var now = DateTime.UtcNow;
+
+        user.PasswordHash = PasswordService.HashPassword(request.NewPassword);
+        user.UpdatedAt = now;
+
+        // Đổi mật khẩu mà để refresh token cũ sống tiếp thì người đang giữ phiên cũ vẫn
+        // duy trì được quyền truy cập mãi mãi — coi như việc đổi mật khẩu không có tác dụng.
+        // Thu hồi cả token đã hết hạn nhưng chưa đánh dấu? Không: chỉ đụng token còn hiệu lực,
+        // tránh ghi thừa hàng loạt dòng lịch sử.
+        var activeTokens = await _db.RefreshTokens
+            .Where(t => t.UserId == id && t.RevokedAt == null && t.ExpiresAt > now)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in activeTokens)
+        {
+            token.RevokedAt = now;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<AdminUserResponse>.Ok(ToResponse(user));
+    }
+
     /// <summary>Nạp tài khoản kèm vai trò. Bảng nối phải Include vì đó là nơi gán/thu hồi vai trò ghi vào.</summary>
     private async Task<User?> FindAsync(Guid id, bool tracking, CancellationToken cancellationToken)
     {

@@ -63,4 +63,13 @@ public interface IAdminUserService
         SetUserRolesRequest request,
         Guid currentUserId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Admin đặt lại mật khẩu của một tài khoản. Băm bằng BCrypt và thu hồi toàn bộ refresh
+    /// token đang hoạt động của tài khoản đó, buộc các phiên cũ đăng nhập lại.
+    /// </summary>
+    Task<ServiceResult<AdminUserResponse>> ResetPasswordAsync(
+        Guid id,
+        ResetAdminUserPasswordRequest request,
+        CancellationToken cancellationToken = default);
 }

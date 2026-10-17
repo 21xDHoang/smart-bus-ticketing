@@ -670,6 +670,100 @@ public class AdminUserApiTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // Đặt lại mật khẩu (PUT /admin/users/{id}/password)
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Dat_lai_mat_khau_thanh_cong_dang_nhap_duoc_bang_mat_khau_moi()
+    {
+        using var factory = new TestAppFactory();
+        var (admin, _) = await SignInAsAdminAsync(factory);
+        var user = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger);
+
+        var response = await admin.PutAsJsonAsync(
+            $"{UsersUrl}/{user.Id}/password",
+            new { newPassword = "matkhaumoi123" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(user.Id.ToString(), body.RootElement.GetProperty("id").GetString());
+        // Không bao giờ trả mật khẩu hay bản băm ra ngoài.
+        Assert.False(body.RootElement.TryGetProperty("passwordHash", out _));
+
+        var client = factory.CreateClient();
+
+        var newLogin = await client.PostAsJsonAsync(
+            LoginUrl,
+            new { phoneNumber = user.PhoneNumber, password = "matkhaumoi123" });
+        Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+
+        var oldLogin = await client.PostAsJsonAsync(
+            LoginUrl,
+            new { phoneNumber = user.PhoneNumber, password = "matkhau123" });
+        Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task Dat_lai_mat_khau_thu_hoi_refresh_token_dang_hoat_dong()
+    {
+        using var factory = new TestAppFactory();
+        var user = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger);
+        var (admin, _) = await SignInAsAdminAsync(factory);
+
+        var client = factory.CreateClient();
+
+        // Đăng nhập trước khi đổi mật khẩu để có một phiên cũ thật.
+        var login = await client.PostAsJsonAsync(
+            LoginUrl,
+            new { phoneNumber = user.PhoneNumber, password = "matkhau123" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+
+        using var loginBody = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+        var refreshToken = loginBody.RootElement.GetProperty("refreshToken").GetString();
+
+        var reset = await admin.PutAsJsonAsync(
+            $"{UsersUrl}/{user.Id}/password",
+            new { newPassword = "matkhaumoi123" });
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        // Phiên cũ không được tự sống tiếp: refresh token phát trước khi đổi mật khẩu phải chết.
+        var refresh = await client.PostAsJsonAsync(
+            "/api/auth/refresh-token",
+            new { refreshToken });
+        Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+    }
+
+    [Fact]
+    public async Task Dat_lai_mat_khau_sai_dinh_dang_tra_400_kem_errors_newPassword()
+    {
+        using var factory = new TestAppFactory();
+        var (admin, _) = await SignInAsAdminAsync(factory);
+        var user = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger);
+
+        // Toàn chữ số — thiếu chữ, không khớp chuẩn mật khẩu của hệ thống.
+        var response = await admin.PutAsJsonAsync(
+            $"{UsersUrl}/{user.Id}/password",
+            new { newPassword = "12345678" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("newPassword", await ErrorFieldsAsync(response));
+    }
+
+    [Fact]
+    public async Task Dat_lai_mat_khau_cho_tai_khoan_khong_ton_tai_tra_404()
+    {
+        using var factory = new TestAppFactory();
+        var (admin, _) = await SignInAsAdminAsync(factory);
+
+        var response = await admin.PutAsJsonAsync(
+            $"{UsersUrl}/{Guid.NewGuid()}/password",
+            new { newPassword = "matkhaumoi123" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Helper
     // ---------------------------------------------------------------------------------------
 
