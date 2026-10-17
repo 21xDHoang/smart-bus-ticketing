@@ -10,13 +10,14 @@ import {
   Row,
   Segmented,
   Select,
+  Space,
   Table,
   TimePicker,
   Typography,
   message,
 } from 'antd';
 import type { TableProps } from 'antd';
-import { ThunderboltOutlined } from '@ant-design/icons';
+import { SyncOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { TRIP_STATUS_META, fetchRouteOptions } from '../api/tripApi';
 import type { Trip, TripRouteOption, TripStatus } from '../api/tripApi';
@@ -135,6 +136,14 @@ interface FrequencyFormValues {
   busId: string;
 }
 
+/**
+ * Cách áp dụng lịch: đúng ngày đã chọn, hay "vĩnh viễn" — bắt đầu từ ngày đã chọn rồi để job
+ * nền (TripGenerationBackgroundService) tự nhân bản sang các ngày tiếp theo. Cả hai chế độ
+ * gửi CÙNG một payload một ngày; nút chỉ đổi cách hiểu và lời giải thích trên màn hình,
+ * không đổi hình dạng hợp đồng API.
+ */
+type ApplyMode = 'once' | 'forever';
+
 export default function TripFrequencyPage() {
   const [form] = Form.useForm<FrequencyFormValues>();
 
@@ -149,9 +158,15 @@ export default function TripFrequencyPage() {
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
-  // Kết quả lần sinh gần nhất — giữ cả thông tin tuyến/ngày để tiêu đề khỏi mơ hồ.
+  // Chế độ áp dụng của lần cấu hình hiện tại — mặc định chỉ ngày đã chọn.
+  const [applyMode, setApplyMode] = useState<ApplyMode>('once');
+  // Kết quả lần sinh gần nhất — giữ cả thông tin tuyến/ngày/chế độ để tiêu đề khỏi mơ hồ.
   const [result, setResult] = useState<GenerateTripsResult | null>(null);
-  const [resultInfo, setResultInfo] = useState<{ routeLabel: string; date: Dayjs } | null>(null);
+  const [resultInfo, setResultInfo] = useState<{
+    routeLabel: string;
+    date: Dayjs;
+    permanent: boolean;
+  } | null>(null);
 
   // Tải danh sách tuyến + xe đang khai thác cho hai ô chọn.
   const loadOptions = useCallback(async () => {
@@ -183,6 +198,8 @@ export default function TripFrequencyPage() {
     watched.frequencyMinutes,
   );
 
+  const forever = applyMode === 'forever';
+
   const applyFrequency = (value: number) => {
     form.setFieldValue('frequencyMinutes', value);
     setWatched((current) => ({ ...current, frequencyMinutes: value }));
@@ -198,6 +215,8 @@ export default function TripFrequencyPage() {
     }
 
     const route = routes.find((item) => item.id === values.routeId);
+    // Chốt chế độ tại thời điểm bấm sinh — người dùng có thể đổi nút trong lúc chờ API.
+    const permanent = applyMode === 'forever';
     const payload: GenerateTripsPayload = {
       busId: values.busId,
       startTime: toVietnamIso(values.date, values.startTime),
@@ -212,8 +231,13 @@ export default function TripFrequencyPage() {
       setResultInfo({
         routeLabel: route ? `${route.code} — ${route.name}` : '',
         date: values.date,
+        permanent,
       });
-      message.success(`Đã sinh ${generated.total} chuyến.`);
+      message.success(
+        permanent
+          ? `Đã sinh ${generated.total} chuyến — lịch sẽ tự lặp lại hằng ngày.`
+          : `Đã sinh ${generated.total} chuyến.`,
+      );
     } catch (error) {
       const appError = error as AppError;
       if (appError.errors) {
@@ -280,7 +304,7 @@ export default function TripFrequencyPage() {
     <div>
       <PageHeader
         title="Cấu hình tần suất chạy xe"
-        subtitle="Chọn tuyến, ngày áp dụng, khung giờ và tần suất — hệ thống sinh các chuyến cách đều nhau trong khung giờ đó."
+        subtitle="Chọn tuyến, ngày áp dụng, khung giờ và tần suất — hệ thống sinh các chuyến cách đều nhau; bật Vĩnh viễn để lịch tự lặp lại hằng ngày."
       />
 
       <PageCard>
@@ -326,8 +350,28 @@ export default function TripFrequencyPage() {
                 <Col xs={24} md={6}>
                   <Form.Item
                     name="date"
-                    label="Ngày áp dụng"
+                    label={forever ? 'Bắt đầu áp dụng' : 'Ngày áp dụng'}
                     rules={[{ required: true, message: 'Vui lòng chọn ngày áp dụng' }]}
+                    extra={
+                      <Space
+                        size={8}
+                        style={{ width: '100%', justifyContent: 'space-between' }}
+                      >
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {forever ? 'Tự lặp lại hằng ngày về sau.' : 'Sinh lịch cho ngày này.'}
+                        </Text>
+                        <Button
+                          size="small"
+                          type={forever ? 'primary' : 'default'}
+                          icon={<SyncOutlined />}
+                          aria-pressed={forever}
+                          htmlType="button"
+                          onClick={() => setApplyMode(forever ? 'once' : 'forever')}
+                        >
+                          Vĩnh viễn
+                        </Button>
+                      </Space>
+                    }
                   >
                     <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
                   </Form.Item>
@@ -444,7 +488,7 @@ export default function TripFrequencyPage() {
                 <Alert
                   type="warning"
                   showIcon
-                  message={`Dự kiến ${preview.count} chuyến — vượt trần ${MAX_TRIPS_PER_CALL} chuyến mỗi lần sinh.`}
+                  message={`Dự kiến ${preview.count} chuyến${forever ? ' mỗi ngày' : ''} — vượt trần ${MAX_TRIPS_PER_CALL} chuyến mỗi lần sinh.`}
                   description="Thu hẹp khung giờ hoặc tăng tần suất rồi thử lại."
                 />
               )}
@@ -452,16 +496,28 @@ export default function TripFrequencyPage() {
                 <Alert
                   type="success"
                   showIcon
-                  message={`Dự kiến sinh ${preview.count} chuyến`}
-                  description={`Chuyến đầu ${preview.first}, chuyến cuối ${preview.last}, cách nhau mỗi ${watched.frequencyMinutes} phút.`}
+                  message={`Dự kiến sinh ${preview.count} chuyến${forever ? ' mỗi ngày' : ''}`}
+                  description={
+                    forever && watched.date
+                      ? `Bắt đầu ${watched.date.format('DD/MM/YYYY')} và tự lặp lại hằng ngày. Chuyến đầu ${preview.first}, chuyến cuối ${preview.last}, cách nhau mỗi ${watched.frequencyMinutes} phút.`
+                      : `Chuyến đầu ${preview.first}, chuyến cuối ${preview.last}, cách nhau mỗi ${watched.frequencyMinutes} phút.`
+                  }
                 />
               )}
             </div>
 
             <div style={{ marginTop: 16 }}>
               <Popconfirm
-                title={preview.kind === 'ok' ? `Sinh ${preview.count} chuyến?` : 'Sinh chuyến?'}
-                description="Nếu một chuyến trong dải trùng khung giờ với chuyến đã có, KHÔNG chuyến nào được tạo — thao tác nguyên tử."
+                title={
+                  preview.kind === 'ok'
+                    ? `Sinh ${preview.count} chuyến${forever ? ' mỗi ngày' : ''}?`
+                    : 'Sinh chuyến?'
+                }
+                description={
+                  forever
+                    ? 'Lịch bắt đầu từ ngày đã chọn và tự lặp lại hằng ngày. Nếu một chuyến trong dải trùng khung giờ với chuyến đã có, KHÔNG chuyến nào được tạo — thao tác nguyên tử.'
+                    : 'Nếu một chuyến trong dải trùng khung giờ với chuyến đã có, KHÔNG chuyến nào được tạo — thao tác nguyên tử.'
+                }
                 okText="Sinh chuyến"
                 cancelText="Xem lại"
                 onConfirm={handleSubmit}
@@ -473,7 +529,9 @@ export default function TripFrequencyPage() {
                   loading={submitting}
                   disabled={preview.kind !== 'ok'}
                 >
-                  {preview.kind === 'ok' ? `Sinh ${preview.count} chuyến` : 'Sinh chuyến'}
+                  {preview.kind === 'ok'
+                    ? `Sinh ${preview.count} chuyến${forever ? ' mỗi ngày' : ''}`
+                    : 'Sinh chuyến'}
                 </Button>
               </Popconfirm>
             </div>
@@ -485,11 +543,13 @@ export default function TripFrequencyPage() {
         // PageCard không có prop style — bọc ngoài để giữ khoảng cách với khối trên.
         <div style={{ marginTop: 24 }}>
           <PageCard
-            title={`Đã sinh ${result.total} chuyến`}
+            title={`Đã sinh ${result.total} chuyến${resultInfo.permanent ? ' mỗi ngày' : ''}`}
             extra={
               <Text type="secondary">
                 {resultInfo.routeLabel ? `${resultInfo.routeLabel} · ` : ''}
-                ngày {resultInfo.date.format('DD/MM/YYYY')}
+                {resultInfo.permanent
+                  ? `vĩnh viễn từ ${resultInfo.date.format('DD/MM/YYYY')}`
+                  : `ngày ${resultInfo.date.format('DD/MM/YYYY')}`}
               </Text>
             }
           >
