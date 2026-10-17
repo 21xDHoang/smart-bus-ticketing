@@ -4794,10 +4794,94 @@ Ví dụ `from=2026-10-11&to=2026-10-17` (7 ngày) → kỳ trước `2026-10-04
 - Khoảng kỳ trước vượt giới hạn lịch (chỉ xảy ra khi `from` rơi vào đầu năm 1) → **400**, lỗi gắn
   ở `errors.from`/`errors.to`.
 
-> **Cho task "API doanh thu theo tuyến, theo xe, theo phương thức thanh toán" (Kiên):** dùng cùng
-> nền `Payments` `Success` và cùng trục thời gian ở trên — mở rộng bằng endpoint mới trên bề mặt
-> `/reports/revenue` (ví dụ `GET /reports/revenue/by-route`) thay vì dựng một nền tính khác, nếu
-> không hai báo cáo sẽ ra hai con số tổng khác nhau cho cùng một kỳ.
+#### `GET /reports/revenue/by-route` — doanh thu theo tuyến
+
+#### `GET /reports/revenue/by-bus` — doanh thu theo xe
+
+#### `GET /reports/revenue/by-payment-method` — doanh thu theo phương thức thanh toán
+
+> ✅ Task *"API doanh thu theo tuyến, theo xe, theo phương thức thanh toán"* — Nguyễn Duy Kiên,
+> Sprint 4. Ba endpoint dùng **cùng nền `Payments` `Success` và cùng trục thời gian** với
+> `GET /reports/revenue` ở trên; không có nền tính thứ hai.
+
+Query — **chỉ hai tham số, đều bỏ trống được**, cùng quy tắc mặc định với `GET /reports/revenue`:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+
+Cố ý **không có** `granularity` (các endpoint này trả một dòng cho mỗi nhóm, không có trục thời
+gian) và **không có** `routeId` (báo cáo theo tuyến đã trả mọi tuyến; muốn một tuyến thì dùng
+`GET /reports/revenue?routeId=…`).
+
+```json
+// GET /reports/revenue/by-route
+{
+  "from": "2026-10-11",
+  "to": "2026-10-17",
+  "totalRevenue": 150000000,
+  "totalPayments": 600,
+  "routes": [
+    { "routeId": "…", "routeCode": "01", "routeName": "Bến Thành — Chợ Lớn", "revenue": 90000000, "payments": 350 },
+    { "routeId": "…", "routeCode": "19", "routeName": "Bến Thành — Suối Tiên", "revenue": 60000000, "payments": 250 }
+  ]
+}
+```
+
+```json
+// GET /reports/revenue/by-bus
+{
+  "from": "2026-10-11",
+  "to": "2026-10-17",
+  "totalRevenue": 150000000,
+  "totalPayments": 600,
+  "buses": [
+    { "busId": "…", "licensePlate": "29B-123.45", "busType": "Xe buýt 45 chỗ", "revenue": 80000000, "payments": 320 },
+    { "busId": "…", "licensePlate": "51C-678.90", "busType": "Xe buýt điện", "revenue": 70000000, "payments": 280 }
+  ]
+}
+```
+
+```json
+// GET /reports/revenue/by-payment-method
+{
+  "from": "2026-10-11",
+  "to": "2026-10-17",
+  "totalRevenue": 150000000,
+  "totalPayments": 600,
+  "paymentMethods": [
+    { "methodCode": "MoMo", "revenue": 90000000, "payments": 360 },
+    { "methodCode": "VNPay", "revenue": 40000000, "payments": 160 },
+    { "methodCode": "BankCard", "revenue": 20000000, "payments": 80 }
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `from` / `to` | Khoảng ngày sau khi áp dụng mặc định (lịch Việt Nam) |
+| `totalRevenue` / `totalPayments` | Tổng cả kỳ — cùng định nghĩa và cùng truy vấn gộp trên `Payments` với `GET /reports/revenue` |
+| `routes[]` / `buses[]` / `paymentMethods[]` | Một dòng cho mỗi nhóm **có ít nhất một giao dịch `Success`** trong kỳ |
+| `routeId` / `routeCode` / `routeName` | Tuyến của chuyến được trả tiền — lấy từ bảng `Routes` tại thời điểm hỏi |
+| `busId` / `licensePlate` / `busType` | Xe chạy chuyến được trả tiền — lấy từ bảng `Buses` tại thời điểm hỏi |
+| `methodCode` | Đúng giá trị cột `Payments.MethodCode`: `MoMo` / `VNPay` / `ZaloPay` / `BankCard` |
+| `revenue` / `payments` | Doanh thu (VND) / số giao dịch `Success` của nhóm |
+
+- **Cùng nền số liệu và cùng trục thời gian với `GET /reports/revenue`**: chỉ giao dịch
+  `PaymentStatus.Success`, mốc `PaidAt` (thiếu thì `CreatedAt`), ngày theo giờ Việt Nam UTC+7.
+  Cộng `revenue` của mọi dòng (và `payments` của mọi dòng) **phải bằng** `totalRevenue` /
+  `totalPayments` của cùng phản hồi.
+- **Chỉ trả nhóm CÓ phát sinh giao dịch `Success`** — nhóm không bán được vé trong kỳ không hiện
+  thành dòng 0. Màn hình nào cần đủ danh sách tuyến/xe/phương thức thì tự đối chiếu với danh mục
+  (FE đã có sẵn các API danh mục). Nhờ vậy phản hồi không phình theo số tuyến/xe của toàn công ty.
+- **Thứ tự dòng cố định**: `revenue` giảm dần; bằng nhau thì theo `routeCode` / `licensePlate` /
+  `methodCode` tăng dần (Ordinal). Danh sách luôn tất định, FE không phải tự sắp.
+- Khoảng `from` → `to` tối đa **366 ngày** · `to` trước `from` → **400**, lỗi gắn ở cả
+  `errors.from` lẫn `errors.to`.
+- **Không đệm**: mỗi lượt gọi đọc CSDL tươi (khác `GET /reports/revenue`). So tổng với bản thời
+  gian ngay sau khi có giao dịch mới thì bản thời gian có thể chậm tới 60 giây (đệm của nó), còn
+  ba báo cáo này luôn tươi. Cùng một kho dữ liệu, cùng một định nghĩa — chỉ khác thời điểm đọc.
 
 > **Vì sao không trả kèm số vé?** Story chỉ hỏi doanh thu; vé đã bán là chuyện của báo cáo tỷ lệ
 > lấp đầy (US 20) — mỗi báo cáo một câu hỏi, trộn lại thì không báo cáo nào đọc được.

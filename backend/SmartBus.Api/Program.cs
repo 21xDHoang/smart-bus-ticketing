@@ -478,6 +478,15 @@ builder.Services.AddScoped<IRevenueReportService>(provider => new CachedRevenueR
 // vào nó — nhìn danh sách đăng ký là thấy quan hệ.
 builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>();
 
+// Doanh thu theo tuyến / theo xe / theo phương thức thanh toán:
+// GET /api/reports/revenue/by-route, /by-bus, /by-payment-method (US 19 "Doanh thu", Sprint 4).
+// Task "API doanh thu theo tuyến, theo xe, theo phương thức thanh toán" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cùng nền Payments Success + cùng trục giờ Việt Nam với báo cáo thời gian ở trên, nhưng controller
+// riêng (RevenueBreakdownController) và KHÔNG đi qua đệm — ba báo cáo này trả dòng theo nhóm, không
+// phải bucket thời gian, nên không dùng chung khoá đệm của RevenueReportCache.
+builder.Services.AddScoped<IRevenueBreakdownService, RevenueBreakdownService>();
+
 // Xuất báo cáo doanh thu ra Excel/PDF: GET /api/reports/revenue/export (US 24 "Xuất dữ liệu",
 // Sprint 4 dòng 78). Task "API xuất báo cáo doanh thu / lấp đầy / nhật ký ra file" — Phùng Duy
 // Hoàng. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
