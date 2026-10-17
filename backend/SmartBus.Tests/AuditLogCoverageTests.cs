@@ -54,6 +54,12 @@ public class AuditLogCoverageTests
         ("PATCH",  "/api/admin/users/{id:guid}/status",          CachGhi.Middleware),
         ("PUT",    "/api/admin/users/{id:guid}/roles",           CachGhi.Middleware),
 
+        // Đặt lại mật khẩu tài khoản — Admin. Middleware tự ghi (PUT → Update); tên bảng suy từ
+        // đoạn tĩnh ngay trước {id} là "Users", Target "Users:{id}". Service băm BCrypt + thu hồi
+        // toàn bộ refresh token đang hoạt động, nhưng KHÔNG tự gọi IAuditLogService — verb đã nói
+        // đủ hành động, và mật khẩu/bản băm không bao giờ được ghi vào nhật ký.
+        ("PUT",    "/api/admin/users/{id:guid}/password",        CachGhi.Middleware),
+
         ("POST",   "/api/auth/login",                            CachGhi.TuGhi),
         ("POST",   "/api/auth/logout",                           CachGhi.TuGhi),
         ("POST",   "/api/auth/refresh-token",                    CachGhi.KhongGhi),
@@ -77,6 +83,13 @@ public class AuditLogCoverageTests
         ("PUT",    "/api/routes/{routeId:guid}/trips/{id:guid}", CachGhi.Middleware),
         ("DELETE", "/api/routes/{routeId:guid}/trips/{id:guid}", CachGhi.Middleware),
         ("POST",   "/api/routes/{routeId:guid}/trips/generate",  CachGhi.Middleware),
+
+        // Giờ đến từng trạm — story 13, Phùng Duy Hoàng. Middleware tự ghi (PUT → Update); tên
+        // bảng suy từ đoạn ngay trước {id} là "Trips", Target "Trips:{id}". Đánh đổi đã biết:
+        // dòng bị ghi thật là TripStopTimeOverrides, nhưng id chuyến trong Target tra ngược được
+        // cả cụm giờ trạm của chuyến — endpoint là thao tác con của chuyến, cùng lối
+        // PATCH /api/admin/feedbacks/{id}/replies ghi về "Feedbacks".
+        ("PUT",    "/api/routes/{routeId:guid}/trips/{id:guid}/stop-times", CachGhi.Middleware),
 
         // Đổi xe/đổi tài xế khi có sự cố — story 14, Phùng Duy Hoàng. Middleware tự ghi
         // (PATCH → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
