@@ -35,14 +35,18 @@ public class TicketValidationService : ITicketValidationService
 
     private readonly ITicketValidationRecorder _recorder;
 
+    private readonly ITicketBoardingStopService _boardingStops;
+
     public TicketValidationService(
         AppDbContext db,
         ITicketQrService qr,
-        ITicketValidationRecorder recorder)
+        ITicketValidationRecorder recorder,
+        ITicketBoardingStopService boardingStops)
     {
         _db = db;
         _qr = qr;
         _recorder = recorder;
+        _boardingStops = boardingStops;
     }
 
     public async Task<ServiceResult<TicketValidationResponse>> ValidateAsync(
@@ -77,7 +81,37 @@ public class TicketValidationService : ITicketValidationService
             }
         }
 
-        // Bước 2 — ghi nhật ký. MỌI lượt quét đều ghi, kể cả lượt bị từ chối (docs/34 §2.2).
+        // Bước 2 — trạm khách THỰC SỰ lên xe (dòng 17, Nguyễn Duy Kiên). Chỉ lượt Valid mới là một
+        // lượt lên xe, và trạm phải thuộc tuyến của chuyến TRÊN VÉ — không so với
+        // Tickets.BoardingStopId (trạm khách chọn lúc mua; docs/34 §2.1).
+        //
+        // Lượt gửi lại cùng clientScanId BỎ QUA bước này: recorder đọc trước và trả dòng gốc
+        // (docs/39 §2.4 mục 2), nên kiểm lại trạm ở đây có thể biến một lượt đã ghi thành công
+        // thành 400 chỉ vì lần gửi sau mang giá trị khác. Dòng đã ghi giữ nguyên trạm lần đầu.
+        Guid? boardingStopId = null;
+        var laLuotGuiLai = request.ClientScanId is { } clientScanId
+            && await _db.TicketValidations
+                .AsNoTracking()
+                .AnyAsync(v => v.ClientScanId == clientScanId, cancellationToken);
+
+        if (!laLuotGuiLai)
+        {
+            var boardingStop = await _boardingStops.ResolveAsync(
+                request.BoardingStopId,
+                row?.TripId,
+                result,
+                cancellationToken);
+
+            if (!boardingStop.Success)
+            {
+                return ServiceResult<TicketValidationResponse>.Invalid(
+                    boardingStop.Error!, boardingStop.Errors!);
+            }
+
+            boardingStopId = boardingStop.Data;
+        }
+
+        // Bước 3 — ghi nhật ký. MỌI lượt quét đều ghi, kể cả lượt bị từ chối (docs/34 §2.2).
         var recorded = await _recorder.RecordAsync(
             new RecordTicketValidationRequest
             {
@@ -87,6 +121,7 @@ public class TicketValidationService : ITicketValidationService
                 Result = result,
                 ClientScanId = request.ClientScanId,
                 ScannedAt = request.ScannedAt,
+                BoardingStopId = boardingStopId,
             },
             validatedByUserId,
             cancellationToken);
@@ -96,7 +131,7 @@ public class TicketValidationService : ITicketValidationService
             return ServiceResult<TicketValidationResponse>.Invalid(recorded.Error!, recorded.Errors!);
         }
 
-        // Bước 3 — câu trả lời từ dòng ĐÃ GHI (docs/39 §4.2). Vé kèm theo chỉ để hiển thị: dựng từ
+        // Bước 4 — câu trả lời từ dòng ĐÃ GHI (docs/39 §4.2). Vé kèm theo chỉ để hiển thị: dựng từ
         // vé vừa tra khi nó khớp đúng dòng đã ghi; lệch (lượt gửi lại mà vé đã đổi trạng thái) thì
         // vẫn trả kết quả gốc, chỉ bỏ qua phần hiển thị.
         var saved = recorded.Data!;

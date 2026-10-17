@@ -570,6 +570,14 @@ builder.Services.AddScoped<ITicketValidationRecorder, TicketValidationRecorder>(
 // ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
 builder.Services.AddScoped<ITicketValidationService, TicketValidationService>();
 
+// Quyết định trạm khách THỰC SỰ lên xe cho nhật ký soát vé (US 15, dòng 17 Sprint 4 — Nguyễn Duy
+// Kiên): chỉ lượt Valid mới ghi trạm, trạm phải thuộc tuyến của chuyến TRÊN VÉ (khác
+// Tickets.BoardingStopId — trạm khách chọn lúc mua, docs/34 §2.1). TicketValidationService ở khối
+// ngay trên tiêm interface này để chuyển giá trị sang ITicketValidationRecorder. Hợp đồng endpoint ở
+// mục "Soát vé QR" của docs/api-contract.md.
+// ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
+builder.Services.AddScoped<ITicketBoardingStopService, TicketBoardingStopService>();
+
 builder.Services.AddScoped<SeatHoldCreateService>();
 builder.Services.AddScoped<ISeatHoldCreateService>(provider => new NotifyingSeatHoldCreateService(
     provider.GetRequiredService<SeatHoldCreateService>(),

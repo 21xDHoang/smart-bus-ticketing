@@ -38,6 +38,18 @@ public class ValidateTicketRequest
     public Guid? TripId { get; init; }
 
     /// <summary>
+    /// Trạm khách <b>THỰC TẾ</b> lên xe, phụ xe ghi lúc quét — task *"API ghi nhận lượt lên xe theo
+    /// trạm"* (dòng 17, Nguyễn Duy Kiên). Ghi vào <c>TicketValidations.BoardingStopId</c>.
+    ///
+    /// ⚠️ KHÁC <c>Tickets.BoardingStopId</c>: đó là trạm khách chọn LÚC MUA, chỉ để hiển thị (A8.1);
+    /// đây là trạm khách thực sự bước lên (docs/34 §2.1). Tuỳ chọn — bỏ trống thì nhật ký để
+    /// <c>null</c>. Chỉ lượt <c>Valid</c> mới ghi trạm; lượt bị từ chối bỏ qua giá trị này. Trạm
+    /// không thuộc tuyến của chuyến trên vé → 400 <c>errors.boardingStopId</c>
+    /// (docs/api-contract.md, "Soát vé QR").
+    /// </summary>
+    public Guid? BoardingStopId { get; init; }
+
+    /// <summary>
     /// Mã lượt soát do CHÍNH MÁY QUÉT sinh NGAY LÚC QUÉT (UUID v4) — khoá chống trùng khi hàng đợi
     /// ngoại tuyến đồng bộ lại (docs/39 §3.2). Null = lượt online, gửi thẳng một lần.
     /// </summary>
