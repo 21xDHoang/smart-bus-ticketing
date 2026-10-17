@@ -76,7 +76,23 @@ public partial class AppDbContext
             // chỉ mục đó. Đây cũng là chỗ EF dễ đánh lừa: quy ước sinh chỉ mục cho khoá ngoại của EF
             // thấy TripId đã là cột tiền tố của một chỉ mục đã khai nên nó KHÔNG tự sinh thêm — khai
             // tường minh ở đây là cách duy nhất để có chỉ mục dùng được cho truy vấn này.
+            //
+            // Vì sao vẫn giữ chỉ mục MỘT CỘT dù chỉ mục (TripId, Status) bên dưới cũng mở đầu bằng
+            // TripId: A6 chốt một chỉ mục không điều kiện trên TripId, và test DDL
+            // TicketQrIssuanceChainTests của Giàng A Vàng ghim nguyên văn câu CREATE INDEX này. Bỏ nó
+            // là làm đỏ file test của người khác — việc phải bàn với Vàng trước. Khi test đó được
+            // cập nhật để chấp nhận chỉ mục hai cột, có thể bỏ chỉ mục này trong một migration sau
+            // (ghi ở docs/49 §7) để đỡ chi phí ghi.
             e.HasIndex(t => t.TripId);
+
+            // "Đếm vé hợp lệ của chuyến" — báo cáo tỷ lệ lấp đầy (US 20):
+            // WHERE TripId = @t AND Status IN ('Paid', 'Used').
+            //
+            // Chỉ mục hai cột này cho phép đếm theo Status bằng index-only scan — không phải quay lại
+            // bảng Tickets lấy từng dòng. Báo cáo lấp đầy quét nhiều chuyến trong một kỳ, nên mỗi dòng
+            // thoát khỏi heap là một lần đọc đỡ. TripId đứng đầu nên chỉ mục này phục vụ luôn khoá
+            // ngoại TripId; phần trùng với chỉ mục một cột ở trên là giá phải trả để giữ A6 nguyên vẹn.
+            e.HasIndex(t => new { t.TripId, t.Status });
 
             // "Tra vé của tôi" (A6): WHERE UserId = @u — đường của GET /tickets/me.
             // Chỉ mục này phục vụ luôn khoá ngoại UserId (UserId là cột tiền tố) nên EF không sinh

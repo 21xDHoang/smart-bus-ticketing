@@ -1206,6 +1206,8 @@ namespace SmartBus.Api.Migrations
                         .HasDatabaseName("IX_Tickets_TripId_SeatId_Active")
                         .HasFilter("\"Status\" IN ('Held', 'Paid')");
 
+                    b.HasIndex("TripId", "Status");
+
                     b.ToTable("Tickets");
                 });
 
@@ -1389,9 +1391,15 @@ namespace SmartBus.Api.Migrations
 
                     b.HasIndex("CurrentStopId");
 
+                    b.HasIndex("DepartureTime");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("DepartureTime"), new[] { "Id", "RouteId", "BusId", "Status" });
+
                     b.HasIndex("DriverId", "DepartureTime");
 
                     b.HasIndex("RouteId", "DepartureTime");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("RouteId", "DepartureTime"), new[] { "Id", "BusId", "Status" });
 
                     b.ToTable("Trips");
                 });
