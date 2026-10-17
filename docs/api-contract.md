@@ -459,6 +459,7 @@ Mã vai trò hợp lệ — đúng 4 giá trị, khớp `Role.Code` và claim ro
 | DELETE | `/admin/users/{id}` | **Xoá mềm** — khóa tài khoản | — | `AdminUser` |
 | PATCH | `/admin/users/{id}/status` | Khóa / mở khóa tài khoản | `{ isActive }` | `AdminUser` |
 | PUT | `/admin/users/{id}/roles` | Gán **và** thu hồi vai trò | `{ roleCodes }` | `AdminUser` |
+| PUT | `/admin/users/{id}/password` | Đặt lại mật khẩu (Admin) | `{ newPassword }` | `AdminUser` |
 
 #### `GET /admin/users`
 
@@ -517,7 +518,29 @@ Lỗi thường gặp: trùng SĐT → **400** `errors.phoneNumber` · trùng em
 #### `PUT /admin/users/{id}`
 
 Body gồm `fullName`, `phoneNumber`, `email` — cùng ràng buộc như trên.
-**Không** đổi mật khẩu (nghiệp vụ riêng), **không** đổi vai trò hay trạng thái (có endpoint riêng).
+**Không** đổi mật khẩu (dùng `PUT /admin/users/{id}/password`), **không** đổi vai trò hay
+trạng thái (có endpoint riêng).
+
+#### `PUT /admin/users/{id}/password` — Admin đặt lại mật khẩu
+
+```json
+{ "newPassword": "matkhaumoi123" }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `newPassword` | ✅ | Ít nhất 8 ký tự, gồm **cả chữ và số** — giống hệt form đăng ký và `POST /admin/users` |
+
+- Trả **200** kèm `AdminUser` của tài khoản vừa đổi (không trả mật khẩu hay bản băm).
+- Mật khẩu băm bằng BCrypt trước khi ghi — CSDL không bao giờ chứa mật khẩu thô.
+- **Thu hồi toàn bộ refresh token đang hoạt động** của tài khoản trong cùng lần ghi: người
+  dùng phải đăng nhập lại bằng mật khẩu mới, phiên cũ không tự sống tiếp. Access token đang
+  có hiệu lực vẫn dùng được tới khi hết hạn (tối đa 30 phút) — giống cơ chế của mọi thao tác
+  đổi quyền khác (xem mục "Hiệu lực tức thì").
+- Không tồn tại → **404**. Danh sách mật khẩu sai ràng buộc → **400** `errors.newPassword`.
+- Admin **được phép** đặt lại mật khẩu của chính mình (khác với tự khóa / tự thu hồi Admin);
+  đổi xong mọi refresh token của chính Admin đó cũng bị thu hồi, lần làm mới phiên kế tiếp
+  sẽ phải đăng nhập lại.
 
 #### `DELETE /admin/users/{id}` — xoá mềm
 

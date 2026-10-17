@@ -191,6 +191,31 @@ public class AdminUserController : ControllerBase
     }
 
     /// <summary>
+    /// Đặt lại mật khẩu của một tài khoản. Mật khẩu mới băm bằng BCrypt; mọi refresh token
+    /// đang hoạt động của tài khoản bị thu hồi nên các phiên cũ phải đăng nhập lại.
+    /// </summary>
+    [HttpPut("{id:guid}/password")]
+    [ProducesResponseType(typeof(AdminUserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResetPassword(
+        Guid id,
+        [FromBody] ResetAdminUserPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationError();
+        }
+
+        var result = await _adminUserService.ResetPasswordAsync(id, request, cancellationToken);
+
+        return result.Success ? Ok(result.Data) : Failure(result);
+    }
+
+    /// <summary>
     /// Đổi kết quả nghiệp vụ thành HTTP. Service đã nói lỗi thuộc loại nào
     /// (<see cref="ServiceErrorKind"/>) nên ở đây chỉ còn việc ánh xạ, không phán đoán lại.
     /// </summary>
