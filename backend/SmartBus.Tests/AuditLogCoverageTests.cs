@@ -213,6 +213,11 @@ public class AuditLogCoverageTests
         // WithWebHostBuilder, kéo theo toàn bộ helper seed/token của file.
         ("PATCH",  "/api/cancellation-requests/{id:guid}",       CachGhi.Middleware),
         ("PATCH",  "/api/ticket-changes/{id:guid}",              CachGhi.Middleware),
+
+        // Gửi yêu cầu đổi chuyến (US 5, dòng 4 Sprint 4 — Nguyễn Duy Kiên). POST thường: middleware
+        // suy hành động từ verb (Create), Target "TicketChanges:{id}" — id yêu cầu do service sinh và
+        // trả về trong response; middleware đệm response với POST nên đọc được.
+        ("POST",   "/api/ticket-changes",                        CachGhi.Middleware),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>

@@ -3920,11 +3920,12 @@ phải viết trong `OnModelCreating` (file của Dăm).
 > áp lên CSDL chung**. Thiết kế đầy đủ — vì sao hai bảng, vì sao điều kiện thời gian, vì sao vé cũ
 > bị HUỶ chứ không bị sửa: `docs/32-csdl-huy-doi-ve.md`.
 >
-> Mục này chốt **hai endpoint duyệt** — task *"API duyệt / từ chối yêu cầu huỷ - đổi vé"* (dòng 5
-> Sprint 4, Phùng Duy Hoàng). Hai endpoint **gửi yêu cầu** là việc của người khác và **chưa có trong
-> tài liệu này**: `POST /cancellation-requests` (Trần Trung Hiếu, dòng 3), `POST /ticket-changes`
-> (Nguyễn Duy Kiên, dòng 4). Cả bốn endpoint dùng chung **một hình dạng dòng** ở dưới, nên màn duyệt
-> của Admin và màn theo dõi của khách đọc được cả hai loại yêu cầu bằng một khuôn.
+> Mục này chốt **ba endpoint**: hai endpoint duyệt — task *"API duyệt / từ chối yêu cầu huỷ - đổi vé"*
+> (dòng 5 Sprint 4, Phùng Duy Hoàng) — và một endpoint gửi yêu cầu đổi chuyến — task *"API gửi yêu
+> cầu đổi chuyến + tính chênh lệch giá"* (dòng 4, Nguyễn Duy Kiên). `POST /cancellation-requests`
+> (Trần Trung Hiếu, dòng 3) vẫn **chưa có trong tài liệu này**. Cả bốn endpoint dùng chung **một hình
+> dạng dòng** ở dưới, nên màn duyệt của Admin và màn theo dõi của khách đọc được cả hai loại yêu cầu
+> bằng một khuôn.
 
 ### Hình dạng một dòng yêu cầu — chốt theo bản nháp FE
 
@@ -3975,7 +3976,7 @@ response cũng là một. Trường nào của riêng một loại thì **null �
 | PATCH | `/cancellation-requests/{id}` | *"API duyệt / từ chối yêu cầu huỷ - đổi vé"* — Phùng Duy Hoàng (dòng 5) | ✅ mục dưới |
 | PATCH | `/ticket-changes/{id}` | cùng task | ✅ mục dưới |
 | POST | `/cancellation-requests` | Trần Trung Hiếu (dòng 3) | ⛔ chưa có trong tài liệu này |
-| POST | `/ticket-changes` | Nguyễn Duy Kiên (dòng 4) | ⛔ chưa có trong tài liệu này |
+| POST | `/ticket-changes` | Nguyễn Duy Kiên (dòng 4) | ✅ mục "Gửi yêu cầu đổi chuyến" bên dưới |
 
 ### Body của cả hai endpoint — giống hệt nhau
 
@@ -3996,6 +3997,95 @@ response cũng là một. Trường nào của riêng một loại thì **null �
 `RejectReason` chỉ có nghĩa ở nhánh từ chối; lưu rồi để màn hình hiện "lý do từ chối" trên một yêu
 cầu đã duyệt là dữ liệu sai). Cố ý: client đang cầm sẵn một object có cả hai trường (form giữ state
 cũ) mà bị chặn ở một lượt gọi hoàn toàn hợp lệ là cái bẫy không đáng có.
+
+### Gửi yêu cầu đổi chuyến — `POST /ticket-changes`
+
+Task *"API gửi yêu cầu đổi chuyến + tính chênh lệch giá"* — Nguyễn Duy Kiên (dòng 4 Sprint 4).
+
+`[Authorize]` trần (không policy): hành khách gửi yêu cầu cho **vé của chính mình**. Người gửi lấy
+từ token (`ClaimTypes.NameIdentifier`), **không có trong body**. Vé không thuộc người gọi → **404**
+chứ không phải 403 — cùng lối `GET /tickets/{id}`, không tiết lộ vé đó có tồn tại.
+
+**Body:**
+
+```json
+{
+  "ticketId": "0f5c…",
+  "newTripId": "9a1e…",
+  "newSeatId": "7b3d…",
+  "reason": "Có việc gia đình, muốn đi chuyến sớm hơn."
+}
+```
+
+| Trường | Bắt buộc | Mô tả |
+|---|---|---|
+| `ticketId` | **Có** | Vé gốc khách muốn đổi |
+| `newTripId` | **Có** | Chuyến muốn đổi sang |
+| `newSeatId` | **Có** | Ghế muốn ngồi ở chuyến mới — phải thuộc xe của `newTripId` |
+| `reason` | Không | Lý do khách nêu, tối đa 2000 ký tự |
+
+**Endpoint làm gì — và KHÔNG làm gì:**
+
+1. Kiểm vé: tồn tại, **thuộc người gọi** (khác → 404) và còn `status = "Paid"` (đã huỷ / đã soát vé
+   → 409).
+2. Kiểm **không có yêu cầu đang chờ** trên cùng vé — cả bảng `CancellationRequests` lẫn
+   `TicketChanges`. Đây là ràng buộc liên bảng mà hai chỉ mục duy nhất điều kiện không diễn đạt được
+   (`docs/32` §4.4): một vé vừa xin huỷ vừa xin đổi thì duyệt cả hai sẽ hoàn tiền cho một vé đã chết
+   và phát hành thêm một vé mới từ nó.
+3. Kiểm chuyến mới: tồn tại (404), còn `Scheduled` và chưa tới giờ khởi hành (409).
+4. Kiểm ghế mới: tồn tại (404), thuộc **xe của chuyến mới** (404), và còn trống — không có lượt
+   `SeatHolds` nào đang `Holding` và không có vé `Paid` nào khác chiếm ghế (409).
+5. Chụp giá: `newPrice` = giá `Standard` của tuyến mà chuyến mới chạy — **cùng nguồn với
+   `GET /trips/search` và `GET /trips/{id}/seats`**. Tuyến chưa cấu hình giá → 409 (không có con số
+   để khách đồng ý). Con số được **chụp lại** vào `TicketChanges.NewPrice`, không tra lại lúc duyệt.
+6. Ghi một dòng `TicketChanges` ở trạng thái `Pending`. **Không đụng dòng vé**: vé gốc vẫn `Paid`,
+   khách còn nguyên chuyến cũ. **Không giữ ghế mới** — chủ ý của thiết kế (`docs/32` §3.3), nên
+   `PATCH /ticket-changes/{id}` phải kiểm lại ghế ngay lúc duyệt.
+
+> 🔴 **Chênh lệch giá KHÔNG ghi vào CSDL.** Nó là `newPrice - price` trả về trong response, **có
+> dấu**: dương = khách trả thêm, âm = nhà xe hoàn lại, `0` = đổi ngang giá. Hai vế đều bất biến (giá
+> vé chụp lúc phát hành, `newPrice` chụp lúc gửi), nên thêm cột thứ ba chỉ tạo thêm một chỗ để các
+> con số nói khác nhau. Tiền chênh thật đi qua `Payments` (thu thêm) hoặc `Refunds` (hoàn lại) ở
+> sprint tương ứng — endpoint này **không** ghi dòng thanh toán/hoàn tiền nào: yêu cầu còn `Pending`,
+> chưa ai duyệt, và một khoản tiền ghi trước khi duyệt là khoản tiền thu/hoàn sai.
+
+**Response — `201 Created`, đúng hình dạng dòng chung ở trên:**
+
+```json
+{
+  "id": "…",
+  "type": "Change",
+  "ticketId": "0f5c…",
+  "ticketCode": "SBT1:…",
+  "status": "Pending",
+  "price": 250000,
+  "reason": "Có việc gia đình, muốn đi chuyến sớm hơn.",
+  "cancellationFee": null,
+  "refundAmount": null,
+  "newTripId": "9a1e…",
+  "newSeatId": "7b3d…",
+  "newPrice": 300000,
+  "priceDifference": 50000,
+  "newTicketId": null,
+  "reviewedByUserId": null,
+  "reviewedAt": null,
+  "rejectReason": null,
+  "createdAt": "2026-10-17T…Z",
+  "updatedAt": null
+}
+```
+
+| Mã | Khi nào |
+|---|---|
+| 201 | Đã ghi yêu cầu `Pending` — trả dòng vừa tạo |
+| 400 | Thiếu `ticketId`/`newTripId`/`newSeatId`; `reason` quá 2000 ký tự |
+| 401 | Không có token |
+| 404 | Vé không tồn tại **hoặc không thuộc người gọi**; chuyến mới không tồn tại; ghế mới không tồn tại hoặc không thuộc xe của chuyến mới |
+| 409 | Vé không còn `Paid`; vé đang có yêu cầu huỷ/đổi chờ duyệt; chuyến mới đã huỷ/đã khởi hành; ghế mới đã có người đặt; tuyến của chuyến mới chưa có giá |
+
+Chỉ mục `IX_TicketChanges_TicketId_Pending` vẫn là lưới thật cho nhánh đua "hai tab cùng gửi": hai
+lượt cùng đọc "chưa có yêu cầu nào" rồi cùng ghi, lượt thua đâm chỉ mục và service bắt
+`DbUpdateException` → **409** cùng câu "đang có yêu cầu chờ duyệt", không phải 500.
 
 ### Duyệt / từ chối yêu cầu HUỶ — `PATCH /cancellation-requests/{id}`
 
