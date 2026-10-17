@@ -63,11 +63,16 @@ export default function StopSuggestionPicker({
   // Khởi tạo `true`: lượt hỏi đầu tiên còn nằm trong cửa sổ debounce, lúc đó "đang tải" mới đúng.
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  // Chỉ hỏi backend khi dropdown thật sự mở: màn tra cứu có HAI ô trạm, nạp sẵn cả hai ngay khi
+  // vào trang là hai truy vấn không ai dùng. Supabase của nhóm còn giới hạn 15 kết nối phiên.
+  const [opened, setOpened] = useState(false);
   // Từ khoá đang gõ, tách khỏi `value`: chọn xong một trạm thì xoá từ khoá để lần mở sau thấy
   // lại danh sách đầy đủ, không bị lọc đúng bằng tên vừa chọn.
   const [keyword, setKeyword] = useState('');
 
   useEffect(() => {
+    if (!opened) return;
+
     let cancelled = false;
     const timer = setTimeout(() => {
       // Đổi trạng thái bên trong hẹn giờ: cửa sổ debounce giữ nguyên danh sách cũ trên màn hình
@@ -96,7 +101,7 @@ export default function StopSuggestionPicker({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [keyword, originStopId, destinationStopId]);
+  }, [opened, keyword, originStopId, destinationStopId]);
 
   // Backend đã xếp hạng sẵn (tên-đầu → tên-chứa → địa-chỉ) nên ở đây chỉ còn việc bày ra.
   const options: SelectProps['options'] = stops.map((stop) => ({
@@ -163,6 +168,7 @@ export default function StopSuggestionPicker({
       options={options}
       optionLabelProp="title"
       onSearch={setKeyword}
+      onOpenChange={setOpened}
       onChange={handleChange}
       onClear={() => setKeyword('')}
       notFoundContent={notFoundContent}
