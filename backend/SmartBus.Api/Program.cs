@@ -548,6 +548,13 @@ builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewServi
 // ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
 builder.Services.AddScoped<ITicketChangeSubmissionService, TicketChangeSubmissionService>();
 
+// Tính phí huỷ vé theo quy định 24h / 12h / 2h (US 5, dòng 6 Sprint 4 — Nguyễn Duy Kiên): hàm thuần,
+// không đọc CSDL lẫn đồng hồ; người gọi truyền Ticket.Price, CancellationRequest.DepartureAt và now.
+// Hiếu (dòng 3) tiêm interface này ở POST /api/cancellation-requests để lấy CẢ điều kiện thời gian
+// lẫn con số ghi vào CancellationFee — đừng chép lại ngưỡng ở endpoint. Quy định: docs/32 §2.1.
+// ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
+builder.Services.AddScoped<ICancellationFeeService, CancellationFeeService>();
+
 // Ghi nhật ký soát vé + chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (US 15, dòng 18 Sprint 4 —
 // Phùng Duy Hoàng). Endpoint soát vé POST /tickets/validate (dòng 15, Trần Trung Hiếu) tiêm interface
 // này rồi gọi SAU khi đã xác thực chữ ký và tính xong kết quả — cả lượt online lẫn lượt đồng bộ đều đi
