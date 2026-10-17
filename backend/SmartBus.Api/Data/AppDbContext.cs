@@ -35,6 +35,7 @@ public partial class AppDbContext : DbContext
         ConfigureTicketValidation(modelBuilder);
         ConfigureInvoice(modelBuilder);
         ConfigureRefund(modelBuilder);
+        ConfigureExportJob(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -141,4 +142,9 @@ public partial class AppDbContext : DbContext
     // A9 KHÔNG có hai bảng này — lần thứ tư việc "A9 lệch thực tế" được nhắc, xem
     // docs/40-csdl-hoan-tien.md §1. Xem AppDbContext.Refund.cs.
     partial void ConfigureRefund(ModelBuilder modelBuilder);
+
+    // US 24 (ExportJobs): hàng đợi yêu cầu xuất báo cáo bất đồng bộ — task Sprint 5 dòng 64 *"Xử lý
+    // xuất file lớn bất đồng bộ + thông báo khi xong"* (Vàng Thị Dăm). Bảng chỉ giữ yêu cầu + file
+    // đã dựng, không sở hữu dữ liệu báo cáo. Xem AppDbContext.ExportJob.cs.
+    partial void ConfigureExportJob(ModelBuilder modelBuilder);
 }

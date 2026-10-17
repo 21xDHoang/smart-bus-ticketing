@@ -7,10 +7,11 @@
 
 - Base URL (dev): `http://localhost:5080/api` — frontend đọc qua `VITE_API_URL`.
 - Định dạng: JSON, mọi tên thuộc tính dùng **camelCase** (do .NET `System.Text.Json`
-  với `PropertyNamingPolicy = CamelCase`). **Ba endpoint nhị phân** trả thẳng file thay vì
-  JSON: `GET /audit-logs/export`, `GET /reports/revenue/export` và
-  `GET /reports/fill-rate/export` (`.xlsx` mặc định, `.pdf` khi `format=pdf`) — xem mục tương
-  ứng. Riêng đường **lỗi** của các endpoint đó vẫn theo đúng định dạng JSON bên dưới.
+  với `PropertyNamingPolicy = CamelCase`). **Bốn endpoint nhị phân** trả thẳng file thay vì
+  JSON: `GET /audit-logs/export`, `GET /reports/revenue/export`,
+  `GET /reports/fill-rate/export` (`.xlsx` mặc định, `.pdf` khi `format=pdf`) và
+  `GET /exports/{id}/download` — xem mục tương ứng. Riêng đường **lỗi** của các endpoint đó vẫn
+  theo đúng định dạng JSON bên dưới.
 - Xác thực: gửi header `Authorization: Bearer <accessToken>` cho mọi endpoint, trừ
   `/auth/login`, `/auth/register` và ba endpoint tra cứu công khai của story 1:
   `GET /routes/search` (tìm tuyến), `GET /stops/search` (gợi ý trạm) và `GET /trips/search`
@@ -1831,8 +1832,8 @@ gọi** — client chỉ kết nối và lắng nghe.
 
 ### Khi nào sự kiện được phát
 
-Có bốn nguồn, mỗi **sự kiện** phát **một lần** cho đúng người nhận (người gửi yêu cầu, chủ khoản
-hoàn, hoặc hành khách đã mua vé của chuyến):
+Có năm nguồn, mỗi **sự kiện** phát **một lần** cho đúng người nhận (người gửi yêu cầu, chủ khoản
+hoàn, hành khách đã mua vé của chuyến, hoặc người đặt job xuất báo cáo):
 
 | Nguồn | Phát khi |
 |---|---|
@@ -1840,6 +1841,7 @@ hoàn, hoặc hành khách đã mua vé của chuyến):
 | `PATCH /ticket-changes/{id}` (duyệt / từ chối yêu cầu đổi chuyến) | Trạng thái được lật sang `Approved` hoặc `Rejected` và **đã lưu** |
 | Một lượt gọi cổng hoàn tiền (job thử lại theo lịch dòng 30, nút "Thử lại" của màn quản trị dòng 35, lượt hoàn tự động lúc duyệt huỷ dòng 28) | Khoản hoàn có **kết quả cuối đã lưu**: `Succeeded`, hoặc `Failed` và **đã hết lịch thử lại** (`NextRetryAt = null`) |
 | `PUT /routes/{routeId}/trips/{id}` (quản lý sửa lịch trình chuyến — dòng 44 Sprint 4) | Giờ khởi hành hoặc giờ tới dự kiến **thực sự đổi** và chuyến đã lưu còn ở `Scheduled` hoặc `Running` |
+| Job nền xuất báo cáo (Sprint 5 dòng 64) | Job xuất chốt trạng thái `Succeeded` (`ExportCompleted`) hoặc `Failed` (`ExportFailed`) và **đã lưu** |
 
 Hai endpoint PATCH trên là task *"API duyệt / từ chối yêu cầu huỷ vé, đổi vé"* (dòng 5 Sprint 4,
 Phùng Duy Hoàng) — hình dạng request/response đầy đủ ở mục
@@ -1894,7 +1896,7 @@ của chúng.
 > thông báo cho đúng yêu cầu đó thì lượt gọi sau bị bỏ qua hoàn toàn (không ghi, không đẩy). Nhờ vậy
 > client retry cũng không làm khách thấy hai thông báo giống nhau.
 
-### Chín loại thông báo
+### Mười một loại thông báo
 
 | `type` | `title` |
 |---|---|
@@ -1907,6 +1909,8 @@ của chúng.
 | `TripDelayed` | Chuyến xe bị trễ |
 | `TripScheduleChanged` | Lịch trình chuyến xe thay đổi |
 | `RefundReconciliationAlert` | Đối soát hoàn tiền phát hiện lệch số liệu |
+| `ExportCompleted` | Báo cáo đã sẵn sàng |
+| `ExportFailed` | Xuất báo cáo thất bại |
 
 Hai loại `…Rejected` có lý do từ chối của quản lý **chép nguyên văn** vào cuối `body`; quản lý không
 nêu lý do thì body ghi rõ *"Người duyệt không nêu lý do."* chứ không để cụt.
@@ -1925,8 +1929,16 @@ Cả hai loại nêu **mốc cũ và mốc mới** để khách đối chiếu �
 lâu" thành câu riêng, vì chuyến có thể đổi cả hai mốc. Không có số tiền nào trong body — cùng luật
 với các loại trên.
 
-`RefundReconciliationAlert` là loại **duy nhất nhắm vào quản trị, không nhắm vào hành khách**: người
-nhận là mọi tài khoản `Admin`/`Manager` **đang hoạt động** (xét cả vai trò chính `User.RoleId` lẫn
+Hai loại `Export…` nhắm vào **người đã đặt job xuất báo cáo** (task *"Xử lý xuất file lớn bất đồng
+bộ + thông báo khi xong"*, Sprint 5 dòng 64) và trỏ vào dòng `ExportJobs` qua
+`RelatedEntityType = ExportJob` + `RelatedEntityId`. Body đọc đứng một mình được: nêu **loại báo
+cáo**, **số dòng** (khi có), **hạn tải file** và — với `ExportFailed` — **lý do thất bại** kèm gợi
+ý thu hẹp bộ lọc. Không có số tiền và không có URL tuyệt đối: file doanh thu chứa số tiền, nhưng
+chép vào thông báo là dựng bản sao có thể lệch; đường dẫn tải lấy từ `downloadUrl` của
+`GET /api/exports/{id}`.
+
+`RefundReconciliationAlert` là loại **duy nhất phát cho MỌI tài khoản quản trị, không nhắm vào một
+người cụ thể**: người nhận là mọi tài khoản `Admin`/`Manager` **đang hoạt động** (xét cả vai trò chính `User.RoleId` lẫn
 bảng nối `UserRoles`). Nó do job đối soát hoàn tiền hằng ngày phát (00:05 UTC = 07:05 giờ Việt Nam)
 khi tìm thấy lệch số liệu giữa sổ nội bộ và (khi có) sao kê cổng — ví dụ nhật ký có lượt gọi cổng
 thành công nhưng khoản hoàn chưa `Succeeded`, khoản `Pending` quá 24 giờ, hoặc mã giao dịch trên
@@ -2014,10 +2026,10 @@ API đăng ký/huỷ theo dõi trạm (dòng 17, Trần Trung Hiếu), màn qu�
 | Trường | Kiểu | Mô tả |
 |---|---|---|
 | `id` | `string` (GUID) | Khoá chính |
-| `type` | `string` | Một trong **chín** loại — bảng "Chín loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
+| `type` | `string` | Một trong **mười một** loại — bảng "Mười một loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
 | `title` | `string` | Dòng tiêu đề ngắn — dòng đầu của mỗi mục trong danh sách |
 | `body` | `string` | Nội dung đầy đủ, **có thể xuống dòng**. Lý do từ chối của quản lý được chép nguyên văn vào đây |
-| `relatedEntityType` | `string \| null` | Bảng mà `relatedEntityId` trỏ tới: `CancellationRequest`, `TicketChange`, `Refund` hoặc `Trip`. `null` với thông báo không gắn bản ghi nào |
+| `relatedEntityType` | `string \| null` | Bảng mà `relatedEntityId` trỏ tới: `CancellationRequest`, `TicketChange`, `Refund`, `Trip` hoặc `ExportJob`. `null` với thông báo không gắn bản ghi nào |
 | `relatedEntityId` | `string \| null` | Id bản ghi mà thông báo nói về; `null` cùng lúc với `relatedEntityType` |
 | `createdAt` | `string` (ISO 8601, UTC) | Thời điểm thông báo được sinh — cũng là cột sắp xếp của danh sách |
 
@@ -2104,11 +2116,15 @@ Authorization: Bearer <JWT>
 > `GET /notifications/me` — `USE_MOCK_DATA` cùng nhánh dữ liệu giả đã bỏ. `NotificationBell` xếp
 > `RefundSucceeded` vào nhóm "thành công" để thông báo hoàn tiền thành công không hiện dấu đỏ.
 >
-> ⚠️ **Còn thiếu ba loại phía frontend — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
-> Backend phát đủ **chín** loại và **bốn** target: hai loại `TripDelayed`/`TripScheduleChanged` do
-> `TripScheduleChangeNotifier` phát (mục trên), target `Trip`; loại thứ chín
-> `RefundReconciliationAlert` do job đối soát hoàn tiền phát, `relatedEntityType = null`.
-> `notificationApi.ts` mới khai sáu loại / ba target nên union TypeScript chưa phủ ba loại này.
+> ⚠️ **Còn thiếu năm loại phía frontend — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
+> Backend phát đủ **mười một** loại và **năm** target: hai loại `TripDelayed`/`TripScheduleChanged`
+> do `TripScheduleChangeNotifier` phát (mục trên), target `Trip`; loại thứ chín
+> `RefundReconciliationAlert` do job đối soát hoàn tiền phát, `relatedEntityType = null`; hai loại
+> `ExportCompleted`/`ExportFailed` do job nền xuất báo cáo phát, target `ExportJob` (mục
+> "Xuất file bất đồng bộ — `/exports`").
+> `notificationApi.ts` mới khai sáu loại / ba target nên union TypeScript chưa phủ năm loại này.
+> Với nhóm `Export…`: `ExportCompleted` nên xếp nhóm "thành công" và bấm vào mở màn xuất báo cáo để
+> tải file; `ExportFailed` nên xếp nhóm lỗi/cảnh báo nhưng KHÔNG dùng dấu X "bị từ chối".
 > `NotificationBell.isPositiveOutcome` xếp mọi loại ngoài ba loại "tốt" vào nhóm đỏ —
 > `TripDelayed` sẽ hiện dấu X đỏ "bị từ chối", sai nghĩa; cần ánh xạ biểu tượng riêng cho nhóm
 > `Trip…` và điều hướng `relatedEntityType = Trip`. Riêng `RefundReconciliationAlert` xếp vào nhóm
@@ -5992,6 +6008,214 @@ quá 366 ngày → **400** `errors.from`, `errors.to` · `timeSlot` lạ → **4
 >
 > **Cho Vàng (test dòng 82):** bản xuất dùng chung `IReportPdfService` của Hiếu (dòng 77); nội dung
 > Excel/PDF đã mô tả ở trên là hợp đồng để ghim.
+
+## Xuất file bất đồng bộ — `/exports`
+
+> Story 24 *"Xuất dữ liệu"* — task *"Xử lý xuất file lớn bất đồng bộ + thông báo khi xong"* của
+> **Vàng Thị Dăm** (Sprint 5 dòng 64). ✅ Backend đã có (`ExportJobsController` +
+> `ExportJobService` + `ExportJobProcessor` + `ExportJobBackgroundService` + `ExportJobNotifier`).
+>
+> **Đây là đường thứ hai để xuất báo cáo, không thay ba bản đồng bộ.** `GET
+> /reports/revenue/export`, `GET /reports/fill-rate/export` và `GET /audit-logs/export` vẫn giữ
+> nguyên hành vi cũ (trả file ngay, chặn 10.000 dòng Excel / 2.000 dòng PDF ở báo cáo lấp đầy và
+> nhật ký). Ba bản đồng bộ hợp cho báo cáo nhỏ; khi vượt trần hoặc khi muốn bấm "Xuất" rồi làm
+> việc khác, dùng `/exports`.
+>
+> **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`.** Riêng `reportType = "audit-logs"` chỉ
+> `Admin` — Manager nhận **403** `{ "message": "Chỉ quản trị viên được xuất nhật ký kiểm toán." }`,
+> đúng ranh giới của `/audit-logs/export`.
+
+### Luồng chạy
+
+1. `POST /exports` — kiểm tham số, ghi một dòng `ExportJobs` trạng thái `Pending`, trả **202** ngay.
+   Thời gian phản hồi **không phụ thuộc** kích thước báo cáo.
+2. Job nền quét hàng đợi mỗi **2 giây**, xử lý lần lượt từng job theo `createdAt` (tối đa 10 job
+   mỗi lượt). Mỗi lượt nhận job: `Pending → Processing`.
+3. Dựng file xong: `Succeeded` + lưu file; lỗi: `Failed` + lý do. Một trong hai trạng thái cuối
+   được lưu **trước**, rồi mới phát thông báo `ExportCompleted` / `ExportFailed` qua SignalR
+   (xem mục "Thông báo"). Thông báo hỏng **không** kéo file đã `Succeeded` sang `Failed`.
+4. Frontend tải file qua `downloadUrl` trong vòng **24 giờ** kể từ khi job chốt kết quả.
+
+Job `Pending` sống qua lần khởi động lại API. Job kẹt `Processing` quá **10 phút** (app tắt giữa
+lúc dựng file) được đưa về `Pending`; mỗi job được nhận tối đa **3 lần**, quá số đó chốt `Failed`
+với lý do "Hệ thống đã thử dựng file 3 lần…".
+
+### Endpoints
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| POST | `/exports` | Đặt một lượt xuất báo cáo ở nền | JSON `CreateExportJobRequest` | **202** + `ExportJobResponse`, header `Location` tới `GET /exports/{id}` |
+| GET | `/exports/{id}` | Trạng thái job của chính người gọi | — | **200** `ExportJobResponse` |
+| GET | `/exports/{id}/download` | Tải file của job đã `Succeeded` | — | file `.xlsx` hoặc `.pdf` (nhị phân) |
+
+`{id}` **bắt buộc** khai kiểu `guid` — cùng lý do đã ghi ở `/audit-logs/{id:guid}`.
+
+#### `POST /exports` — đặt job xuất báo cáo
+
+Body — một lớp duy nhất cho ba loại báo cáo:
+
+| Trường | Kiểu | Bắt buộc | Ý nghĩa |
+|---|---|---|---|
+| `reportType` | `string` | ✅ | `revenue` / `fill-rate` / `audit-logs` (không phân biệt hoa/thường). Giá trị khác → **400** `errors.reportType` |
+| `format` | `string` | — | `xlsx` (mặc định) / `pdf`. Giá trị khác → **400** `errors.format` |
+| `granularity` | `string` | — | Chỉ báo cáo doanh thu: `day` (mặc định) / `week` / `month`. Giá trị khác → **400** `errors.granularity` |
+| `from` | `string` (`yyyy-MM-dd`) | — | Ngày bắt đầu, TÍNH CẢ. Doanh thu/lấp đầy theo lịch **Việt Nam**; nhật ký theo **UTC** — đúng bản đồng bộ tương ứng |
+| `to` | `string` (`yyyy-MM-dd`) | — | Ngày kết thúc, TÍNH CẢ. Cùng múi giờ với `from` theo loại báo cáo |
+| `routeId` | `string` (GUID) | — | Chỉ doanh thu / lấp đầy. Không tồn tại → **404** ngay khi đặt job |
+| `timeSlot` | `string` | — | Chỉ lấp đầy: `early` / `morning` / `afternoon` / `evening` / `night`. Trống = mọi khung. Giá trị khác → **400** `errors.timeSlot` |
+| `userId` | `string` (GUID) | — | Chỉ nhật ký: lọc theo người thao tác. GUID sai định dạng → **400** `errors.userId` |
+| `action` | `string` | — | Chỉ nhật ký: `Login` / `Logout` / `LoginFailed` / `Create` / `Update` / `Delete` / `Warning`, tối đa 20 ký tự. Mã lạ cho ra file rỗng (không phải lỗi), cùng bản đồng bộ |
+
+**Trường không thuộc loại đã chọn bị BỎ QUA,** không phải lỗi: form dùng chung gửi thừa trường
+là chuyện bình thường, và trường thừa không làm đổi nội dung file.
+
+Mặc định của `from`/`to` theo đúng báo cáo gốc: doanh thu/lấp đầy là **29 ngày trước `to`** (lịch
+VN); nhật ký là **30 ngày gần nhất** (UTC). Khoảng ngày doanh thu/lấp đầy tối đa **366 ngày**;
+nhật ký **không** có trần ngày — nó chặn bằng số dòng.
+
+Ví dụ:
+
+```json
+{
+  "reportType": "fill-rate",
+  "format": "xlsx",
+  "from": "2026-01-01",
+  "to": "2026-09-30",
+  "routeId": null,
+  "timeSlot": "morning"
+}
+```
+
+**202 Accepted:**
+
+```json
+{
+  "id": "2d9b6f31-…",
+  "reportType": "fill-rate",
+  "format": "xlsx",
+  "status": "Pending",
+  "createdAt": "2026-10-17T03:21:07.812Z",
+  "startedAt": null,
+  "completedAt": null,
+  "expiresAt": null,
+  "fileName": null,
+  "fileSizeBytes": null,
+  "rowCount": null,
+  "errorMessage": null,
+  "downloadUrl": null
+}
+```
+
+Lưu ý hình dạng: **202 chứ không phải 201** — tài nguyên vừa tạo là một *yêu cầu đang chờ*, chưa
+phải file. `Location` trỏ tới `GET /exports/{id}` để frontend hỏi trạng thái.
+
+#### `GET /exports/{id}` — trạng thái job
+
+**200** với `ExportJobResponse`:
+
+| Trường | Kiểu | Ý nghĩa |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `reportType` | `string` | Cùng mã với request |
+| `format` | `string` | `xlsx` hoặc `pdf` |
+| `status` | `string` | `Pending` / `Processing` / `Succeeded` / `Failed` |
+| `createdAt` | `string` (ISO 8601, UTC) | Lúc đặt job |
+| `startedAt` | `string \| null` | Lúc job nền nhận job |
+| `completedAt` | `string \| null` | Lúc chốt `Succeeded` hoặc `Failed` |
+| `expiresAt` | `string \| null` | Hạn tải file: `completedAt + 24 giờ`. Sau mốc này job coi như không tồn tại |
+| `fileName` | `string \| null` | Tên file ASCII không dấu — có khi `Succeeded` |
+| `fileSizeBytes` | `number \| null` | Kích thước file — có khi `Succeeded` |
+| `rowCount` | `number \| null` | Số dòng dữ liệu (không tính tiêu đề). `null` với báo cáo doanh thu (tối đa 366 bucket) và khi job chưa xong / thất bại |
+| `errorMessage` | `string \| null` | Lý do thất bại, chỉ khi `Failed` |
+| `downloadUrl` | `string \| null` | `/api/exports/{id}/download`, chỉ khi `Succeeded` và chưa hết hạn |
+
+Không có trường nội dung file: frontend hỏi trạng thái mỗi vài giây, không bao giờ kéo theo vài
+chục MB.
+
+Job không tồn tại, **của người khác**, hoặc đã quá `expiresAt` đều trả **404**
+`Không tìm thấy yêu cầu xuất file.` — không phân biệt, để không tiết lộ job nào có thật trong hệ
+thống.
+
+#### `GET /exports/{id}/download` — tải file
+
+Chỉ khi `status = "Succeeded"` và chưa hết hạn: **200**, `Content-Disposition: attachment` kèm
+`fileName`, `Content-Type` là
+`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (xlsx) hoặc `application/pdf`.
+
+- Job chưa xong (`Pending`/`Processing`) → **409**
+  `File chưa sẵn sàng. Hãy chờ thông báo hoàn tất rồi tải lại.`
+- Job `Failed` → **409** `Yêu cầu xuất file đã thất bại. Xem lý do ở trạng thái yêu cầu.`
+  (hai câu khác nhau để frontend biết nên tiếp tục hỏi hay dừng và hiện lỗi)
+- Không tồn tại / của người khác / quá hạn → **404**.
+
+**409 chứ không 404** khi job chưa xong: job có thật, chỉ là chưa có file.
+
+### Trần dòng và nội dung file
+
+| Định dạng | Trần của bản bất đồng bộ | Trần bản đồng bộ tương ứng |
+|---|---|---|
+| Excel (`.xlsx`) | **50.000 dòng** | 10.000 (lấp đầy, nhật ký) |
+| PDF (`.pdf`) | **10.000 dòng** | 2.000 (lấp đầy, nhật ký) |
+
+Vượt trần → job `Failed` kèm câu gợi ý **thu hẹp khoảng thời gian / thêm bộ lọc**, trong đó nêu
+rõ số dòng thực tế và trần của định dạng. **Không bao giờ cắt bớt file** — một chứng từ thiếu dòng
+mà không ai biết còn tệ hơn không có chứng từ.
+
+Nội dung file giữ đúng bố cục của bản đồng bộ cùng loại (cột, tiêu đề, định dạng ô) — xem
+`GET /reports/revenue/export`, `GET /reports/fill-rate/export`, `GET /audit-logs/export`. Tên file:
+`<loại>-bao-cao_YYYYMMDD-HHmmssZ.xlsx|pdf`, giờ UTC, ASCII không dấu.
+
+Báo cáo doanh thu dùng lại `IRevenueExportService` (nguồn không có trần), lấp đầy dùng
+`IFillRateReportService`, nhật ký đọc thẳng bảng `AuditLogs` với cùng bộ lọc — số liệu vì vậy
+khớp bản JSON/đồng bộ, không có phép tính thứ hai.
+
+### Lưu trữ và dọn dẹp
+
+- File nằm trong cột `content` (`bytea`) của bảng `ExportJobs` — hosting không giữ đĩa qua lần
+  deploy, và cách này không cần thêm dịch vụ lưu trữ ngoài.
+- Giữ **24 giờ** kể từ `completedAt`. Job hết hạn bị xoá khỏi CSDL bởi lượt dọn mỗi giờ; trước
+  khi lượt dọn chạy, `GET` và `download` đã trả 404 từ mốc `expiresAt`.
+- Tối đa **3 job `Pending`/`Processing`** của một người tại một thời điểm. Chạm trần → **409**
+  `Bạn đang có 3 yêu cầu xuất file chưa xong. Hãy chờ một yêu cầu hoàn tất rồi đặt tiếp.`
+  Job `Succeeded`/`Failed` **không** tính vào trần.
+
+### Thông báo khi xong
+
+Job nền phát đúng một thông báo cho **chủ job** khi chốt kết quả — hai loại mới trong bảng
+`Notifications` (xem mục "Thông báo"):
+
+| `type` | `relatedEntityType` | Nội dung |
+|---|---|---|
+| `ExportCompleted` | `ExportJob` | Tên báo cáo, số dòng, hạn tải file. Không có tiền, không có URL tuyệt đối |
+| `ExportFailed` | `ExportJob` | Tên báo cáo + lý do thất bại + gợi ý thu hẹp bộ lọc |
+
+`relatedEntityId` là `id` của job. Thông báo chỉ phát **một lần** cho mỗi `(userId, type, jobId)`
+dù job được thử lại; gửi lỗi không làm job đã `Succeeded` đổi trạng thái.
+
+> **Cho Băng (chủ `notificationApi.ts`):** cần map hai loại trên — `ExportCompleted` hiện như
+> thông báo thành công, bấm vào mở màn xuất báo cáo / tải file; `ExportFailed` hiện như lỗi, **không**
+> dùng nhãn "bị từ chối" của yêu cầu huỷ/đổi chuyến. Chuông chưa map loại mới sẽ rơi vào nhánh
+> mặc định (chỉ hiện tiêu đề), không vỡ giao diện.
+
+### Lỗi
+
+| Mã | Khi nào |
+|---|---|
+| **400** | `reportType` / `format` / `granularity` / `timeSlot` lạ · `to` trước `from` · khoảng doanh thu/lấp đầy quá 366 ngày (lỗi gắn cả `errors.from` lẫn `errors.to`) · `action` quá 20 ký tự (`errors.action`) · body sai kiểu (`errors.<trường>`) |
+| **401** | Thiếu / hỏng token |
+| **403** | Không phải `Admin`/`Manager` · là `Manager` mà `reportType = "audit-logs"` |
+| **404** | `routeId` không tồn tại khi đặt job · job không tồn tại, của người khác hoặc quá hạn khi đọc/tải |
+| **409** | Đã có 3 job chưa xong · tải file khi job chưa `Succeeded` |
+
+> **Vì sao không có endpoint danh sách job?** Task chỉ cần đặt, theo dõi và tải; màn "lịch sử xuất
+> báo cáo" không thuộc story nào đang mở. Thêm bề mặt API phải nuôi bằng tài liệu + test mà không
+> ai gọi là nợ kỹ thuật, không phải tính năng. Khi có story, thêm `GET /exports` là thay đổi
+> **cộng thêm**.
+
+> **Vì sao `routeId` kiểm ngay lúc đặt job mà lỗi dữ liệu khác lại để job `Failed`?** Lỗi phát hiện
+> được mà **không cần dựng file** phải trả ngay — bắt người dùng chờ vài phút để nhận câu "tuyến
+> không tồn tại" là lãng phí. Ngược lại, lỗi chỉ biết khi đọc dữ liệu (dữ liệu mồ côi, CSDL đứt)
+> không thể biết trước, nên thuộc nhánh `Failed` của processor.
 
 ## Đề xuất tần suất chạy xe — `/reports/frequency-proposals`
 

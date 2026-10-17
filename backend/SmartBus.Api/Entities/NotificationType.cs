@@ -113,5 +113,22 @@ public enum NotificationType
     /// nhãn và biểu tượng riêng cần Băng bổ sung; đã ghi ở docs/api-contract.md và docs/48.
     /// </para>
     /// </summary>
-    RefundReconciliationAlert
+    RefundReconciliationAlert,
+
+    /// <summary>
+    /// Báo cáo xuất ở nền đã DỰNG XONG — file sẵn sàng tải. Task *"Xử lý xuất file lớn bất đồng bộ +
+    /// thông báo khi xong"* (Sprint 5 dòng 64, Vàng Thị Dăm).
+    ///
+    /// Người nhận là người ĐẶT job (không phải mọi quản lý): thông báo này chỉ có nghĩa với chủ
+    /// file, và đường dẫn tải chỉ mở cho chính họ. <see cref="Notification.RelatedEntityType"/> là
+    /// <see cref="NotificationTarget.ExportJob"/>, id là <c>ExportJobs.Id</c>.
+    /// </summary>
+    ExportCompleted,
+
+    /// <summary>
+    /// Báo cáo xuất ở nền THẤT BẠI — không có file để tải. Cùng người nhận và cùng con trỏ với
+    /// <see cref="ExportCompleted"/>; lý do nằm ở <see cref="Notification.Body"/> để người dùng biết
+    /// nên thu hẹp bộ lọc hay báo quản trị.
+    /// </summary>
+    ExportFailed
 }

@@ -819,10 +819,10 @@ internal sealed class NhaMaySqlite : WebApplicationFactory<Program>
     public ChenLuotGiuDoiThuInterceptor? ChenGiua { get; }
 
     /// <summary>
-    /// Sáu job nền của app. Phải gỡ khỏi host test: <c>TripGenerationBackgroundService</c> chạy ngay
+    /// Bảy job nền của app. Phải gỡ khỏi host test: <c>TripGenerationBackgroundService</c> chạy ngay
     /// một lượt lúc khởi động rồi ĐUA với lúc test seed dữ liệu — đúng loại lỗi làm đỏ CI ngẫu nhiên
     /// ở PR #81 (xem <c>ThayJobNenBangBanNoop</c>). File này không có test wiring nào nên gỡ hẳn được,
-    /// không cần chép sáu lớp noop của <c>TestAppFactory</c>.
+    /// không cần chép bảy lớp noop của <c>TestAppFactory</c>.
     /// </summary>
     private static readonly Type[] JobNen =
     [
@@ -832,6 +832,7 @@ internal sealed class NhaMaySqlite : WebApplicationFactory<Program>
         typeof(SeatHoldAbuseBackgroundService),
         typeof(RefundRetryBackgroundService),
         typeof(RefundReconciliationBackgroundService),
+        typeof(ExportJobBackgroundService),
     ];
 
     private readonly string _tepCsdl =
