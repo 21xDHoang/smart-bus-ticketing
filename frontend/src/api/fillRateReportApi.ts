@@ -1,7 +1,8 @@
 // -----------------------------------------------------------------------------
 // API THỐNG KÊ TỶ LỆ LẤP ĐẦY THEO CHUYẾN — phục vụ màn hình "Thống kê tỷ lệ lấp đầy
 // theo chuyến" (US 20 "Tỷ lệ lấp đầy", Sprint 4/5, task của Dương Thị Hạnh). Màn
-// quản trị/vận hành: Admin và Manager xem từng chuyến trong một ngày đầy/trống tới đâu.
+// quản trị/vận hành: Admin và Manager xem từng chuyến đầy/trống tới đâu, lọc theo
+// tuyến + khung giờ + khoảng ngày.
 //
 // Backend CHƯA có endpoint này — task "API thống kê tỷ lệ lấp đầy theo chuyến/tuyến/khung
 // giờ" (dòng 66) là của Kiên, docs/38 §4 chỉ mới ĐỀ XUẤT endpoint `GET /reports/fill-rate`.
@@ -42,10 +43,10 @@ export interface TripFillRate {
 
 /** Dải số liệu tóm tắt cho các thẻ trên đầu màn hình. */
 export interface FillRateSummary {
-  /** Tổng chuyến khởi hành trong ngày đã chọn. */
+  /** Tổng chuyến khởi hành trong khoảng đã chọn (sau khi lọc). */
   totalTrips: number;
 
-  /** Tỷ lệ lấp đầy trung bình cả ngày (%). */
+  /** Tỷ lệ lấp đầy trung bình cả khoảng (%). */
   averageFillRatePct: number;
 
   /** Số chuyến "đầy" — lấp đầy ≥ 80%. */
@@ -57,18 +58,60 @@ export interface FillRateSummary {
 
 /** Toàn bộ dữ liệu một lượt tải báo cáo. */
 export interface FillRateReport {
-  /** Ngày báo cáo (yyyy-MM-dd, lịch Việt Nam). */
-  date: string;
+  /** Ngày bắt đầu khoảng (yyyy-MM-dd, lịch Việt Nam). */
+  from: string;
+
+  /** Ngày kết thúc khoảng (yyyy-MM-dd, lịch Việt Nam). */
+  to: string;
 
   summary: FillRateSummary;
 
-  /** Các chuyến trong ngày, sắp theo giờ khởi hành tăng dần. */
+  /** Các chuyến trong khoảng, sắp theo giờ khởi hành tăng dần. */
   trips: TripFillRate[];
 }
 
+/** Khung giờ khởi hành — lọc chuyến theo giờ chạy trong ngày. */
+export type TimeSlot = 'early' | 'morning' | 'afternoon' | 'evening';
+
+/** Một lựa chọn khung giờ — `[fromHour, toHour)` theo giờ Việt Nam. */
+export interface TimeSlotOption {
+  value: TimeSlot;
+  label: string;
+  fromHour: number;
+  /** Cận trên, KHÔNG tính — giờ chạy thuộc `[fromHour, toHour)`. */
+  toHour: number;
+}
+
+export const TIME_SLOT_OPTIONS: TimeSlotOption[] = [
+  { value: 'early', label: 'Sáng sớm (5–9h)', fromHour: 5, toHour: 9 },
+  { value: 'morning', label: 'Buổi sáng (9–13h)', fromHour: 9, toHour: 13 },
+  { value: 'afternoon', label: 'Buổi chiều (13–17h)', fromHour: 13, toHour: 17 },
+  { value: 'evening', label: 'Buổi tối (17–22h)', fromHour: 17, toHour: 22 },
+];
+
+/** Giá trị bộ lọc — khớp thẳng tham số query dự kiến của `GET /reports/fill-rate`. */
+export interface FillRateFilterValue {
+  /** Ngày bắt đầu (yyyy-MM-dd), tính cả. */
+  from: string;
+
+  /** Ngày kết thúc (yyyy-MM-dd), tính cả. */
+  to: string;
+
+  /**
+   * Lọc theo tuyến. Bỏ trống = mọi tuyến.
+   *
+   * Mock dùng `routeCode` làm giá trị; endpoint thật sẽ là GUID (docs/38 §4 đề xuất
+   * `routeId`) — lúc nối API thật chỉ cần đổi nguồn `ROUTE_OPTIONS`.
+   */
+  routeId?: string;
+
+  /** Lọc theo khung giờ khởi hành. Bỏ trống = mọi khung giờ. */
+  timeSlot?: TimeSlot;
+}
+
 export interface FillRateReportApi {
-  /** Tải báo cáo tỷ lệ lấp đầy của một ngày. */
-  getReport: (date: string) => Promise<FillRateReport>;
+  /** Tải báo cáo tỷ lệ lấp đầy cho một khoảng ngày + bộ lọc. */
+  getReport: (filter: FillRateFilterValue) => Promise<FillRateReport>;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +130,8 @@ const api: FillRateReportApi = {
 };
 
 // -------- Dữ liệu giả (dùng khi USE_MOCK_DATA = true) --------
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 /** Các tuyến + sức chứa xe — trùng tuyến ở dashboard doanh thu để số liệu nhất quán. */
 const ROUTES = [
   { routeCode: '01', routeName: 'Bến xe Mỹ Đình — Bến xe Gia Lâm', capacity: 45 },
@@ -96,6 +141,12 @@ const ROUTES = [
   { routeCode: '16', routeName: 'Bến xe Gia Lâm — Bến xe Yên Nghĩa', capacity: 50 },
   { routeCode: '05', routeName: 'Bến xe Giáp Bát — Bến xe Mỹ Đình', capacity: 30 },
 ];
+
+/** Danh sách tuyến cho ô chọn — mock dùng routeCode làm giá trị, API thật sẽ là GUID. */
+export const ROUTE_OPTIONS = ROUTES.map((route) => ({
+  value: route.routeCode,
+  label: `${route.routeCode} · ${route.routeName}`,
+}));
 
 /** Lịch chạy cố định trong ngày — 20 chuyến cách nhau ~50 phút, từ 05:00. */
 const SLOTS = [
@@ -115,6 +166,37 @@ function dateSeed(date: string): number {
   let hash = 0;
   for (let i = 0; i < date.length; i++) hash = (hash * 31 + date.charCodeAt(i)) % 1000;
   return hash;
+}
+
+/** Giờ khởi hành của một chuyến — lấy từ chuỗi ISO `YYYY-MM-DDTHH:mm:00+07:00`. */
+function hourOf(departureTime: string): number {
+  return Number(departureTime.slice(11, 13));
+}
+
+/** Định dạng một epoch (ms) thành ngày yyyy-MM-dd theo giờ Việt Nam. */
+function vnDateString(epochMs: number): string {
+  const d = new Date(epochMs + VN_OFFSET_MS);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+/** Ngày hôm nay theo lịch Việt Nam — dùng cho bộ lọc mặc định. */
+function vietnamToday(): string {
+  return vnDateString(Date.now());
+}
+
+/** Các ngày trong khoảng [from, to], tính cả hai đầu mút. */
+function enumerateDates(from: string, to: string): string[] {
+  const start = new Date(`${from}T00:00:00+07:00`).getTime();
+  const end = new Date(`${to}T00:00:00+07:00`).getTime();
+  const days = Math.round((end - start) / 86_400_000) + 1;
+
+  return Array.from({ length: days }, (_, index) => vnDateString(start + index * 86_400_000));
+}
+
+/** Bộ lọc mặc định: hôm nay, mọi tuyến, mọi khung giờ. */
+export function defaultFillRateFilter(): FillRateFilterValue {
+  const today = vietnamToday();
+  return { from: today, to: today };
 }
 
 /**
@@ -151,13 +233,29 @@ function buildTrips(date: string): TripFillRate[] {
   });
 }
 
-function buildReport(date: string): FillRateReport {
-  const trips = buildTrips(date);
+function buildReport(filter: FillRateFilterValue): FillRateReport {
+  const timeSlot = filter.timeSlot
+    ? TIME_SLOT_OPTIONS.find((option) => option.value === filter.timeSlot)
+    : undefined;
+
+  const trips = enumerateDates(filter.from, filter.to)
+    .flatMap((date) => buildTrips(date))
+    .filter((trip) => {
+      if (filter.routeId && trip.routeCode !== filter.routeId) return false;
+      if (timeSlot) {
+        const hour = hourOf(trip.departureTime);
+        if (hour < timeSlot.fromHour || hour >= timeSlot.toHour) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => a.departureTime.localeCompare(b.departureTime));
+
   const totalTrips = trips.length;
   const sumPct = trips.reduce((total, trip) => total + trip.fillRatePct, 0);
 
   return {
-    date,
+    from: filter.from,
+    to: filter.to,
     summary: {
       totalTrips,
       averageFillRatePct: totalTrips ? Math.round((sumPct / totalTrips) * 10) / 10 : 0,
@@ -169,9 +267,9 @@ function buildReport(date: string): FillRateReport {
 }
 
 const mock: FillRateReportApi = {
-  async getReport(date) {
+  async getReport(filter) {
     await delay(450);
-    return buildReport(date);
+    return buildReport(filter);
   },
 };
 

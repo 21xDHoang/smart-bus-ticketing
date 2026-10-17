@@ -1779,8 +1779,9 @@ Cả bốn endpoint của bề mặt đều trả về đúng hình dạng này.
 > Chi tiết + lý do: `docs/41-thong-bao-ket-qua-hoan-tien.md`.
 >
 > Hub KHÔNG phải nguồn dữ liệu: nó chỉ báo "bạn vừa có thông báo mới", còn **danh sách** thông báo
-> sẽ đến từ một endpoint REST (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19
-> Sprint 5 — cùng người làm, **chưa có trong tài liệu này**). Mục này chỉ mô tả kênh đẩy.
+> đến từ endpoint REST `GET /api/notifications/me` (task *"API lịch sử thông báo đã nhận của hành
+> khách"*, dòng 19 Sprint 5, Vàng Thị Dăm) — hình dạng đầy đủ ở mục
+> **"Thông báo trong ứng dụng — /notifications"**. Mục này chỉ mô tả kênh đẩy.
 
 ### Kết nối
 
@@ -1910,7 +1911,7 @@ const connection = new HubConnectionBuilder()
 
 // Không có JoinUser/LeaveUser: nhóm do server tự thêm khi kết nối.
 connection.on("NotificationReceived", ({ notificationId }) => {
-  // Gọi lại API danh sách thông báo (dòng 19 Sprint 5) rồi cập nhật badge.
+  // Gọi lại GET /api/notifications/me rồi cập nhật badge — mục "Thông báo trong ứng dụng".
 });
 ```
 
@@ -1936,6 +1937,125 @@ connection.on("NotificationReceived", ({ notificationId }) => {
 > thông báo** — dòng `Notifications` đã ghi vào CSDL dùng chung, nên khách vẫn thấy khi mở màn danh
 > sách; chỉ mất đúng lời nhắc tức thời. Muốn xuyên máy chủ thì thêm backplane (Azure SignalR /
 > `AddStackExchangeRedis`) — ngoài phạm vi.
+
+## Thông báo trong ứng dụng — `/notifications`
+
+> ✅ Backend đã có: `MyNotificationsController` + `IMyNotificationsService`/`MyNotificationsService`
+> (task *"API lịch sử thông báo đã nhận của hành khách"*, dòng 19 Sprint 5, phân công bảng tính:
+> Vàng Thị Dăm), kèm một dòng
+> `builder.Services.AddScoped<IMyNotificationsService, MyNotificationsService>()` trong `Program.cs`
+> — dòng thuộc file của Phùng Duy Hoàng, thêm ngay ở task này (cùng lối đã làm ở khối
+> `IRefundLookupService`, commit `d5bd049`). Test tích hợp:
+> `backend/SmartBus.Tests/MyNotificationsApiTests.cs`.
+>
+> Đây là mặt **ĐỌC** của thông báo. Kênh **ĐẨY** vẫn là `NotificationHub` ở `/hubs/notifications`
+> — mục ngay trên. Hai mặt cùng đọc một bảng `Notifications`, không có bản sao dữ liệu nào: hub
+> chỉ đánh thức màn hình, còn nội dung luôn lấy từ đây.
+
+### Endpoint
+
+| Method | Endpoint | Mô tả | Query | Trả về |
+|---|---|---|---|---|
+| `GET` | `/notifications/me` | Lịch sử thông báo đã nhận của **chính người gọi**, mới nhất trước | *không có* | `200` mảng `Notification` (rỗng nếu chưa nhận thông báo nào) · `401` khi thiếu/không hợp lệ token |
+
+Không có endpoint nào khác trên bề mặt này. Các task Sprint 5 còn lại của US 10 sẽ dựng thêm ở đây:
+API đăng ký/huỷ theo dõi trạm (dòng 17, Trần Trung Hiếu), màn quản lý mẫu thông báo (dòng 24).
+
+### Dòng `Notification`
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá chính |
+| `type` | `string` | Một trong **sáu** loại — bảng "Sáu loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
+| `title` | `string` | Dòng tiêu đề ngắn — dòng đầu của mỗi mục trong danh sách |
+| `body` | `string` | Nội dung đầy đủ, **có thể xuống dòng**. Lý do từ chối của quản lý được chép nguyên văn vào đây |
+| `relatedEntityType` | `string \| null` | Bảng mà `relatedEntityId` trỏ tới: `CancellationRequest`, `TicketChange` hoặc `Refund`. `null` với thông báo không gắn bản ghi nào |
+| `relatedEntityId` | `string \| null` | Id bản ghi mà thông báo nói về; `null` cùng lúc với `relatedEntityType` |
+| `createdAt` | `string` (ISO 8601, UTC) | Thời điểm thông báo được sinh — cũng là cột sắp xếp của danh sách |
+
+> 🔴 `type` và `relatedEntityType` là **CHUỖI chữ**, không phải số. Dự án không bật
+> `JsonStringEnumConverter`, nên để nguyên enum trong DTO là JSON tuôn ra con số (`0`, `1`, …) —
+> bẫy đã ghi ở `RefundResponse` và `TicketResponse`. Service `ToString()` trong bộ nhớ rồi mới dựng
+> DTO; có test ghim điều này.
+
+> ⚠️ **Chưa có trường "đã đọc".** Bảng `Notifications` chưa có cột đó (lý do hoãn ghi ở doc-comment
+> của entity `Notification`: hình dạng đúng của nó phụ thuộc badge của màn hình, dòng 22). Trả một
+> trường `isRead` ở đây là hứa một thứ backend không có.
+
+### Ví dụ
+
+```http
+GET /api/notifications/me
+Authorization: Bearer <JWT>
+```
+
+```json
+[
+  {
+    "id": "8f2b1d64-1111-2222-3333-444455556666",
+    "type": "CancellationApproved",
+    "title": "Đã duyệt yêu cầu huỷ vé",
+    "body": "Yêu cầu huỷ vé của quý khách đã được duyệt.",
+    "relatedEntityType": "CancellationRequest",
+    "relatedEntityId": "1a2b3c4d-5555-6666-7777-888899990000",
+    "createdAt": "2026-10-14T03:20:11.482Z"
+  },
+  {
+    "id": "7e1a0c53-aaaa-bbbb-cccc-ddddeeeeffff",
+    "type": "RefundFailed",
+    "title": "Hoàn tiền thất bại",
+    "body": "Rất tiếc, giao dịch hoàn tiền chưa thực hiện được. Nhà xe sẽ liên hệ quý khách.",
+    "relatedEntityType": "Refund",
+    "relatedEntityId": "9f8e7d6c-1234-5678-9abc-def012345678",
+    "createdAt": "2026-10-13T21:05:40.117Z"
+  },
+  {
+    "id": "5c4b3a29-0000-1111-2222-333344445555",
+    "type": "TicketChangeApproved",
+    "title": "Đã duyệt yêu cầu đổi chuyến",
+    "body": "Yêu cầu đổi chuyến của quý khách đã được duyệt.",
+    "relatedEntityType": null,
+    "relatedEntityId": null,
+    "createdAt": "2026-10-11T06:44:02.900Z"
+  }
+]
+```
+
+> **Vì sao trả MẢNG TRẦN, không phân trang?** Khớp đúng lối các endpoint "của tôi" đang có
+> (`GET /tickets/me`, `GET /refunds`, `GET /feedbacks/me`, `GET /monthly-passes/me`), và khớp đúng
+> bản nháp frontend đã merge (`frontend/src/api/notificationApi.ts` khai
+> `listMine: () => Promise<AppNotification[]>`). Chuông + badge gọi endpoint này mỗi lần có sự kiện
+> đẩy, nên thêm một vỏ phân trang là bắt mọi lượt gọi đi qua thêm một tầng mà không lượt nào dùng.
+>
+> ⚠️ **Đánh đổi đã biết:** bảng chỉ-ghi-thêm nên danh sách của một người **dài dần vô hạn** — mỗi
+> quyết định huỷ/đổi và mỗi kết quả cuối của một khoản hoàn là một dòng. Trong phạm vi đồ án con số
+> này nhỏ (một khách có bao nhiêu yêu cầu huỷ vé?), nên chấp nhận được. Khi khối lượng thành vấn đề
+> thật thì cách sửa là thêm **tham số con trỏ** (`?before=<createdAt>` — đúng chỉ mục
+> `IX_Notifications_UserId_CreatedAt`, không cần đếm tổng), **không** phải lặng lẽ cắt bớt danh sách:
+> cắt ngầm làm badge đếm sai mà không ai thấy lỗi.
+
+> **Vì sao KHÔNG có `GET /notifications/{id}`?** `body` đã nằm trong **từng dòng** của danh sách.
+> A8.5 chốt thông báo phải *đủ để đọc một mình* (lưu lại cho khách xem khi offline), nên không có
+> phần nội dung nào bị giữ lại sau một endpoint chi tiết — màn chi tiết (dòng 23) đọc thẳng từ dòng
+> đã tải về. Dựng thêm endpoint đó là mở một đường đọc thứ hai vào cùng dữ liệu mà không thêm gì.
+
+> **Vì sao không có tham số `userId`?** Phạm vi "của tôi" nằm **trong truy vấn** (`WHERE UserId`),
+> không nằm ở tầng kiểm tra: người gọi lấy từ claim `NameIdentifier` trong token, và **không tồn tại
+> tham số nào để hỏi thông báo của người khác**. Thông báo là dữ liệu riêng của một người — nội dung
+> là kết quả duyệt yêu cầu huỷ vé *của họ*, kèm cả lý do từ chối — nên đây là chuyện quyền đọc chứ
+> không phải chuyện lịch sự. Cùng lối `GET /refunds` và `GET /tickets/me`.
+
+> **Vì sao `[Authorize]` trần, không gắn policy vai trò?** Hành khách tự xem thông báo của mình, mà
+> RBAC của dự án chỉ có `AdminOnly`/`ManagerOrAbove` — không có policy `Passenger` nào để gắn. Quyền
+> sở hữu kiểm bằng chính điều kiện truy vấn ở trên, mạnh hơn một policy vai trò vì nó chặt theo *từng
+> dòng* chứ không theo *loại tài khoản*.
+
+> ⚠️ **Frontend đang lệch so với backend — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
+> `NotificationType` trong `notificationApi.ts` mới khai **bốn** giá trị, thiếu `RefundSucceeded` và
+> `RefundFailed`; `NotificationTarget` mới khai **hai**, thiếu `Refund`. Backend phát đủ sáu loại và
+> ba target (hai loại `Refund…` do `RefundResultNotifier` phát — mục trên), nên gặp thông báo hoàn
+> tiền là union của TypeScript không phủ. Ngoài ra `USE_MOCK_DATA` còn `true`: đổi thành `false` là
+> màn thông báo chạy thật.
 
 ## Xe buýt — `/buses`
 
@@ -5197,7 +5317,7 @@ liệu của người khác. Danh sách toàn hệ thống là việc của `GET
 | Câu hỏi | Hiện trạng |
 |---|---|
 | **Thông báo kết quả hoàn tiền đi kênh nào?** Bảng phân công dòng 45 ghi *"qua **email** và trên web"*, nhưng A8.5 chốt thông báo **chỉ in-app qua SignalR** + bảng `Notifications`, không email/SMS/Web Push | **Chưa cài.** Cùng dạng xung đột đã gặp ở dòng 7 (docs/33 §1) — nhóm nên chốt **một lần** cho cả hai |
-| **Cổng sandbox nào hoàn tiền được?** Dòng 40 (Hiếu) gọi cổng để hoàn; MoMo/VNPay/ZaloPay sandbox có API hoàn hay không chưa ai kiểm | Chưa kiểm — chặn dòng 40 |
+| **Cổng sandbox nào hoàn tiền được?** Dòng 40 (Hiếu) gọi cổng để hoàn; MoMo/VNPay/ZaloPay sandbox có API hoàn hay không chưa ai kiểm | ✅ **Đã kiểm** (dòng 40 đã dựng, xem `docs/43-api-goi-cong-hoan-tien.md` §4): MoMo/ZaloPay sandbox CÓ API hoàn (khoá test công khai); **VNPay sandbox HẠN CHẾ** hoàn tiền — cần liên hệ VNPAY mở. Nhóm vẫn cần chốt cách xử lý với VNPay |
 | **`Refunds` + `RefundLogs` bổ sung vào A9?** | Nhóm cần chốt — lần thứ **tư** việc "A9 lệch thực tế" được nhắc |
 | **Ai làm `GET /admin/refunds`?** Bảng phân công có màn (dòng 46–47) nhưng **không có dòng nào** giao API danh sách ở tầng backend | Chưa có chủ |
 

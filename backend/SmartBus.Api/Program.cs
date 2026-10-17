@@ -564,13 +564,19 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
 // Ba người gọi phân biệt bằng trigger (chi tiết ở IRefundAttemptService): service hoàn tiền tự
 // động khi duyệt huỷ vé (dòng 28 — Kiên, chưa dựng) → Initial; nút "Thử lại" của màn Admin
 // (dòng 35 — Băng, chưa nối) → ManualRetry; job theo lịch ngay dưới → ScheduledRetry.
-// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu — chưa dựng), nên hôm nay
-// IRefundGatewayCaller trỏ vào Placeholder: mọi lượt gọi trả Unresolved → khoản giữ nguyên Pending,
-// TUYỆT ĐỐI không ghi Succeeded giả. Khi dòng 29 vào thì đổi ĐÚNG MỘT dòng đăng ký dưới đây sang
-// client thật.
+// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu) — đã dựng: RefundGatewayCaller tra client
+// theo MethodCode của giao dịch gốc (docs/40 §2.5) và bọc lỗi vận chuyển thành Unresolved, TUYỆT ĐỐI
+// không đoán. Thay chỗ đăng ký Placeholder trước đây (class Placeholder vẫn nằm ở Services/ — file
+// của Hoàng, nhờ Hoàng xem qua PR này).
+// Ba client đăng ký qua AddHttpClient (transient) và chỉ được dựng khi có lời gọi — máy cấu hình
+// thiếu cổng nào thì cổng đó không kéo sập dây chuyền (cùng lối PaymentGatewayResolver).
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
-builder.Services.AddScoped<IRefundGatewayCaller, PlaceholderRefundGatewayCaller>();
+builder.Services.Configure<VnPayRefundOptions>(builder.Configuration.GetSection(VnPayRefundOptions.SectionName));
+builder.Services.AddScoped<IRefundGatewayCaller, RefundGatewayCaller>();
+builder.Services.AddHttpClient<MoMoRefundClient>();
+builder.Services.AddHttpClient<VnPayRefundClient>();
+builder.Services.AddHttpClient<ZaloPayRefundClient>();
 // Thông báo kết quả hoàn tiền cho khách (US 8, dòng 34 Sprint 4 — Phùng Duy Hoàng): từ đây
 // IRefundAttemptService resolve ra LỚP BỌC NotifyingRefundAttemptService thay vì lớp trần, nên CẢ BA
 // đường gọi cổng ở trên đi qua chỗ báo tin mà không đường nào phải tự nhớ — kể cả hai đường chưa
@@ -625,6 +631,24 @@ builder.Services.AddScoped<IRefundLookupService, RefundLookupService>();
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR ghế, trước phần hạ tầng JWT/RBAC/CORS) để không
 // chèn vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
+// Thông báo trong ứng dụng (US 10, Sprint 5), phần đọc của hành khách:
+// GET /api/notifications/me.
+// Task "API lịch sử thông báo đã nhận của hành khách" (dòng 19 Sprint 5) — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR (cùng lối đã làm ở khối IRefundLookupService
+// ngay trên, commit d5bd049).
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự xem thông báo của mình, quyền sở
+// hữu kiểm ngay trong truy vấn theo userId. Đây là bề mặt REST của thông báo; kênh ĐẨY vẫn là
+// NotificationHub ở /hubs/notifications (đăng ký phía trên, trong khối SignalR).
+// Chỉ đọc nên không có migration kèm theo: bảng Notifications và chỉ mục (UserId, CreatedAt) đã dựng
+// từ 20261013143603_Sprint4_Notifications.
+// Các phần CÒN LẠI của bề mặt thông báo chưa dựng và không thuộc task này: service bắn thông báo khi
+// xe cách trạm dưới 500m (Kiên, dòng 15), API đăng ký/huỷ theo dõi trạm (Hiếu, dòng 17), màn quản lý
+// mẫu thông báo (dòng 24) và test luồng thông báo (Giàng A Vàng, dòng 30) — chưa có dòng đăng ký nào
+// ở đây vì chưa có service.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
+builder.Services.AddScoped<IMyNotificationsService, MyNotificationsService>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);

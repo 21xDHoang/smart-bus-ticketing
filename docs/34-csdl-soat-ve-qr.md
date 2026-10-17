@@ -12,10 +12,9 @@
 >
 > 🟢 **Trạng thái:** entity `TicketValidation` + `TicketValidationResult`, cấu hình
 > `AppDbContext.TicketValidation.cs`, và migration `Sprint4_TicketValidations` (Vàng Thị Dăm, task
-> Sprint 4 dòng 14) — **đã sinh và đã soát, xem §8**. **Chưa merge, chưa áp lên CSDL chung**: bảng chỉ
-> có thật sau khi PR được merge rồi chạy `database update` (thứ tự ở
-> `docs/25-huong-dan-csdl-chung.md` §4). Trước bước đó, endpoint nào chạm bảng này sẽ lỗi
-> `relation "TicketValidations" does not exist`.
+> Sprint 4 dòng 14) — **đã sinh và đã soát, xem §8**. **Đã merge** vào `main` qua PR #188 và
+> **đã áp lên CSDL chung** — kiểm lại 17/10/2026: `dotnet ef migrations list` liệt kê **18/18**
+> migration, **0** dòng `(Pending)`. Endpoint nào chạm bảng này nay chạy thật.
 
 ## 1. Bảng này KHÔNG nằm trong A9 — phải báo nhóm
 
@@ -379,11 +378,13 @@ bằng chứng cho chốt chống trùng. Chốt đó chỉ có thật ở Postg
 
 ### 8.4 Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4
 
-1. PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge** vào `main`.
-2. **Sau khi merge** mới áp lên CSDL chung:
-   `dotnet ef database update --project backend/SmartBus.Api`.
-   Lệnh này áp **cả hai** bảng — `Notifications` (nợ của `main`) lẫn `TicketValidations`. Trước bước
-   đó, endpoint nào chạm chúng sẽ lỗi `relation "…" does not exist`.
+✅ **Cả hai bước đã xong** (kiểm lại 17/10/2026) — giữ nguyên hai dòng dưới làm mốc lịch sử:
+
+1. ~~PR nhánh này → **có người khác approve** (⛔ luật 7) → **Squash and merge** vào `main`.~~
+   ✅ Đã merge qua **PR #188** (`feature/15-migrate-ticketvalidations`).
+2. ~~**Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.~~
+   ✅ Đã chạy. Lệnh đó áp **cả hai** bảng — `Notifications` (nợ của `main`) lẫn `TicketValidations`.
+   Kiểm lại 17/10/2026: **18/18** migration đã áp, **0** `(Pending)`.
 
 ### 8.5 ⚠️ Phân tích đồ thị (GitNexus) KHÔNG chạy được trên máy này
 

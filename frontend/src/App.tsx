@@ -29,6 +29,7 @@ import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
 import TicketChangeRequestPage from './pages/TicketChangeRequestPage';
 import TicketScanPage from './pages/TicketScanPage';
+import TripPassengerListPage from './pages/TripPassengerListPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import VoucherManagePage from './pages/VoucherManagePage';
@@ -40,6 +41,8 @@ import AdminRefundPage from './pages/AdminRefundPage';
 import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
 import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
+import OverloadAlertPage from './pages/OverloadAlertPage';
+import TicketValidationStatsPage from './pages/TicketValidationStatsPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -241,6 +244,21 @@ function App() {
                   </RouteGuard>
                 }
               />
+              {/* /trip-passengers là màn hình danh sách hành khách đã lên xe theo chuyến
+                  (US 15, Sprint 4, dòng 22, task của Dương Thị Hạnh): tài xế chọn chuyến đang
+                  chạy rồi xem ai đã được soát vé hợp lệ và lên xe — màn đi cùng "Soát vé".
+                  Backend endpoint này chưa có nên màn hình đang chạy dữ liệu giả
+                  (tripPassengerListApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn hình
+                  cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã
+                  ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/trip-passengers"
+                element={
+                  <RouteGuard allowedRoles={['Driver']}>
+                    <TripPassengerListPage />
+                  </RouteGuard>
+                }
+              />
               {/* /my-tickets/:ticketId/request là màn hình gửi yêu cầu huỷ/đổi vé (US 5, Sprint 4 —
                   task của Dương Thị Hạnh): hành khách chọn huỷ vé hay đổi chuyến, viết lý do rồi
                   gửi yêu cầu để nhà xe xem xét. Vào từ nút "Huỷ / Đổi vé" trên màn "Vé của tôi",
@@ -386,6 +404,35 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <RevenueDashboardPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /overload-alerts là màn hình cảnh báo các chuyến định kỳ bị quá tải lặp lại
+                  (US 20 "Tỷ lệ lấp đầy", Sprint 4, task của Nguyễn Đình Băng). Khác với
+                  /fill-rate chỉ xem một ngày: màn này gộp nhiều ngày để bắt chuyến "thường
+                  xuyên" quá tải. Báo cáo vận hành nên chỉ Admin và Manager vào được. Backend
+                  cảnh báo quá tải chưa có nên màn hình đang chạy dữ liệu giả
+                  (overloadAlertApi.ts). */}
+              <Route
+                path="/overload-alerts"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <OverloadAlertPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /ticket-validation-stats là màn hình thống kê lượt soát theo chuyến (US 15,
+                  Sprint 4, dòng 24, task của Dương Thị Hạnh): chọn một chuyến rồi xem lượt soát
+                  vé phân bố thế nào — tổng / hợp lệ / từng lý do từ chối. Báo cáo vận hành nên
+                  chỉ Admin và Manager vào được. Backend endpoint này chưa có nên màn hình đang
+                  chạy dữ liệu giả (ticketValidationStatsApi.ts). Dòng route này do Dương Thị
+                  Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung §E1 (của
+                  Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/ticket-validation-stats"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <TicketValidationStatsPage />
                   </RouteGuard>
                 }
               />
