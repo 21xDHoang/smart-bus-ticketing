@@ -42,4 +42,13 @@ public class ExportAuditLogsRequest
     /// </summary>
     [StringLength(20, ErrorMessage = "Hành động tối đa 20 ký tự")]
     public string? Action { get; set; }
+
+    /// <summary>
+    /// Định dạng file: <c>xlsx</c> (mặc định) hoặc <c>pdf</c>, không phân biệt hoa/thường.
+    /// Giá trị khác → <b>400</b> gắn vào <c>errors.format</c> — cùng lối <c>from</c>/<c>to</c>:
+    /// đây là tham số điều khiển cách dựng file, gõ sai mà lặng lẽ trả Excel là che mất lỗi.
+    ///
+    /// Trần dòng khác nhau theo định dạng: 10.000 dòng với Excel, 2.000 dòng với PDF.
+    /// </summary>
+    public string? Format { get; set; }
 }

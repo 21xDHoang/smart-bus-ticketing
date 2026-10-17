@@ -206,7 +206,7 @@ builder.Services.AddHostedService<MonthlyPassExpiryBackgroundService>();
 // Task story 23 — Vàng Thị Dăm. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
-// Xuất nhật ký kiểm toán ra Excel: GET /api/audit-logs/export.
+// Xuất nhật ký kiểm toán ra Excel/PDF: GET /api/audit-logs/export.
 // Task story 23 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Cố ý tách khỏi IAuditLogService ở trên: API truy vấn danh sách là việc của Kiên.
 builder.Services.AddScoped<IAuditLogExportService, AuditLogExportService>();
@@ -478,6 +478,21 @@ builder.Services.AddScoped<IRevenueReportService>(provider => new CachedRevenueR
 // vào nó — nhìn danh sách đăng ký là thấy quan hệ.
 builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>();
 
+// Xuất báo cáo doanh thu ra Excel/PDF: GET /api/reports/revenue/export (US 24 "Xuất dữ liệu",
+// Sprint 4 dòng 78). Task "API xuất báo cáo doanh thu / lấp đầy / nhật ký ra file" — Phùng Duy
+// Hoàng. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service KHÔNG tự tính doanh thu: gọi IRevenueReportService (bản có đệm 60 giây đăng ký ngay
+// trên) rồi dàn kết quả ra file — số trong file luôn khớp số endpoint JSON trả về. Vì vậy đăng ký
+// ở đây KHÔNG được chèn một dòng IRevenueReportService nào phía dưới (xem cảnh báo ở dòng đệm).
+builder.Services.AddScoped<IRevenueExportService, RevenueExportService>();
+
+// Xuất báo cáo tỷ lệ lấp đầy ra Excel/PDF: GET /api/reports/fill-rate/export (US 20 "Tỷ lệ lấp
+// đầy", Sprint 4 dòng 78). Cùng task — Phùng Duy Hoàng.
+// Service đọc thẳng Trips/Buses/Tickets theo định nghĩa đã chốt trong docs/api-contract.md; chưa
+// phụ thuộc báo cáo JSON GET /reports/fill-rate (dòng 66, việc của Kiên). Khi báo cáo JSON ra đời,
+// rút phép tính ở đây ra dùng chung thay vì chép công thức. Không ghi dữ liệu, không migration.
+builder.Services.AddScoped<IFillRateExportService, FillRateExportService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
@@ -537,6 +552,9 @@ builder.Services.AddScoped<IPeakHoursReportService, PeakHoursReportService>();
 // liền sau dòng đăng ký báo cáo gốc để thứ tự phụ thuộc đọc được ngay tại chỗ; không ghi dữ liệu,
 // không migration.
 builder.Services.AddScoped<IFrequencyProposalService, FrequencyProposalService>();
+
+// (Đăng ký xuất báo cáo tỷ lệ lấp đầy ra file đã nằm cạnh khối báo cáo doanh thu ở trên — hai
+// endpoint của cùng task dòng 78, đọc cùng một mạch.)
 
 // Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
 // sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).

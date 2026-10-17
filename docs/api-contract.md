@@ -7,9 +7,10 @@
 
 - Base URL (dev): `http://localhost:5080/api` — frontend đọc qua `VITE_API_URL`.
 - Định dạng: JSON, mọi tên thuộc tính dùng **camelCase** (do .NET `System.Text.Json`
-  với `PropertyNamingPolicy = CamelCase`). **Một ngoại lệ duy nhất:** `GET /audit-logs/export`
-  trả file `.xlsx` nhị phân — xem mục "Nhật ký kiểm toán". Riêng đường **lỗi** của endpoint
-  đó vẫn theo đúng định dạng JSON bên dưới.
+  với `PropertyNamingPolicy = CamelCase`). **Ba endpoint nhị phân** trả thẳng file thay vì
+  JSON: `GET /audit-logs/export`, `GET /reports/revenue/export` và
+  `GET /reports/fill-rate/export` (`.xlsx` mặc định, `.pdf` khi `format=pdf`) — xem mục tương
+  ứng. Riêng đường **lỗi** của các endpoint đó vẫn theo đúng định dạng JSON bên dưới.
 - Xác thực: gửi header `Authorization: Bearer <accessToken>` cho mọi endpoint, trừ
   `/auth/login`, `/auth/register` và ba endpoint tra cứu công khai của story 1:
   `GET /routes/search` (tìm tuyến), `GET /stops/search` (gợi ý trạm) và `GET /trips/search`
@@ -3212,7 +3213,7 @@ không có request. Vì vậy màn hình nhật ký lọc `action=Warning` là r
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
 | GET | `/audit-logs` | Truy vấn danh sách nhật ký — lọc theo người dùng, hành động, khoảng thời gian | — | JSON `{ items, total, page, pageSize }` |
-| GET | `/audit-logs/export` | Tải nhật ký ra file Excel | — | file `.xlsx` (nhị phân) |
+| GET | `/audit-logs/export` | Tải nhật ký ra file Excel / PDF | — | file `.xlsx` hoặc `.pdf` (nhị phân) |
 
 #### `GET /audit-logs`
 
@@ -3291,8 +3292,8 @@ Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin`
 
 #### `GET /audit-logs/export`
 
-Trả về **file `.xlsx`**, không phải JSON — đây là endpoint nhị phân duy nhất của hệ thống. File
-chứa toàn bộ bản ghi khớp bộ lọc, **mới nhất trước**.
+Trả về **file `.xlsx`** (mặc định) hoặc **file `.pdf`** (`format=pdf`), không phải JSON — một
+trong ba endpoint nhị phân của hệ thống. File chứa toàn bộ bản ghi khớp bộ lọc, **mới nhất trước**.
 
 | Tham số | Kiểu | Mặc định | Mô tả |
 |---|---|---|---|
@@ -3300,6 +3301,7 @@ chứa toàn bộ bản ghi khớp bộ lọc, **mới nhất trước**.
 | `to` | `string` (`yyyy-MM-dd`) | hôm nay (UTC) | Ngày kết thúc, theo **UTC**, tính **trọn ngày** |
 | `userId` | `string` (GUID) | — | Chỉ lấy thao tác của một người |
 | `action` | `string` | — | Chỉ lấy một loại hành động — một trong 6 mã ở bảng trên |
+| `format` | `string` | `xlsx` | Định dạng file: `xlsx` hoặc `pdf` (không phân biệt hoa/thường). Giá trị khác → **400** `errors.format` |
 
 Bỏ trống cả `from` lẫn `to` → lấy **30 ngày gần nhất** tính cả hôm nay. Cả hai đầu mút được tính
 **trọn ngày**: `to=2026-09-26` bao gồm mọi bản ghi tới hết `2026-09-26T23:59:59.9999999Z`.
@@ -3317,15 +3319,21 @@ xuất / người xuất, hàng 3 trống, **hàng 4 là tiêu đề cột**, d�
 | 6 | `Địa chỉ IP` | Để trống khi không lấy được |
 | 7 | `Mã người dùng` | GUID — khoá ổn định để tra ngược, vì SĐT đổi được và họ tên trùng được |
 
-Khoảng lọc không có bản ghi nào → **200** kèm file chỉ có tiêu đề, **không** phải 404.
+File **PDF** dùng đúng bảy cột trên, cùng thứ tự, cùng khung giờ UTC; tiêu đề tài liệu, khoảng
+thời gian / số dòng / thời điểm xuất / người xuất nằm ở khối đầu trang. PDF không có bộ lọc hay
+cố định dòng tiêu đề — file để đọc và trình ký, không phải để sàng lọc.
 
-Giới hạn **10.000 dòng mỗi lần xuất**. Vượt → **400** `errors.from` và `errors.to` kèm gợi ý thu
-hẹp khoảng — **không bao giờ trả về file thiếu dòng**, vì một chứng từ cụt mà trông như thành công
-còn tệ hơn một dòng báo lỗi.
+Khoảng lọc không có bản ghi nào → **200** kèm file chỉ có tiêu đề (Excel) hoặc bảng rỗng (PDF),
+**không** phải 404.
+
+Giới hạn **10.000 dòng mỗi lần xuất với Excel** và **2.000 dòng với PDF** — mỗi dòng PDF là chữ
+vector nên file 10.000 dòng rất nặng và chậm, còn Excel dựng cả DOM trong RAM. Vượt trần tương
+ứng → **400** `errors.from` và `errors.to` kèm gợi ý thu hẹp khoảng — **không bao giờ trả về file
+thiếu dòng**, vì một chứng từ cụt mà trông như thành công còn tệ hơn một dòng báo lỗi.
 
 Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin` → **403** · `to` sớm hơn `from` →
-**400** `errors.to` · `userId` sai định dạng GUID → **400** `errors.userId` · vượt 10.000 dòng →
-**400** `errors.from`, `errors.to`.
+**400** `errors.to` · `userId` sai định dạng GUID → **400** `errors.userId` · `format` lạ →
+**400** `errors.format` · vượt trần số dòng → **400** `errors.from`, `errors.to`.
 
 > **Vì sao trả 200 + file rỗng mà không phải 404?** Câu hỏi kiểm toán hay gặp nhất là *"tuần đó có
 > ai xoá gì không?"* — và "không" là một **câu trả lời**, không phải một lỗi. Trả 404 thì trình duyệt
@@ -3346,10 +3354,11 @@ Lỗi thường gặp: không đăng nhập → **401** · không phải `Admin`
 > lẫn SĐT qua `GET /admin/users`. Bản xuất chỉ còn GUID thì người ngồi đọc không tra được gì —
 > mất đúng mục đích của story.
 
-⚠️ **Cho người viết frontend:** đây là endpoint nhị phân đầu tiên nên phải gọi với
-`responseType: 'blob'`. Khi đó body lỗi cũng về dưới dạng `Blob`, khiến `error.response.data.message`
-trong `axiosClient.ts` là `undefined` và người dùng chỉ thấy câu thông báo chung. Màn hình tải file
-cần tự `await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc được `message`.
+⚠️ **Cho người viết frontend:** cả ba endpoint nhị phân phải gọi với `responseType: 'blob'`. Khi
+đó body lỗi cũng về dưới dạng `Blob`, khiến `error.response.data.message` trong `axiosClient.ts`
+là `undefined` và người dùng chỉ thấy câu thông báo chung. Màn hình tải file cần tự
+`await blob.text()` rồi `JSON.parse` cho nhánh lỗi mới đọc được `message`. Tên file nằm trong
+header `Content-Disposition` (ASCII không dấu, `attachment`); đừng tự ghép tên ở FE.
 
 ## Phản ánh — `/feedbacks`
 
@@ -4627,9 +4636,10 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 
 > Story 19 *"Doanh thu"*. ✅ Backend đã có (`RevenueReportController` — Trần Trung Hiếu, task
 > *"API báo cáo doanh thu theo ngày / tuần / tháng"*; `RevenueComparisonController` — Phùng Duy
-> Hoàng, task *"API so sánh doanh thu giữa các kỳ"*; cùng Sprint 4). Mục này là nửa "theo thời
-> gian" của story; **theo tuyến / theo xe / theo phương thức** (Kiên) và **xuất Excel/PDF** (các
-> task sau) sẽ mở rộng trên cùng bề mặt `/reports/revenue`.
+> Hoàng, task *"API so sánh doanh thu giữa các kỳ"*; `RevenueExportController` — Phùng Duy Hoàng,
+> task *"API xuất báo cáo doanh thu / lấp đầy / nhật ký ra file"*; cùng Sprint 4). Mục này là nửa
+> "theo thời gian" của story; **theo tuyến / theo xe / theo phương thức** (Kiên) sẽ mở rộng trên
+> cùng bề mặt `/reports/revenue`.
 
 **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 19 là nghiệp vụ của quản lý). Người đã
 đăng nhập nhưng không đủ quyền nhận **403** kèm body
@@ -4688,6 +4698,49 @@ Query — **mọi tham số bỏ trống được**:
   lại kết quả đã đệm, nên một giao dịch `Success` vừa ghi có thể xuất hiện chậm tới 60 giây.
   Khoá khác (đổi bất kỳ tham số nào, kể cả ngày mặc định sang ngày mới) đọc tươi. **Lỗi `400`/`404`
   không bao giờ vào đệm** — tuyến vừa tạo phải tra được ngay ở lượt kế tiếp.
+
+#### `GET /reports/revenue/export` — xuất báo cáo doanh thu ra Excel / PDF
+
+Trả về **file `.xlsx`** (mặc định) hoặc **file `.pdf`** (`format=pdf`) — một trong ba endpoint
+nhị phân của hệ thống, không phải JSON. Query **giống hệt** `GET /reports/revenue`, thêm đúng một
+tham số:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `granularity` | `day` | Độ mịn: `day` / `week` / `month` (không phân biệt hoa/thường) |
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+| `format` | `xlsx` | Định dạng file: `xlsx` hoặc `pdf` (không phân biệt hoa/thường). Giá trị khác → **400** `errors.format` |
+
+**Số liệu trong file là đúng số liệu `GET /reports/revenue` trả về** — endpoint xuất gọi lại
+chính `IRevenueReportService` (bản có đệm 60 giây), không dựng phép tính thứ hai. Vì vậy mọi quy
+tắc nền (chỉ giao dịch `Success`, mốc `paidAt`/`createdAt`, trục giờ Việt Nam, bucket liên tục,
+tối đa 366 ngày, tuyến không tồn tại → 404) giữ nguyên.
+
+**Nội dung file** — Excel: hàng 1 tiêu đề tài liệu, hàng 2 ghi khoảng thời gian / độ mịn / tổng
+doanh thu / tổng giao dịch / thời điểm xuất / người xuất, hàng 3 trống, **hàng 4 là tiêu đề cột**,
+dữ liệu từ hàng 5:
+
+| # | Cột | Ghi chú |
+|---|---|---|
+| 1 | `Kỳ` | `periodStart` dạng `yyyy-MM-dd` — đúng giá trị JSON, gồm cả bucket rỗng |
+| 2 | `Doanh thu (VND)` | Ô số thật, định dạng `#,##0` — sắp xếp và cộng được trong Excel |
+| 3 | `Số giao dịch` | Ô số thật, định dạng `#,##0` |
+
+File PDF dùng đúng ba cột trên; khối đầu trang thay cho hàng 1–2 của Excel. Cả hai định dạng đều
+chứa **toàn bộ bucket mà JSON trả về**, kể cả bucket 0 — không lược bỏ kỳ rỗng, để biểu đồ và bản
+in kể cùng một câu chuyện.
+
+Tên file: `bao-cao-doanh-thu_YYYYMMDD-HHmmssZ.xlsx` / `.pdf` (giờ UTC, ASCII không dấu).
+
+Không có trần số dòng riêng: tối đa 366 ngày nên bảng nhiều nhất 366 dòng (`day`), 54 dòng
+(`week`) hoặc 13 dòng (`month`).
+
+Lỗi: không đăng nhập → **401** · không phải `Admin`/`Manager` → **403** · `granularity` lạ →
+**400** `errors.granularity` · `to` trước `from` hoặc quá 366 ngày → **400** `errors.from`,
+`errors.to` · `format` lạ → **400** `errors.format` · `routeId` không tồn tại → **404**
+`Không tìm thấy tuyến đường.`
 
 #### `GET /reports/revenue/comparison` — so sánh kỳ hiện tại với kỳ liền trước
 
@@ -5608,14 +5661,105 @@ Query — **mọi tham số bỏ trống được**:
 - Khoảng `from` → `to` tối đa **366 ngày** · `to` trước `from` → **400** — lỗi gắn ở cả
   `errors.from` lẫn `errors.to` · `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
 
-> **Cho task "API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ" (Kiên):** mục này đã gộp
-> khách theo giờ KHỞI HÀNH; tỷ lệ lấp đầy cần thêm mẫu số **sức chứa** (ghế của xe) — đơn vị
-> khác hẳn (phần trăm), đừng đổi ngữ nghĩa của `passengers` ở đây, mở endpoint riêng trên bề mặt
-> `/reports` (ví dụ `GET /reports/fill-rate`).
+> **Tỷ lệ lấp đầy:** mục này gộp khách theo giờ KHỞI HÀNH; tỷ lệ lấp đầy cần thêm mẫu số **sức
+> chứa** (ghế của xe) — đơn vị khác hẳn (phần trăm), nên không đổi ngữ nghĩa của `passengers` ở
+> đây. Bản xuất file đã có ở mục **"Tỷ lệ lấp đầy — /reports/fill-rate"** ngay dưới (dòng 78,
+> Phùng Duy Hoàng). Task *"API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ"* của Kiên
+> (dòng 66) vẫn là người mở **JSON** `GET /reports/fill-rate`; khi làm, nên rút phép tính trong bản
+> xuất ra service dùng chung thay vì dựng định nghĩa thứ hai — hai bên phải ra cùng con số.
 >
 > **Đề xuất tần suất:** đã có endpoint riêng — xem mục
 > **"Đề xuất tần suất chạy xe — /reports/frequency-proposals"** ngay dưới. Endpoint đó đọc thẳng
 > `peakHours` của mục này, không dựng lại nền tính.
+
+## Tỷ lệ lấp đầy — `/reports/fill-rate`
+
+> Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có **bản xuất file** (`FillRateExportController` — Phùng
+> Duy Hoàng, task *"API xuất báo cáo doanh thu / lấp đầy / nhật ký ra file"*, Sprint 4 dòng 78).
+> **JSON `GET /reports/fill-rate` CHƯA có** — task của Kiên (dòng 66), xem bàn giao ở cuối mục.
+> Bản xuất tự tính từ `Trips` / `Routes` / `Buses` / `Tickets`, đúng công thức màn hình tỷ lệ lấp
+> đầy đang dựng bằng dữ liệu giả (`frontend/src/api/fillRateReportApi.ts`).
+
+#### `GET /reports/fill-rate/export` — xuất báo cáo tỷ lệ lấp đầy ra Excel / PDF
+
+Trả về **file `.xlsx`** (mặc định) hoặc **file `.pdf`** (`format=pdf`) — một trong ba endpoint
+nhị phân của hệ thống. Query:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Lọc theo tuyến; bỏ trống = toàn công ty. Không tồn tại → **404** |
+| `timeSlot` | — | Khung giờ khởi hành (giờ VN): `early` (05:00–09:00), `morning` (09:00–13:00), `afternoon` (13:00–17:00), `evening` (17:00–22:00). Biên dưới tính, biên trên KHÔNG tính; ngoài bốn khung (trước 5h, từ 22h) chỉ thấy khi bỏ trống tham số này |
+| `format` | `xlsx` | Định dạng file: `xlsx` hoặc `pdf` (không phân biệt hoa/thường). Giá trị khác → **400** `errors.format` |
+
+**Định nghĩa tỷ lệ lấp đầy** — một dòng cho mỗi chuyến trong khoảng, giờ khởi hành tính theo lịch
+Việt Nam:
+
+```
+tỷ lệ (%) = số vé Paid + Used của chuyến / sức chứa ghế của xe × 100    (làm tròn 1 chữ số)
+```
+
+- `Paid` + `Used` là khách thực sự có chỗ trên xe; vé `Cancelled` không tính. Chuyến `Cancelled`
+  không xuất hiện. Ba trạng thái còn lại (`Scheduled`, `Running`, `Completed`) đều có mặt.
+- Mẫu số là `Buses.Capacity`, không phải số ghế đã khai báo trong sơ đồ — sức chứa là con số vận
+  hành dùng để bán vé. Chuyến có `Capacity <= 0` bị loại khỏi cả bảng lẫn phần tóm tắt (chia cho 0
+  không có nghĩa), không xuất thành dòng 0%.
+- Chuyến đã lên lịch nhưng chưa tới giờ khởi hành vẫn có mặt (thường 0%): báo cáo phản ánh lượng
+  vé đã bán **tại thời điểm xuất**. Muốn nhìn toàn kỳ đã khép lại thì chọn `to` là hôm qua.
+- Tỷ lệ có thể **vượt 100%** khi dữ liệu bán vượt sức chứa (bán thêm khách đứng, hoặc sức chứa
+  khai báo sai) — giữ nguyên con số thật, **không kẹp về 100**, để bất thường lộ ra thay vì bị
+  che.
+
+**Phần tóm tắt** (khối đầu file):
+
+| Trường | Nghĩa |
+|---|---|
+| `totalTrips` | Số chuyến trong bảng sau khi lọc |
+| `averageFillRatePct` | Trung bình **không trọng số** của tỷ lệ từng chuyến, 1 chữ số — cùng cách màn hình đang tính; chuyến ít ghế và chuyến nhiều ghế nặng như nhau. Không có chuyến → `0` |
+| `fullTrips` | Số chuyến đầy: tỷ lệ **≥ 80%** |
+| `emptyTrips` | Số chuyến trống: tỷ lệ **< 50%** |
+
+Hai ngưỡng 80/50 tính trên tỷ lệ **đã làm tròn 1 chữ số** — cùng con số hiện trên dòng, để người
+đọc không gặp chuyến ghi `80.0` mà không được đếm là đầy.
+
+**Nội dung file** — Excel: hàng 1 tiêu đề tài liệu, hàng 2 ghi khoảng thời gian / tuyến / khung
+giờ / tổng số chuyến / tỷ lệ trung bình / số chuyến đầy / số chuyến trống / thời điểm xuất / người
+xuất, hàng 3 trống, **hàng 4 là tiêu đề cột**, dữ liệu từ hàng 5:
+
+| # | Cột | Ghi chú |
+|---|---|---|
+| 1 | `Mã chuyến` | `C{mã tuyến}-{HHmm}` theo giờ Việt Nam, ví dụ `C01-0530` — **chỉ để đọc**, không phải khoá: cùng tuyến cùng giờ ở hai ngày khác nhau sẽ trùng mã. Khoá thật là `Id` của chuyến |
+| 2 | `Tuyến` | `Mã · Tên`, ví dụ `01 · Bến xe Mỹ Đình — Bến xe Gia Lâm` |
+| 3 | `Giờ khởi hành (VN)` | `yyyy-MM-dd HH:mm` theo giờ Việt Nam |
+| 4 | `Xe` | Biển số |
+| 5 | `Sức chứa` | Ô số thật |
+| 6 | `Khách` | Ô số thật — vé `Paid` + `Used` |
+| 7 | `Tỷ lệ lấp đầy (%)` | Ô số thật, 1 chữ số thập phân |
+
+Các chuyến sắp theo **giờ khởi hành tăng dần** (trùng giờ thì theo `Id` để kết quả ổn định). File
+PDF dùng đúng bảy cột trên; khối đầu trang thay cho hàng 1–2 của Excel. Cả hai định dạng đều chứa
+**toàn bộ chuyến thoả bộ lọc**, không lược bỏ chuyến 0%.
+
+Giới hạn: **10.000 dòng với Excel** và **2.000 dòng với PDF**. Vượt trần → **400**, gắn lỗi vào
+`errors.from` + `errors.to`, **không bao giờ cắt bớt file** — file thiếu dòng mà không báo là báo
+cáo sai. Khoảng lọc không có chuyến nào → **200** kèm file chỉ có tiêu đề (Excel) hoặc bảng rỗng
+(PDF), không phải 404.
+
+Tên file: `bao-cao-ty-le-lap-day_YYYYMMDD-HHmmssZ.xlsx` / `.pdf` (giờ UTC, ASCII không dấu).
+
+Lỗi: không đăng nhập → **401** · không phải `Admin`/`Manager` → **403** · `to` trước `from` hoặc
+quá 366 ngày → **400** `errors.from`, `errors.to` · `timeSlot` lạ → **400** `errors.timeSlot` ·
+`format` lạ → **400** `errors.format` · `routeId` không tồn tại → **404**
+`Không tìm thấy tuyến đường.` · vượt trần dòng → **400** `errors.from`, `errors.to`.
+
+> **Cho Kiên — JSON `GET /reports/fill-rate` (dòng 66):** bản xuất đã chốt định nghĩa nền ở trên và
+> đang sở hữu phép tính (`FillRateExportService`). Khi làm JSON, **rút phép tính ra service dùng
+> chung** rồi cho cả hai gọi vào, đừng chép công thức — nếu không, màn hình và file xuất sẽ lệch
+> nhau ngay lần đầu ai đó sửa một bên. Endpoint xuất không phụ thuộc JSON nên Kiên không bị chặn.
+>
+> **Cho Vàng (test dòng 82):** bản xuất dùng chung `IReportPdfService` của Hiếu (dòng 77); nội dung
+> Excel/PDF đã mô tả ở trên là hợp đồng để ghim.
 
 ## Đề xuất tần suất chạy xe — `/reports/frequency-proposals`
 

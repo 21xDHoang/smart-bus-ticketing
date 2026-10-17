@@ -8,7 +8,7 @@ using SmartBus.Api.Services;
 namespace SmartBus.Api.Controllers;
 
 /// <summary>
-/// Xuất nhật ký kiểm toán ra Excel — US 23, Phùng Duy Hoàng.
+/// Xuất nhật ký kiểm toán ra Excel/PDF — US 23, Phùng Duy Hoàng.
 /// Hợp đồng đầy đủ ở mục "Nhật ký kiểm toán" của docs/api-contract.md.
 ///
 /// Chỉ Admin: doc-comment của <see cref="RbacPolicies.AdminOnly"/> đã ghi rõ "nhật ký kiểm toán"
@@ -25,17 +25,15 @@ namespace SmartBus.Api.Controllers;
 [Authorize(Policy = RbacPolicies.AdminOnly)]
 public class AuditLogExportController : ControllerBase
 {
-    private const string XlsxContentType =
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
     private readonly IAuditLogExportService _auditLogExportService;
 
     public AuditLogExportController(IAuditLogExportService auditLogExportService)
         => _auditLogExportService = auditLogExportService;
 
     /// <summary>
-    /// Tải nhật ký trong khoảng lọc ra file .xlsx, mới nhất trước.
-    /// Bỏ trống <c>from</c>/<c>to</c> thì lấy 30 ngày gần nhất. Vượt trần 10.000 dòng → 400.
+    /// Tải nhật ký trong khoảng lọc ra file .xlsx (mặc định) hoặc .pdf, mới nhất trước.
+    /// Bỏ trống <c>from</c>/<c>to</c> thì lấy 30 ngày gần nhất. <c>format</c> lạ → 400; vượt trần
+    /// 10.000 dòng với Excel hoặc 2.000 dòng với PDF → 400.
     /// </summary>
     [HttpGet("export")]
     public async Task<IActionResult> Export(
@@ -65,7 +63,7 @@ public class AuditLogExportController : ControllerBase
         // RFC 5987 — client không hỗ trợ filename* (script, công cụ tải cũ) sẽ nhận
         // "nh_t-k_-ki_m-to_n_….xlsx", tức đúng cái ngược lại của "dễ đọc". Tiếng Việt để ở tiêu
         // đề cột BÊN TRONG file, nơi không bị mã hoá gì.
-        return File(file.Content, XlsxContentType, file.FileName);
+        return File(file.Content, file.ContentType, file.FileName);
     }
 
     private IActionResult Failure<T>(ServiceResult<T> result) => result.ErrorKind switch

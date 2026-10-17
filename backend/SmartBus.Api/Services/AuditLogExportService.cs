@@ -1,3 +1,4 @@
+using System.Globalization;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using SmartBus.Api.Data;
@@ -7,7 +8,7 @@ using SmartBus.Api.Entities;
 namespace SmartBus.Api.Services;
 
 /// <summary>
-/// Dựng file Excel nhật ký kiểm toán — task story 23, Phùng Duy Hoàng.
+/// Dựng file Excel/PDF nhật ký kiểm toán — task story 23, Sprint 4 dòng 78, Phùng Duy Hoàng.
 /// Hợp đồng đầy đủ ở mục "Nhật ký kiểm toán" của docs/api-contract.md.
 ///
 /// Chỉ ĐỌC bảng AuditLogs. Không sửa entity, không thêm cột, không migration.
@@ -22,6 +23,15 @@ public sealed class AuditLogExportService : IAuditLogExportService
     /// Đổi con số này thì sửa luôn một dòng trong docs/api-contract.md.
     /// </summary>
     public const int MaxRows = 10_000;
+
+    /// <summary>
+    /// Trần số dòng khi xuất PDF. Thấp hơn Excel vì QuestPDF dựng cả tài liệu trong RAM trước khi
+    /// ghi ra mảng byte, và bảng 7 cột đổ dọc trên A4 dày đặc chữ — 2.000 dòng đã là mấy chục
+    /// trang, nhiều hơn nữa thì người đọc cũng không dùng bản giấy.
+    ///
+    /// Đổi con số này thì sửa luôn một dòng trong docs/api-contract.md.
+    /// </summary>
+    public const int MaxPdfRows = 2_000;
 
     /// <summary>Bỏ trống cả from lẫn to thì lấy 30 ngày gần nhất, TÍNH CẢ hôm nay.</summary>
     private const int DefaultWindowDays = 30;
@@ -52,14 +62,28 @@ public sealed class AuditLogExportService : IAuditLogExportService
     private static readonly double[] ColumnWidths = [22, 24, 16, 12, 30, 16, 38];
 
     private readonly AppDbContext _db;
+    private readonly IReportPdfService _reportPdfService;
 
-    public AuditLogExportService(AppDbContext db) => _db = db;
+    public AuditLogExportService(AppDbContext db, IReportPdfService reportPdfService)
+    {
+        _db = db;
+        _reportPdfService = reportPdfService;
+    }
 
     public async Task<ServiceResult<AuditLogExportFile>> ExportAsync(
         ExportAuditLogsRequest request,
         string? exportedBy,
         CancellationToken cancellationToken)
     {
+        // Kiểm định dạng TRƯỚC khi đếm/truy vấn: tham số hỏng không tốn truy vấn nào và lỗi gắn
+        // đúng ô input. Trần dòng phụ thuộc định dạng nên phải chốt cap sau bước này.
+        if (!ReportExportFormats.TryParse(request.Format, out var format))
+        {
+            return FormatError();
+        }
+
+        var cap = format == ReportExportFormat.Pdf ? MaxPdfRows : MaxRows;
+
         var todayUtc = DateOnly.FromDateTime(DateTime.UtcNow);
         var fromDate = request.From ?? todayUtc.AddDays(-(DefaultWindowDays - 1));
         var toDate = request.To ?? todayUtc;
@@ -78,15 +102,15 @@ public sealed class AuditLogExportService : IAuditLogExportService
         // Chốt 1 — đếm trước, chưa nạp dòng nào. Vượt trần thì thoát ngay, không dựng workbook.
         var total = await query.CountAsync(cancellationToken);
 
-        if (total > MaxRows)
+        if (total > cap)
         {
-            return TooManyRows(total, fromDate, toDate);
+            return TooManyRows(total, fromDate, toDate, cap, format);
         }
 
         var raw = await query
             .OrderByDescending(a => a.CreatedAt)
             .ThenBy(a => a.Id)
-            .Take(MaxRows + 1)
+            .Take(cap + 1)
             .Select(a => new
             {
                 a.CreatedAt,
@@ -100,9 +124,9 @@ public sealed class AuditLogExportService : IAuditLogExportService
         // Chốt 2 — chặn đua. Middleware ghi nhật ký ở request khác có thể chèn thêm dòng giữa
         // CountAsync và ToListAsync. Vẫn vượt thì TỪ CHỐI chứ không cắt bớt rồi xuất: một chứng
         // từ thiếu dòng mà không ai biết còn tệ hơn không có chứng từ nào.
-        if (raw.Count > MaxRows)
+        if (raw.Count > cap)
         {
-            return TooManyRows(total, fromDate, toDate);
+            return TooManyRows(total, fromDate, toDate, cap, format);
         }
 
         var actors = await LoadActorsAsync(raw.Select(r => r.UserId), cancellationToken);
@@ -129,14 +153,26 @@ public sealed class AuditLogExportService : IAuditLogExportService
 
         return ServiceResult<AuditLogExportFile>.Ok(new AuditLogExportFile
         {
-            Content = BuildWorkbook(rows, fromDate, toDate, generatedAtUtc, exportedBy),
+            Content = format == ReportExportFormat.Pdf
+                ? BuildPdf(rows, fromDate, toDate, generatedAtUtc, exportedBy)
+                : BuildWorkbook(rows, fromDate, toDate, generatedAtUtc, exportedBy),
+
+            ContentType = format.ContentType(),
 
             // Tên file ASCII không dấu là CỐ Ý — xem chú thích ở AuditLogExportController.Export.
             // Cùng một biến generatedAtUtc dùng cho cả tên file lẫn dòng mô tả, nên hai chỗ
             // không bao giờ lệch nhau.
-            FileName = $"nhat-ky-kiem-toan_{generatedAtUtc:yyyyMMdd-HHmmss}Z.xlsx",
+            FileName = $"nhat-ky-kiem-toan_{generatedAtUtc:yyyyMMdd-HHmmss}Z{format.Extension()}",
         });
     }
+
+    private static ServiceResult<AuditLogExportFile> FormatError()
+        => ServiceResult<AuditLogExportFile>.Invalid(
+            ReportExportFormats.InvalidMessage,
+            new Dictionary<string, string[]>
+            {
+                ["format"] = [ReportExportFormats.InvalidMessage],
+            });
 
     private IQueryable<AuditLog> BuildQuery(
         ExportAuditLogsRequest request,
@@ -207,12 +243,16 @@ public sealed class AuditLogExportService : IAuditLogExportService
     private static ServiceResult<AuditLogExportFile> TooManyRows(
         int total,
         DateOnly fromDate,
-        DateOnly toDate)
+        DateOnly toDate,
+        int cap,
+        ReportExportFormat format)
     {
+        var formatLabel = format == ReportExportFormat.Pdf ? "PDF" : "Excel";
+
         var message =
             $"Khoảng {fromDate:yyyy-MM-dd} → {toDate:yyyy-MM-dd} có {total} bản ghi, " +
-            $"vượt trần {MaxRows} dòng mỗi lần xuất. Hãy thu hẹp khoảng thời gian, " +
-            "hoặc lọc thêm theo người thao tác / hành động.";
+            $"vượt trần {cap} dòng mỗi lần xuất file {formatLabel}. " +
+            "Hãy thu hẹp khoảng thời gian, hoặc lọc thêm theo người thao tác / hành động.";
 
         // Gắn lỗi vào CẢ HAI ô ngày vì cả hai đều phải đổi mới hẹp lại được — đúng tinh thần
         // "lỗi theo từng trường để form gắn vào ô input" của mục D3.
@@ -292,6 +332,54 @@ public sealed class AuditLogExportService : IAuditLogExportService
         workbook.SaveAs(stream);
 
         return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Bản PDF của cùng một bảng. Thời gian giữ khung UTC và in dạng chuỗi
+    /// <c>yyyy-MM-dd HH:mm:ss</c> — PDF là bản để đọc/đối chiếu, không phải bản để lọc như Excel;
+    /// ghi chuỗi có cùng múi giờ với nhãn cột "(UTC)" để người kiểm toán không cộng nhầm 7 tiếng.
+    /// </summary>
+    private byte[] BuildPdf(
+        IReadOnlyList<ExportRow> rows,
+        DateOnly fromDate,
+        DateOnly toDate,
+        DateTime generatedAtUtc,
+        string? exportedBy)
+    {
+        var tableRows = rows
+            .Select(row => (IReadOnlyList<string>)
+            [
+                row.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                row.UserFullName ?? UnknownActor,
+                row.UserPhoneNumber ?? string.Empty,
+                row.Action.ToString(),
+                row.Target ?? string.Empty,
+                row.IpAddress ?? string.Empty,
+                row.UserId?.ToString() ?? string.Empty,
+            ])
+            .ToList();
+
+        var model = new ReportPdfModel
+        {
+            Title = DocumentTitle,
+            Subtitle =
+                $"Khoảng thời gian: {fromDate:yyyy-MM-dd} → {toDate:yyyy-MM-dd} (UTC, trọn ngày) · " +
+                $"Số dòng: {rows.Count}",
+            ExportedAt = generatedAtUtc,
+            GeneratedBy = exportedBy,
+
+            // Bảng rỗng vẫn hợp lệ: khoảng lọc không có bản ghi thì file phải có đầu cột để người
+            // đọc thấy "không có dòng nào", không phải một trang giấy trắng.
+            Table = new ReportTable
+            {
+                Headers = Headers,
+                Rows = tableRows,
+            },
+
+            FooterNote = "Thời gian hiển thị theo UTC, trọn ngày; bản ghi mới nhất ở trên.",
+        };
+
+        return _reportPdfService.GeneratePdf(model);
     }
 
     /// <summary>
