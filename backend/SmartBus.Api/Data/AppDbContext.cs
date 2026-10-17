@@ -123,9 +123,11 @@ public partial class AppDbContext : DbContext
     // US 7 (Invoices — không có trong A9, Vàng Thị Dăm): task "Migrate bảng Invoices" của bảng phân
     // công **Sprint 4, dòng 27** (ưu tiên Cao, 3 điểm). HOÁ ĐƠN ĐIỆN TỬ của một lượt thanh toán —
     // neo vào Payments chứ không vào vé, theo đúng giả định đã ghi trước ở docs/32 §3.1.
-    // ⚠️ Dòng 27 này là dòng migrate DUY NHẤT của Sprint 4 còn nợ: dòng 50 (PriorityGroups,
-    // PriorityApprovals) đã xong từ Sprint 2 dưới tên DiscountRequests — xem docs/38 §0 (bản dài ở
-    // docs/37 §8.1, nhưng docs/37 nằm ở nhánh feature/10-… CHƯA MERGE nên đừng trích nó làm nguồn).
+    // ⚠️ Dòng 27 từng là dòng migrate CUỐI CÙNG của Sprint 4 còn nợ — nay đã xong (bảng Invoices có
+    // trên main), nên sheet Sprint 4 hết nợ migrate. Dòng 50 (PriorityGroups, PriorityApprovals) đã
+    // xong từ Sprint 2 dưới tên DiscountRequests — xem docs/38 §0 (bản dài ở docs/37 §8.1; docs/37
+    // nay ĐÃ ở trên main qua PR #195 nên trích được — câu cũ ở đây ghi "docs/37 nằm ở nhánh
+    // feature/10-… CHƯA MERGE nên đừng trích nó làm nguồn" đã hết đúng).
     // A9 KHÔNG có bảng này — lần thứ sáu việc "A9 lệch thực tế" được nhắc, xem
     // docs/38-csdl-hoa-don.md §1. Xem AppDbContext.Invoice.cs.
     partial void ConfigureInvoice(ModelBuilder modelBuilder);

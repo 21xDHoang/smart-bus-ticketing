@@ -11,6 +11,29 @@
 
 > ⚠️ **Đọc mục §0 trước.** Task này **không** nằm ở Sprint 4 — xem §0.
 
+---
+
+## ✅ Cập nhật 16/10/2026 — cả hai nhánh đã merge, Sprint 4 hết nợ migrate
+
+Tài liệu này viết lúc hai nhánh còn đang chờ merge, nên **§1, §8.3, §8.6 và §9** còn nhiều câu nói
+*"chưa merge"* hoặc *"còn nợ"* — **đã hết đúng**. Trạng thái thật trên `main` hôm nay (`3dc2b0e`):
+
+| Việc | Tài liệu ghi lúc viết | Nay |
+|---|---|---|
+| Nhánh `feature/10-migrate-notificationtemplates-subscriptions` | chưa merge | ✅ **đã merge — PR #195** (`081cec9`) |
+| Nhánh `feature/8-api-tra-cuu-hoan-tien` (Sprint 4 dòng 42) | chưa merge | ✅ **đã merge — PR #205** (`4d60f79`) |
+| Sprint 4 dòng 27 — `Invoices` | 🔴 chưa ai làm thật | ✅ **đã xong** — `Entities/Invoice.cs`, `AppDbContext.Invoice.cs`, migration `20261014171948_Sprint4_Invoices` |
+
+**Năm dòng migrate của sheet Sprint 4 nay đều xong** — dòng 2 (`TicketChanges`, `CancellationRequests`),
+14 (`TicketValidations`), 27 (`Invoices`), 38 (`Refunds`, `RefundLogs`), 50 (`PriorityGroups`,
+`PriorityApprovals` → `DiscountRequests`) — **không còn dòng nào nợ**. Câu *"Sprint 4 còn đúng MỘT
+dòng migrate chưa ai làm"* ở §0.1 và danh sách còn nợ ở §8.3 là **ảnh chụp lúc viết**, giữ nguyên làm
+mốc lịch sử; đừng dùng chúng để tra việc còn nợ.
+
+⚠️ Hệ quả cho người đọc sau: mọi câu trong tài liệu này nói một thứ *"nằm ở nhánh chưa merge"* đều đã
+cũ. Cách tra đúng vẫn là ba bước ở §8.1 — **theo User Story, không theo tên bảng** — rồi đối chiếu
+`main`, chứ đừng đối chiếu tài liệu này.
+
 ## 0. Hai điều phải nói ngay
 
 ### 0.1 Task này thuộc **Sprint 5**, không phải Sprint 4
@@ -27,6 +50,8 @@ thêm task, không sửa story, không đổi thứ tự task nào của Sprint 
 1. **Nghiệm thu của Sprint 5 đã bớt việc**: dòng 14 coi như xong phần CSDL, không làm lại.
 2. **Sprint 4 còn đúng MỘT dòng migrate chưa ai làm** — dòng 27 (*"Migrate bảng Invoices"*), cũng giao
    Vàng Thị Dăm. Nếu ai đó đọc tài liệu này để tìm việc Sprint 4 còn nợ thì dòng 27 là câu trả lời.
+   ⚠️ **Nay đã hết đúng**: dòng 27 đã xong, Sprint 4 hết nợ migrate — xem khối *Cập nhật 16/10/2026*
+   ở đầu tài liệu.
    ⚠️ Bản đầu của tài liệu này kể thêm **dòng 50** (`PriorityGroups`, `PriorityApprovals`) vào danh
    sách còn nợ — **sai**, dòng đó đã xong từ Sprint 2 dưới tên `DiscountRequests`. Cách tra sai và
    cách tra đúng ở **§8.1**: tra theo **User Story**, không tra theo **tên bảng**.
@@ -324,7 +349,9 @@ Nhóm thấy sai thì nói; đổi tên một migration **chưa merge** thì r�
    tế (§1). A9 nằm trong `quy uoc.docx` ngoài repo.
 2. **Task Sprint 5 dòng 14 coi như xong phần CSDL** — dòng 14 trong bảng phân công nên được đánh dấu,
    để không ai làm lại `Notifications`. Việc này kéo theo §0.1: xác nhận việc làm sớm là chủ ý.
-3. **Sprint 4 còn nợ hai dòng migrate của Dăm, và một dòng đang nằm ở nhánh chưa merge.** Cả năm
+3. **Sprint 4 còn nợ hai dòng migrate của Dăm, và một dòng đang nằm ở nhánh chưa merge.**
+   ⚠️ **Đã hết đúng (16/10/2026)**: cả hai nhánh đã merge và dòng 27 đã xong, nên **không còn dòng
+   migrate nào nợ** — phần dưới giữ nguyên làm mốc lịch sử, xem khối cập nhật ở đầu tài liệu. Cả năm
    dòng migrate của sheet Sprint 4 đều giao Vàng Thị Dăm (dòng 2, 14, 27, 38, 50 — sheet có **đúng
    60 dòng**, đã tra cả 60 và **không** có dòng nào tên *"Notifications, NotificationTemplates,
    Subscriptions"*). Bốn dòng còn lại tra theo code:
