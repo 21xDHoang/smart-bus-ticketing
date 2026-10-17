@@ -62,25 +62,33 @@ builder.Services.AddScoped<ITripService, TripService>();
 // Đặt tên RouteTrips để tránh đụng ITripService/TripService của API chi tiết chuyến /trips/{id}
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
 // Thông báo trễ/đổi lịch trình (US 10, dòng 44 Sprint 4 — Phùng Duy Hoàng): từ đây
-// IRouteTripsService resolve ra CHUỖI HAI LỚP BỌC, ngoài cùng là NotifyingRouteTripsService:
+// IRouteTripsService resolve ra CHUỖI BA LỚP BỌC, ngoài cùng là NotifyingRouteTripsService:
 //
 //   IRouteTripsService → NotifyingRouteTripsService → ArrivalEstimatingRouteTripsService
-//                                                                   → RouteTripsService (lớp trần)
+//                        → FleetAwareRouteTripsService → RouteTripsService (lớp trần)
 //
 // - Notifying (ngoài cùng) báo tin khi PUT /routes/{routeId}/trips/{id} đổi giờ chạy thật.
-// - ArrivalEstimating (giữa) điền giờ đến cho các chuyến vừa sinh hàng loạt — màn hình "Cấu hình
-//   tần suất" không còn cột Giờ đến trống; job nhân bản ngày sau cũng có mốc để chép sang.
-// Cả hai đều là decorator để RouteTripsService (file của Hiếu — luật E1) không phải sửa. Lớp ước
-// lượng đăng ký bằng KIỂU RIÊNG (không phải IRouteTripsService) để tránh vòng lặp DI; Notifying
-// nhận IRouteTripsService nên đọc được lớp giữa. Cùng lối RefundAttemptService bên dưới: lớp trần
-// trước, lớp bọc sau; DI lấy bản đăng ký sau cùng nên ai thêm dòng IRouteTripsService nữa ở dưới sẽ
-// thay thế im lặng (TripScheduleChangeWiringTests ghim Notifying ở ngoài cùng). Notifier tự quyết
-// định "có gì để báo" bằng cách so ảnh chụp giờ cũ với dữ liệu đã lưu; hợp đồng không-bao-giờ-ném-
-// lỗi + lý do bọc decorator ở Services/ITripScheduleChangeNotifier.cs và NotifyingRouteTripsService.cs.
+// - ArrivalEstimating (giữa trên) điền giờ đến cho các chuyến vừa sinh hàng loạt — màn hình "Cấu
+//   hình tần suất" không còn cột Giờ đến trống; job nhân bản ngày sau cũng có mốc để chép sang.
+// - FleetAware (trong cùng) sửa ngữ nghĩa trùng giờ của CreateAsync cho đội xe nhiều chiếc: cùng
+//   TUYẾN chỉ cấm trùng đúng giờ khởi hành, cùng XE mới cấm chồng khung giờ (nợ của đợt mở rộng đội
+//   xe 17/10/2026 — Phùng Duy Hoàng; trước đó thêm một chuyến lẻ vào tuyến đã có lịch luôn bị 409).
+// Cả ba đều là decorator để RouteTripsService (file của Hiếu — luật E1) không phải sửa. Các lớp bọc
+// đăng ký bằng KIỂU RIÊNG (không phải IRouteTripsService) để tránh vòng lặp DI; Notifying nhận
+// IRouteTripsService nên đọc được lớp ngoài cùng của chuỗi. Cùng lối RefundAttemptService bên dưới:
+// lớp trần trước, lớp bọc sau; DI lấy bản đăng ký sau cùng nên ai thêm dòng IRouteTripsService nữa
+// ở dưới sẽ thay thế im lặng (TripScheduleChangeWiringTests ghim Notifying ở ngoài cùng). Notifier
+// tự quyết định "có gì để báo" bằng cách so ảnh chụp giờ cũ với dữ liệu đã lưu; hợp đồng không-bao-
+// giờ-ném-lỗi + lý do bọc decorator ở Services/ITripScheduleChangeNotifier.cs và
+// NotifyingRouteTripsService.cs.
 builder.Services.AddScoped<RouteTripsService>();
+builder.Services.AddScoped<FleetAwareRouteTripsService>(provider =>
+    new FleetAwareRouteTripsService(
+        provider.GetRequiredService<RouteTripsService>(),
+        provider.GetRequiredService<AppDbContext>()));
 builder.Services.AddScoped<ArrivalEstimatingRouteTripsService>(provider =>
     new ArrivalEstimatingRouteTripsService(
-        provider.GetRequiredService<RouteTripsService>(),
+        provider.GetRequiredService<FleetAwareRouteTripsService>(),
         provider.GetRequiredService<AppDbContext>(),
         provider.GetRequiredService<ILogger<ArrivalEstimatingRouteTripsService>>()));
 builder.Services.AddScoped<ITripScheduleChangeNotifier, TripScheduleChangeNotifier>();
@@ -89,6 +97,13 @@ builder.Services.AddScoped<IRouteTripsService>(provider => new NotifyingRouteTri
     provider.GetRequiredService<ITripScheduleChangeNotifier>(),
     provider.GetRequiredService<AppDbContext>(),
     provider.GetRequiredService<ILogger<NotifyingRouteTripsService>>()));
+
+// Sinh chuyến hàng loạt chia đều cho NHIỀU xe: POST /routes/{routeId}/trips/generate-fleet.
+// Nợ của đợt mở rộng đội xe 17/10/2026 — Phùng Duy Hoàng. Service riêng thay vì sửa
+// RouteTripsService.GenerateAsync (file của Hiếu — luật E1); endpoint cũ vẫn giữ hành vi một xe,
+// màn hình "Cấu hình tần suất" chuyển sang endpoint mới. Hợp đồng: docs/api-contract.md mục
+// "POST /routes/{routeId}/trips/generate-fleet".
+builder.Services.AddScoped<IFleetTripGenerationService, FleetTripGenerationService>();
 
 // Giờ đến TỪNG TRẠM của một chuyến: GET/PUT /routes/{routeId}/trips/{id}/stop-times.
 // Giờ dự kiến suy ra từ RouteStops.DistanceKm khi đọc; bảng TripStopTimeOverrides chỉ giữ mốc

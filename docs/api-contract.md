@@ -3051,7 +3051,8 @@ mục "Chuyến xe — `/trips`" phía trên.
 | POST | `/routes/{routeId}/trips` | Thêm một chuyến lẻ | `CreateTrip` | `Trip` (201) |
 | PUT | `/routes/{routeId}/trips/{id}` | Sửa xe / giờ chạy / trạng thái | `UpdateTrip` | `Trip` |
 | DELETE | `/routes/{routeId}/trips/{id}` | **Huỷ chuyến** — chuyển về `Cancelled` | — | `Trip` |
-| POST | `/routes/{routeId}/trips/generate` | **Sinh chuyến hàng loạt** theo tần suất (quy ước A8.3) | `GenerateTrips` | `GenerateTripsResponse` |
+| POST | `/routes/{routeId}/trips/generate` | **Sinh chuyến hàng loạt một xe** (quy ước A8.3) — ⚠️ ngừng dùng, xem mục bên dưới | `GenerateTrips` | `GenerateTripsResponse` |
+| POST | `/routes/{routeId}/trips/generate-fleet` | **Sinh chuyến hàng loạt, tự chia vòng tròn cho nhiều xe** của tuyến (quy ước A8.3) | `GenerateFleetTrips` | `GenerateFleetTripsResponse` |
 | PATCH | `/routes/{routeId}/trips/driver-assignment` | **Gán một tài xế cho nhiều chuyến** cùng lúc (màn hình "Phân công điều xe") | `AssignDriverToTrips` | `DriverAssignmentResponse` |
 | GET | `/routes/{routeId}/trips/{id}/stop-times` | **Giờ đến từng trạm** của một chuyến — dự kiến từ km + giờ đã ghi đè | — | `TripStopTimesResponse` |
 | PUT | `/routes/{routeId}/trips/{id}/stop-times` | **Ghi đè giờ các trạm trung gian** — thay thế toàn phần | `UpdateTripStopTimes` | `TripStopTimesResponse` |
@@ -3109,8 +3110,11 @@ Tham số query (đều không bắt buộc):
 Chuyến mới luôn ở trạng thái `Scheduled` — muốn đổi trạng thái thì dùng PUT, cùng lối tuyến mới
 luôn `Active`. Lỗi thường gặp: tuyến không tồn tại → **404** · xe không tồn tại → **404** · xe
 không ở trạng thái khai thác → **409** · `arrivalTime` không sau `departureTime` → **400**
-`errors.arrivalTime` · trùng khung giờ → **409** · vượt trần chuyến/ngày → **400**
+`errors.arrivalTime` · chồng khung giờ với chuyến khác **cùng xe**, hoặc trùng **đúng giờ khởi
+hành** với chuyến khác **cùng tuyến** → **409** · vượt trần chuyến/ngày → **400**
 `errors.departureTime` — hai kiểm tra sau xem mục "Hai kiểm tra khi tạo lịch trình" bên dưới.
+Hai chuyến khác xe của cùng tuyến **được phép** chồng khung giờ: đó chính là cách một tuyến chạy
+nhiều xe song song.
 
 #### `PUT /routes/{routeId}/trips/{id}`
 
@@ -3152,7 +3156,14 @@ quy ước A4 cấm thêm cột `IsDeleted` nên dùng đúng cột trạng thá
 - Chuyến đã `Cancelled` gọi lại → **200** không báo lỗi (idempotent).
 - Chuyến đã `Completed` → **409** — huỷ chuyến đã chạy xong là viết lại lịch sử, chặn hẳn.
 
-#### `POST /routes/{routeId}/trips/generate` — sinh chuyến hàng loạt (quy ước A8.3)
+#### `POST /routes/{routeId}/trips/generate` — sinh chuyến hàng loạt một xe (quy ước A8.3) — ⚠️ NGỪNG DÙNG
+
+> ⚠️ **Ngừng dùng từ 17/10/2026.** Endpoint này gán **toàn bộ** chuyến trong dải cho **một xe** và
+> coi mọi chuyến đang hoạt động khác **cùng tuyến** là xung đột, nên không dùng được cho tuyến khai
+> thác nhiều xe song song — vừa dồn hàng chục chuyến/ngày vào một xe, vừa chặn oan lần sinh sau.
+> Màn hình "Sinh chuyến" đã chuyển sang `POST /routes/{routeId}/trips/generate-fleet`. Endpoint này
+> giữ nguyên hành vi cũ để tương thích, **không nhận sửa đổi mới** và sẽ trả **409** nếu tuyến đã
+> có lịch nhiều xe. Mã mới phải dùng `generate-fleet`.
 
 Đây chính là API "lập lịch trình": **ngày áp dụng** là phần ngày của `startTime`, **giờ khởi hành**
 là phần giờ của `startTime` và từng bước `frequencyMinutes`, **tần suất** là khoảng cách giữa hai
@@ -3201,6 +3212,90 @@ Trả **200** kèm danh sách chuyến **vừa sinh** (không gồm chuyến cũ
   **409** · `endTime` không sau `startTime` → **400** `errors.endTime` · `frequencyMinutes` ngoài
   khoảng 1..1440 → **400** `errors.frequencyMinutes` · trùng khung giờ với chuyến hiện có →
   **409** · vượt trần chuyến/ngày của tuyến → **400** `errors.endTime`.
+
+#### `POST /routes/{routeId}/trips/generate-fleet` — sinh chuyến và chia cho nhiều xe
+
+Cùng tham số lịch trình như `generate` (ngày áp dụng lấy từ phần ngày của `startTime`, chuyến đầu
+đúng `startTime`, mỗi chuyến sau cách `frequencyMinutes`, chuyến cuối không vượt `endTime`), nhưng
+nhận **danh sách xe** thay vì một xe. Backend tự chia từng chuyến cho một xe **rảnh** trong danh
+sách — đây là API "lập lịch trình" chuẩn cho tuyến khai thác nhiều xe song song.
+
+```json
+// GenerateFleetTrips — body
+{
+  "busIds": [
+    "1c9a4f05-0000-0000-0000-000000000000",
+    "2d0b5a16-0000-0000-0000-000000000000",
+    "3e1c6b27-0000-0000-0000-000000000000",
+    "4f2d7c38-0000-0000-0000-000000000000"
+  ],
+  "startTime": "2026-10-18T05:30:00+07:00",
+  "endTime": "2026-10-18T19:00:00+07:00",
+  "frequencyMinutes": 15
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `busIds` | ✅ | **1–100** GUID xe có thật, **không trùng nhau**; mọi xe phải đang `Active`. Thứ tự trong mảng là thứ tự ưu tiên khi chia chuyến |
+| `startTime` | ✅ | Như `generate` |
+| `endTime` | ✅ | Như `generate` |
+| `frequencyMinutes` | ✅ | Số nguyên từ **1** đến **1440** |
+
+**Cách chia xe.** Chuyến được duyệt theo thứ tự thời gian; mỗi chuyến giao cho xe **đầu tiên
+theo vòng tròn** đang rảnh trong khoảng `[departureTime, departureTime + thời gian chạy]`. "Rảnh"
+nghĩa là không chồng lấn với chuyến đang hoạt động (`Scheduled`/`Running`) đã có của xe đó **hoặc**
+với chuyến vừa chia cho chính xe đó trong lô này. Chuyến nối đuôi (xe vừa tới bến đúng lúc khởi
+hành chuyến kế) **không** tính là chồng lấn. Con trỏ vòng tròn tiến sau mỗi lượt chia, nên tải được
+rải đều thay vì dồn hết cho xe đầu tiên.
+
+**Số xe tối thiểu** xấp xỉ `ceil(thời gian chạy / frequencyMinutes)` khi các xe chưa có lịch khác;
+ít hơn thì một số chuyến không còn xe rảnh và cả lần gọi bị chặn. Màn hình "Sinh chuyến" tính sẵn
+con số này theo `distanceKm` của tuyến để cảnh báo trước.
+
+**Sinh chuyến khi tuyến đã có lịch.** Chỉ **trùng đúng giờ khởi hành** với một chuyến đang hoạt
+động **cùng tuyến** mới bị coi là xung đột — hai chuyến cùng tuyến khác giờ (kể cả khác xe chồng
+khung giờ) là bình thường. Xe đã có chuyến khác chồng khung giờ thì đơn giản là không được chọn.
+Nhờ vậy có thể sinh bù một khung giờ hẹp mà không đụng lịch đã có, miễn còn xe rảnh.
+
+**Giờ đến** của mọi chuyến vừa sinh được điền ngay khi tạo, cùng công thức ước lượng với `generate`
+(25 km/h, làm tròn lên bội số 5 phút, tối thiểu 15 phút). Giờ này cũng là căn cứ xét xe rảnh.
+
+Trả **200** kèm danh sách chuyến vừa sinh và tải từng xe:
+
+```json
+// GenerateFleetTripsResponse
+{
+  "items": [ /* Trip[] vừa sinh — mỗi phần tử có busId/busLicensePlate riêng */ ],
+  "total": 55,
+  "busLoads": [
+    { "busId": "1c9a4f05-0000-0000-0000-000000000000", "busLicensePlate": "20B-500.01", "tripCount": 14 },
+    { "busId": "2d0b5a16-0000-0000-0000-000000000000", "busLicensePlate": "20B-500.02", "tripCount": 14 },
+    { "busId": "3e1c6b27-0000-0000-0000-000000000000", "busLicensePlate": "20B-500.03", "tripCount": 14 },
+    { "busId": "4f2d7c38-0000-0000-0000-000000000000", "busLicensePlate": "20B-500.04", "tripCount": 13 }
+  ]
+}
+```
+
+- `busLoads` có **đủ mọi xe trong `busIds`**, kể cả xe không được chia chuyến nào (`tripCount: 0`),
+  theo đúng thứ tự trong request — màn hình đối chiếu được ngay xe nào thừa, xe nào thiếu.
+- Một lần gọi sinh **tối đa 500 chuyến**; vượt → **400** `errors.endTime`.
+- Thao tác là **nguyên tử**: bất kỳ lỗi nào (trùng giờ tuyến, thiếu xe rảnh, vượt trần) đều không
+  tạo chuyến nào.
+- Trần **200 chuyến đang hoạt động/ngày (UTC) cho mỗi tuyến** áp như mọi đường tạo lịch trình;
+  kiểm tra từng ngày bị dải giờ chạm tới.
+- Lỗi thường gặp: tuyến không tồn tại → **404** · tuyến đã `Inactive` → **409** — không sinh lịch
+  cho tuyến ngừng khai thác · `busIds` rỗng / trùng GUID / quá 100 → **400** `errors.busIds` · xe
+  không tồn tại → **404** · xe không `Active` → **409** · `endTime` không sau `startTime` → **400**
+  `errors.endTime` · `frequencyMinutes` ngoài 1..1440 → **400** `errors.frequencyMinutes` · quá 500
+  chuyến/lần → **400** `errors.endTime` · trùng đúng giờ khởi hành với chuyến khác cùng tuyến →
+  **409** · không còn xe rảnh cho một chuyến → **400** `errors.busIds` · vượt trần chuyến/ngày →
+  **400** `errors.endTime`.
+
+> **Vì sao `busIds` chứ không để backend tự chọn xe?** Hệ thống không có bảng gán xe ↔ tuyến
+> (quan hệ suy ra từ chuyến), nên "xe nào thuộc tuyến" là câu hỏi không có nguồn trả lời. Người
+> điều hành chọn đội xe cho lịch trình này; backend chỉ lo chia sao cho không xe nào chạy chồng.
+> Chọn thiếu xe là lỗi tham số (400) chứ không phải xung đột dữ liệu (409).
 
 #### `PATCH /routes/{routeId}/trips/driver-assignment` — gán tài xế hàng loạt
 
@@ -3290,21 +3385,30 @@ Lỗi thường gặp:
 
 ### Hai kiểm tra khi tạo lịch trình
 
-Áp dụng cho cả `POST /routes/{routeId}/trips` lẫn `POST /routes/{routeId}/trips/generate`
-(xem chi tiết lỗi ở từng endpoint phía trên):
+Áp dụng cho `POST /routes/{routeId}/trips` và `POST /routes/{routeId}/trips/generate-fleet`
+(xem chi tiết lỗi ở từng endpoint phía trên). `POST /routes/{routeId}/trips/generate` cũ giữ
+hành vi một xe cũ — mọi chuyến của tuyến đều bị coi là xung đột — vì đã ngừng dùng.
 
-**1. Trùng khung giờ → 409.** Khung giờ của một chuyến là khoảng [giờ khởi hành, giờ đến];
-chuyến chưa có giờ đến thì coi là một mốc (chỉ chặn chuyến trùng đúng giờ khởi hành hoặc nằm
-lọt trong khung giờ của chuyến kia). Chuyến mới không được chồng khung giờ với chuyến đang
-hoạt động (`Scheduled`/`Running`) **cùng tuyến hoặc cùng xe** — một xe không thể chạy hai
-chuyến cùng lúc. Chuyến nối đuôi (chuyến này đến đúng giờ chuyến kia khởi hành) không tính
-là trùng. Chuyến đã `Cancelled` hoặc `Completed` không tính — chúng không chiếm chỗ trên
-thời gian biểu nữa.
+**1. Xung đột thời gian → 409.** Xét trên **hai tài nguyên độc lập**; mỗi bên có luật riêng:
+
+- **Cùng xe:** hai chuyến có khung giờ **chồng lấn** mới xung đột. Khung giờ của một chuyến là
+  `[giờ khởi hành, giờ đến]`; chuyến chưa có giờ đến thì coi là một mốc. Chuyến nối đuôi (chuyến
+  này đến **đúng** giờ chuyến kia khởi hành) **không** tính là chồng lấn — một xe hoàn toàn có
+  thể chạy nối chuyến. Chỉ chuyến đang hoạt động (`Scheduled`/`Running`) mới tính; `Cancelled` và
+  `Completed` không chiếm chỗ trên thời gian biểu nữa.
+- **Cùng tuyến:** chỉ **trùng đúng giờ khởi hành** mới xung đột — đó là hai chuyến không thể phân
+  biệt trên thời gian biểu. Hai chuyến cùng tuyến **khác giờ** là bình thường, kể cả khi chúng do
+  **khác xe** chạy chồng khung giờ: đó chính là cách một tuyến khai thác nhiều xe song song.
+
+Hệ quả cho người điều hành: thêm một chuyến cho tuyến đã có lịch thì chỉ cần chọn **một xe còn
+rảnh** trong khung giờ đó và một **giờ khởi hành chưa có ai chạy** — không phải xoá lịch cũ.
+`generate-fleet` tự lo phần chọn xe; nó chỉ báo **400** `errors.busIds` khi không còn xe nào rảnh
+cho một chuyến, chứ không coi cả tuyến là đã kín.
 
 **2. Vượt sức chứa tuyến → 400.** Mỗi ngày (tính theo **UTC**, cùng lối bộ lọc của
 `/audit-logs`) một tuyến chỉ có tối đa **200 chuyến đang hoạt động** — `Scheduled` và
-`Running`, không tính `Cancelled`/`Completed`. Với generate, kiểm tra từng ngày bị lịch trình
-chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200 thì cả lần gọi bị chặn.
+`Running`, không tính `Cancelled`/`Completed`. Với `generate-fleet`, kiểm tra từng ngày bị lịch
+trình chạm tới: tổng chuyến đã có + sắp sinh của ngày đó vượt 200 thì cả lần gọi bị chặn.
 
 > **Vì sao trùng khung giờ trả 409 mà vượt trần trả 400?** Trùng khung giờ là xung đột với dữ
 > liệu đang có — cùng loại trùng giá vé, trùng trạm (mục D2). Vượt trần là tham số của lịch

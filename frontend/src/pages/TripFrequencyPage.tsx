@@ -24,14 +24,19 @@ import type { TableProps } from 'antd';
 import { SyncOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
-import { TRIP_STATUS_META, fetchRouteOptions } from '../api/tripApi';
+import { TRIP_STATUS_META } from '../api/tripApi';
 import type { Trip, TripRouteOption, TripStatus } from '../api/tripApi';
+import { fetchRoutes } from '../api/routeApi';
 import { fetchActiveBusOptions } from '../api/busApi';
 import type { BusOption } from '../api/busApi';
 import { fetchRouteStops } from '../api/routeStopApi';
 import type { RouteStop } from '../api/routeStopApi';
-import { generateTrips } from '../api/tripGenerateApi';
-import type { GenerateTripsPayload, GenerateTripsResult } from '../api/tripGenerateApi';
+import { generateFleetTrips } from '../api/tripGenerateApi';
+import type {
+  FleetBusLoad,
+  GenerateFleetTripsPayload,
+  GenerateFleetTripsResult,
+} from '../api/tripGenerateApi';
 import type { AppError } from '../api/axiosClient';
 import {
   EmptyState,
@@ -46,16 +51,20 @@ import { formatDateTime, formatTime } from '../components/ui/format';
 // ("Là quản lý, tôi muốn thiết lập thời gian biểu và tần suất chạy xe cho từng tuyến
 // theo ngày"), task Sprint 2 — Hoàng Văn Thịnh.
 //
-// Một lần cấu hình = một lần gọi POST /routes/{routeId}/trips/generate: chọn tuyến +
-// ngày áp dụng + giờ bắt đầu/kết thúc + tần suất + xe → xem trước số chuyến sẽ sinh →
+// Một lần cấu hình = một lần gọi POST /routes/{routeId}/trips/generate-fleet: chọn tuyến +
+// ngày áp dụng + giờ bắt đầu/kết thúc + tần suất + ĐỘI XE → xem trước số chuyến sẽ sinh →
 // bấm sinh. Khác màn hình "Quản lý lịch trình" (/trip-schedule — của Hạnh, thêm/sửa/huỷ
 // TỪNG chuyến lẻ) ở chỗ đây là thao tác theo lô sinh cả dải chuyến cách đều nhau.
 //
+// Endpoint cũ `.../trips/generate` gắn CẢ dải vào một xe nên tuyến 15 phút/chuyến dồn
+// hàng chục chuyến lên một xe (đúng lỗi đợt mở rộng đội xe 17/10/2026). Endpoint mới nhận
+// danh sách xe và chia vòng tròn: mỗi chuyến đi tới xe đầu tiên theo thứ tự ưu tiên còn rảnh
+// trong khung giờ của chuyến, nên một xe chỉ chạy chuyến kế tiếp sau khi đã về bến.
+//
 // Hợp đồng — docs/api-contract.md mục "Lịch trình chạy xe — /routes/{routeId}/trips",
-// tiểu mục "POST .../trips/generate". Hai luật của hợp đồng được phản ánh ngay trên
-// màn hình: tối đa 500 chuyến mỗi lần (khối xem trước chặn trước khi bấm) và thao tác
-// nguyên tử — một chuyến trùng khung giờ thì không chuyến nào được tạo (ghi trong
-// hộp xác nhận).
+// tiểu mục "POST .../trips/generate-fleet". Ba luật của hợp đồng được phản ánh ngay trên
+// màn hình: tối đa 500 chuyến mỗi lần (khối xem trước chặn trước khi bấm), thao tác
+// nguyên tử, và số xe tối thiểu ≈ thời gian chạy / tần suất (cảnh báo trước khi bấm).
 //
 // Điểm đến của chuyến là TRẠM CUỐI theo `stopOrder` của tuyến (A8.6), không phải chuỗi
 // `Route.Destination` — chuỗi đó chỉ là nhãn hành chính, có thể lệch với trạm thật đã gán.
@@ -72,8 +81,47 @@ const VIETNAM_OFFSET = '+07:00';
 /** Trần số chuyến một lần sinh — hợp đồng ghi rõ "tối đa 500 chuyến", vượt là 400. */
 const MAX_TRIPS_PER_CALL = 500;
 
+/** Trần `pageSize` của GET /routes — `[Range(1, 100)]`, xem docs/api-contract.md. */
+const ROUTE_PICKER_PAGE_SIZE = 100;
+
 /** Tần suất gợi ý nhanh (phút) — bấm một nút thay vì gõ số. */
 const FREQUENCY_PRESETS = [10, 15, 20, 30, 60];
+
+/**
+ * Tuyến cho ô chọn khi SINH CHUYẾN: chỉ lấy tuyến đang khai thác.
+ *
+ * `fetchRouteOptions` của tripApi.ts cố ý trả cả tuyến ngừng khai thác để còn
+ * xem chuyến cũ, nhưng endpoint sinh chuyến từ chối tuyến Inactive (409). Giữ nguyên file
+ * của người khác nên viết loader riêng ở đây, lặp trang đúng như loader đó để tuyến thứ 101
+ * không âm thầm biến mất.
+ */
+async function fetchActiveRouteOptions(): Promise<TripRouteOption[]> {
+  const options: TripRouteOption[] = [];
+
+  for (let page = 1; ; page += 1) {
+    const { items, total } = await fetchRoutes({
+      status: 'Active',
+      page,
+      pageSize: ROUTE_PICKER_PAGE_SIZE,
+    });
+
+    options.push(
+      ...items.map(({ id, code, name, origin, destination, distanceKm }) => ({
+        id,
+        code,
+        name,
+        origin,
+        destination,
+        distanceKm,
+      })),
+    );
+
+    // Chốt chặn để không lặp vô hạn nếu `total` sai.
+    if (options.length >= total || items.length === 0) break;
+  }
+
+  return options;
+}
 
 /**
  * Ghép ngày áp dụng + giờ trong ngày thành ISO 8601 kèm offset Việt Nam để gửi lên server.
@@ -271,7 +319,8 @@ interface FrequencyFormValues {
   startTime: Dayjs;
   endTime: Dayjs;
   frequencyMinutes: number;
-  busId: string;
+  /** Thứ tự trong mảng là thứ tự ưu tiên khi chia chuyến — giữ nguyên thứ tự người dùng chọn. */
+  busIds: string[];
 }
 
 /**
@@ -309,7 +358,7 @@ export default function TripFrequencyPage() {
   // Chế độ áp dụng của lần cấu hình hiện tại — mặc định chỉ ngày đã chọn.
   const [applyMode, setApplyMode] = useState<ApplyMode>('once');
   // Kết quả lần sinh gần nhất — giữ cả thông tin tuyến/ngày/chế độ để tiêu đề khỏi mơ hồ.
-  const [result, setResult] = useState<GenerateTripsResult | null>(null);
+  const [result, setResult] = useState<GenerateFleetTripsResult | null>(null);
   const [resultInfo, setResultInfo] = useState<{
     routeLabel: string;
     /** Trạm cuối theo thứ tự trạm; chỉ rơi về `Route.Destination` khi tuyến chưa gán trạm. */
@@ -325,10 +374,14 @@ export default function TripFrequencyPage() {
     permanent: boolean;
   } | null>(null);
 
-  // Tải danh sách tuyến + xe đang khai thác cho hai ô chọn.
+  // Tải danh sách tuyến + xe đang khai thác cho hai ô chọn. Tuyến Inactive bị loại từ đây:
+  // endpoint sinh chuyến chỉ nhận tuyến Active, hiện chúng ra chỉ để người dùng bấm rồi ăn 409.
   const loadOptions = useCallback(async () => {
     try {
-      const [routeList, busList] = await Promise.all([fetchRouteOptions(), fetchActiveBusOptions()]);
+      const [routeList, busList] = await Promise.all([
+        fetchActiveRouteOptions(),
+        fetchActiveBusOptions(),
+      ]);
       setRoutes(routeList);
       setBuses(busList);
 
@@ -433,17 +486,31 @@ export default function TripFrequencyPage() {
     [resultInfo],
   );
 
-  // Tần suất ngắn hơn thời gian chạy: một xe chưa kịp về bến đã có chuyến kế tiếp. Backend chỉ
-  // kiểm tra trùng khung giờ với chuyến CÓ SẴN, không kiểm tra chéo các chuyến vừa sinh trong
-  // cùng lượt — nên cảnh báo ở đây là lưới an toàn cho điều độ, không chặn thao tác.
-  const frequencyTooShort =
+  // Số xe tối thiểu để giữ tần suất: mỗi chuyến chiếm xe khoảng `travel` phút, nên một xe chỉ
+  // quay lại sau ceil(travel / tần suất) chuyến. Đúng công thức hợp đồng generate-fleet dùng
+  // để giải thích lỗi "không còn xe rảnh"; cảnh báo ở đây không chặn thao tác vì khung giờ
+  // ngắn vẫn có thể xếp vừa với ít xe hơn.
+  const selectedBusIds = watched.busIds ?? [];
+  const watchedFrequency = watched.frequencyMinutes ?? 0;
+  const requiredBusCount =
+    estimatedTravelMinutes !== null && watchedFrequency > 0
+      ? Math.ceil(estimatedTravelMinutes / watchedFrequency)
+      : null;
+  const busShortage =
     preview.kind === 'ok' &&
-    estimatedTravelMinutes !== null &&
-    (watched.frequencyMinutes ?? 0) < estimatedTravelMinutes;
+    requiredBusCount !== null &&
+    selectedBusIds.length < requiredBusCount;
 
   const applyFrequency = (value: number) => {
     form.setFieldValue('frequencyMinutes', value);
     setWatched((current) => ({ ...current, frequencyMinutes: value }));
+  };
+
+  /** Chọn cả đội xe đang khai thác — đội hiện có hơn 60 chiếc, chọn tay từng chiếc rất mỏi. */
+  const selectAllBuses = () => {
+    const allBusIds = buses.map((bus) => bus.id);
+    form.setFieldValue('busIds', allBusIds);
+    setWatched((current) => ({ ...current, busIds: allBusIds }));
   };
 
   const handleSubmit = async () => {
@@ -458,8 +525,9 @@ export default function TripFrequencyPage() {
     const route = routes.find((item) => item.id === values.routeId);
     // Chốt chế độ tại thời điểm bấm sinh — người dùng có thể đổi nút trong lúc chờ API.
     const permanent = applyMode === 'forever';
-    const payload: GenerateTripsPayload = {
-      busId: values.busId,
+    const payload: GenerateFleetTripsPayload = {
+      // Giữ nguyên thứ tự người dùng chọn — backend coi đó là thứ tự ưu tiên khi chia chuyến.
+      busIds: values.busIds,
       startTime: toVietnamIso(values.date, values.startTime),
       endTime: toVietnamIso(values.date, values.endTime),
       frequencyMinutes: values.frequencyMinutes,
@@ -471,7 +539,7 @@ export default function TripFrequencyPage() {
       // lại km) không được làm sai dòng thời gian của lịch đã sinh. Lỗi tải trạm KHÔNG được
       // làm hỏng thao tác sinh chuyến — rơi về danh sách đang có trên màn hình, có thể rỗng.
       const [generated, fetchedStops] = await Promise.all([
-        generateTrips(values.routeId, payload),
+        generateFleetTrips(values.routeId, payload),
         fetchRouteStops(values.routeId)
           .then((list) => [...list].sort((a, b) => a.stopOrder - b.stopOrder))
           .catch(() => null),
@@ -497,15 +565,18 @@ export default function TripFrequencyPage() {
         date: values.date,
         permanent,
       });
+      // `busLoads` gồm cả xe 0 chuyến — chỉ đếm xe THỰC SỰ nhận chuyến để câu thông báo
+      // không nói "chia cho 60 xe" trong khi 40 xe đứng không vì khung giờ ngắn.
+      const usedBusCount = generated.busLoads.filter((bus) => bus.tripCount > 0).length;
       message.success(
         permanent
-          ? `Đã sinh ${generated.total} chuyến — lịch sẽ tự lặp lại hằng ngày.`
-          : `Đã sinh ${generated.total} chuyến.`,
+          ? `Đã sinh ${generated.total} chuyến, chia cho ${usedBusCount}/${generated.busLoads.length} xe — lịch sẽ tự lặp lại hằng ngày.`
+          : `Đã sinh ${generated.total} chuyến, chia cho ${usedBusCount}/${generated.busLoads.length} xe.`,
       );
     } catch (error) {
       const appError = error as AppError;
       if (appError.errors) {
-        // Lỗi theo từng trường (endTime, frequencyMinutes, busId…) → gắn thẳng vào ô input;
+        // Lỗi theo từng trường (endTime, frequencyMinutes, busIds…) → gắn thẳng vào ô input;
         // tên ô trùng tên trường API nên map thẳng, không cần bảng dịch.
         form.setFields(
           Object.entries(appError.errors).map(([name, fieldErrors]) => ({
@@ -514,7 +585,7 @@ export default function TripFrequencyPage() {
           })),
         );
       } else {
-        // 409 trùng khung giờ (không chuyến nào được tạo), 404 tuyến/xe, 403… — hiện toast.
+        // 409 trùng đúng giờ khởi hành (không chuyến nào được tạo), 404 tuyến/xe, 403… — hiện toast.
         message.error(appError.customMessage || 'Sinh chuyến thất bại.');
       }
     } finally {
@@ -585,11 +656,34 @@ export default function TripFrequencyPage() {
     },
   ];
 
+  // Bảng phân công theo xe: `busLoads` giữ đúng thứ tự ưu tiên đã chọn và gồm cả xe 0 chuyến —
+  // nhờ vậy người lập lịch thấy ngay xe nào chưa được dùng trong khung giờ này.
+  const busLoadColumns: TableProps<FleetBusLoad>['columns'] = [
+    {
+      title: 'Xe',
+      dataIndex: 'busLicensePlate',
+      key: 'busLicensePlate',
+      render: (plate: string) => <StatusTag>{plate}</StatusTag>,
+    },
+    {
+      title: 'Số chuyến nhận',
+      dataIndex: 'tripCount',
+      key: 'tripCount',
+      width: 140,
+      align: 'right',
+      render: (count: number) => (
+        <Text strong={count > 0} type={count > 0 ? undefined : 'secondary'}>
+          {count}
+        </Text>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader
         title="Cấu hình tần suất chạy xe"
-        subtitle="Chọn tuyến, ngày áp dụng, khung giờ và tần suất — hệ thống sinh các chuyến cách đều nhau; bật Vĩnh viễn để lịch tự lặp lại hằng ngày."
+        subtitle="Chọn tuyến, ngày áp dụng, khung giờ, tần suất và đội xe — hệ thống sinh các chuyến cách đều nhau rồi chia vòng tròn cho từng xe; bật Vĩnh viễn để lịch tự lặp lại hằng ngày."
       />
 
       <PageCard>
@@ -632,7 +726,7 @@ export default function TripFrequencyPage() {
                   </Form.Item>
                 </Col>
 
-                <Col xs={24} md={6}>
+                <Col xs={24} md={12}>
                   <Form.Item
                     name="date"
                     label={forever ? 'Bắt đầu áp dụng' : 'Ngày áp dụng'}
@@ -661,18 +755,45 @@ export default function TripFrequencyPage() {
                     <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
+              </Row>
 
-                <Col xs={24} md={6}>
+              <Row gutter={16}>
+                <Col xs={24}>
                   <Form.Item
-                    name="busId"
-                    label="Xe buýt"
-                    rules={[{ required: true, message: 'Vui lòng chọn xe buýt' }]}
+                    name="busIds"
+                    label="Đội xe tham gia"
+                    rules={[{ required: true, message: 'Vui lòng chọn ít nhất một xe' }]}
+                    extra={
+                      <Space
+                        size={8}
+                        style={{ width: '100%', justifyContent: 'space-between' }}
+                        wrap
+                      >
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Thứ tự chọn là thứ tự ưu tiên khi chia chuyến — mỗi chuyến chỉ chạy
+                          trên một xe.
+                        </Text>
+                        <Button
+                          size="small"
+                          type="link"
+                          htmlType="button"
+                          onClick={selectAllBuses}
+                          disabled={buses.length === 0}
+                        >
+                          Chọn tất cả ({buses.length})
+                        </Button>
+                      </Space>
+                    }
                   >
                     <Select
+                      mode="multiple"
+                      allowClear
                       showSearch
                       optionFilterProp="label"
-                      placeholder="Chọn xe đang khai thác"
+                      placeholder="Chọn một hoặc nhiều xe đang khai thác"
                       notFoundContent="Không có xe nào đang khai thác"
+                      loading={loadingOptions}
+                      maxTagCount="responsive"
                       options={buses.map((bus) => ({
                         value: bus.id,
                         label: `${bus.licensePlate} · ${bus.busType} · ${bus.capacity} chỗ`,
@@ -789,6 +910,13 @@ export default function TripFrequencyPage() {
                           ? `Bắt đầu ${watched.date.format('DD/MM/YYYY')} và tự lặp lại hằng ngày. Chuyến đầu ${preview.first}, chuyến cuối ${preview.last}, cách nhau mỗi ${watched.frequencyMinutes} phút.`
                           : `Chuyến đầu ${preview.first}, chuyến cuối ${preview.last}, cách nhau mỗi ${watched.frequencyMinutes} phút.`}
                       </div>
+                      {requiredBusCount !== null && (
+                        <div style={{ marginTop: 4 }}>
+                          Đội xe: đang chọn {selectedBusIds.length} xe — cần ít nhất{' '}
+                          <Text strong>{requiredBusCount}</Text> xe cho tần suất {watchedFrequency}{' '}
+                          phút. Chuyến được chia vòng tròn theo thứ tự ưu tiên đã chọn.
+                        </div>
+                      )}
                       {selectedRoute && estimatedTravelMinutes !== null && (
                         <div style={{ marginTop: 4 }}>
                           Điểm đến: <Text strong>{previewDestination || '—'}</Text>
@@ -876,13 +1004,13 @@ export default function TripFrequencyPage() {
                     }
                   />
                 )}
-              {frequencyTooShort && estimatedTravelMinutes !== null && (
+              {busShortage && estimatedTravelMinutes !== null && requiredBusCount !== null && (
                 <Alert
                   type="warning"
                   showIcon
                   style={{ marginTop: 8 }}
-                  message="Tần suất ngắn hơn thời gian chạy ước lượng"
-                  description={`Mỗi chuyến mất khoảng ${estimatedTravelMinutes} phút, nhưng cứ ${watched.frequencyMinutes} phút lại có chuyến kế tiếp — một xe không kịp về bến để chạy chuyến sau. Tăng tần suất lên ít nhất ${estimatedTravelMinutes} phút hoặc bố trí thêm xe.`}
+                  message={`Chưa đủ xe để giữ tần suất ${watchedFrequency} phút`}
+                  description={`Mỗi chuyến mất khoảng ${estimatedTravelMinutes} phút nên cần ít nhất ${requiredBusCount} xe để chuyến kế tiếp có xe rảnh; đang chọn ${selectedBusIds.length} xe. Hệ thống vẫn thử chia — nếu không còn xe rảnh cho một chuyến, cả lượt sinh bị từ chối (nguyên tử). Chọn thêm xe hoặc giãn tần suất.`}
                 />
               )}
             </div>
@@ -896,8 +1024,8 @@ export default function TripFrequencyPage() {
                 }
                 description={
                   forever
-                    ? 'Lịch bắt đầu từ ngày đã chọn và tự lặp lại hằng ngày. Nếu một chuyến trong dải trùng khung giờ với chuyến đã có, KHÔNG chuyến nào được tạo — thao tác nguyên tử.'
-                    : 'Nếu một chuyến trong dải trùng khung giờ với chuyến đã có, KHÔNG chuyến nào được tạo — thao tác nguyên tử.'
+                    ? `Lịch bắt đầu từ ngày đã chọn và tự lặp lại hằng ngày. Chuyến được chia vòng tròn cho ${selectedBusIds.length} xe theo thứ tự ưu tiên. Nếu một chuyến trùng ĐÚNG giờ khởi hành với chuyến đã có trên tuyến, hoặc không còn xe rảnh cho một chuyến, KHÔNG chuyến nào được tạo — thao tác nguyên tử.`
+                    : `Chuyến được chia vòng tròn cho ${selectedBusIds.length} xe theo thứ tự ưu tiên. Nếu một chuyến trùng ĐÚNG giờ khởi hành với chuyến đã có trên tuyến, hoặc không còn xe rảnh cho một chuyến, KHÔNG chuyến nào được tạo — thao tác nguyên tử.`
                 }
                 okText="Sinh chuyến"
                 cancelText="Xem lại"
@@ -982,6 +1110,35 @@ export default function TripFrequencyPage() {
                 }
               />
             )}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 8,
+              }}
+            >
+              <Text strong>Phân công theo xe</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {result.busLoads.filter((bus) => bus.tripCount > 0).length}/
+                {result.busLoads.length} xe có chuyến — thứ tự theo lúc chọn
+              </Text>
+            </div>
+            <Table<FleetBusLoad>
+              rowKey="busId"
+              size="small"
+              columns={busLoadColumns}
+              dataSource={result.busLoads}
+              pagination={false}
+              scroll={{ x: 320, y: 240 }}
+              style={{ marginBottom: 20 }}
+            />
+
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              Danh sách chuyến vừa sinh
+            </Text>
             <Table<Trip>
               rowKey="id"
               columns={columns}

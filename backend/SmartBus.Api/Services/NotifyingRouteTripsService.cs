@@ -14,10 +14,12 @@ namespace SmartBus.Api.Services;
 ///
 /// <para>
 /// <b>Chuỗi lớp bọc trong DI:</b> Notifying (lớp này) → <see cref="ArrivalEstimatingRouteTripsService"/>
-/// → <see cref="RouteTripsService"/>. Lớp này nhận <c>IRouteTripsService</c> chứ không nhận lớp trần để
-/// có thể nằm ngoài lớp điền giờ đến; nhờ vậy <c>GenerateAsync</c> vẫn đi qua lớp ước lượng, còn
-/// <c>UpdateAsync</c> vẫn chạy trước khi chụp/so giờ như cũ. Không đổi thứ tự: Notifying phải ngoài
-/// cùng để mọi lượt sửa chuyến — kể cả lượt đi qua lớp ước lượng — đều được báo tin.
+/// → <see cref="FleetAwareRouteTripsService"/> → <see cref="RouteTripsService"/>. Lớp này nhận
+/// <c>IRouteTripsService</c> chứ không nhận lớp trần để có thể nằm ngoài lớp điền giờ đến và lớp sửa
+/// ngữ nghĩa trùng giờ; nhờ vậy <c>GenerateAsync</c> vẫn đi qua lớp ước lượng, <c>CreateAsync</c> đi
+/// qua lớp hiểu đội xe nhiều chiếc, còn <c>UpdateAsync</c> vẫn chạy trước khi chụp/so giờ như cũ.
+/// Không đổi thứ tự: Notifying phải ngoài cùng để mọi lượt sửa chuyến — kể cả lượt đi qua các lớp
+/// trong — đều được báo tin.
 /// </para>
 ///
 /// <para>
