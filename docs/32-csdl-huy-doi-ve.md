@@ -69,6 +69,37 @@ cầu huỷ luôn gắn với một chuyến đã có `DepartureTime`.
 (tiền chỉ rời hệ thống ở bảng `Refunds`, US 8, có vòng đời riêng kèm retry) và **không** có "khách tự
 rút yêu cầu" (chưa task nào của Sprint 4 làm nút đó). Lý do đầy đủ ở doc-comment enum.
 
+### 2.1 Phí huỷ — quy định 24h / 12h / 2h
+
+Service `ICancellationFeeService.GetCancellationFee(ticketPrice, departureAt, now)` (dòng 6 — Nguyễn Duy Kiên) là
+nguồn duy nhất của quy định này. Hàm thuần: không đọc CSDL, không đọc đồng hồ; người gọi truyền
+`Ticket.Price`, giờ chạy và `now` (UTC).
+
+| Khoảng cách tới giờ chạy lúc khách bấm gửi | Được huỷ? | Phí |
+|---|---|---|
+| `>= 24 giờ` | ✅ | `0` — miễn phí |
+| `>= 12 giờ` và `< 24 giờ` | ✅ | 30% giá vé |
+| `>= 2 giờ` và `< 12 giờ` | ✅ | 50% giá vé |
+| `< 2 giờ` (kể cả đã qua giờ chạy) | ❌ | không có phí — từ chối |
+
+- **Các mốc tính CẢ biên:** đúng 24h = miễn phí, đúng 12h = 30%, đúng 2h = 50%. So bằng `TimeSpan`,
+  không đổi sang "số giờ nguyên" — 11h59m59s vẫn là dưới 12h.
+- **Mốc 2h là điều kiện được huỷ, không phải mức phí thứ ba.** Quá 2h thì không có yêu cầu nào để
+  tính phí.
+- **Làm tròn tới đồng nguyên**, `MidpointRounding.AwayFromZero` (cùng lối `VoucherValidationService`).
+  Cột vẫn `numeric(12,2)` theo A3 nên lưu với `.00`.
+- **Hiếu** (dòng 3) gọi service này trong `POST /api/cancellation-requests`: dùng `CanCancel` làm
+  điều kiện thời gian, ghi `Fee` vào `CancellationFee` (không null, `0` = miễn phí). Endpoint
+  **không** chép lại ngưỡng.
+- Phí **chụp lại** vào dòng yêu cầu (§2): sửa quy định hoặc dời chuyến sau đó không được tính lại
+  các yêu cầu đã gửi.
+
+> ⚠️ **Nguồn của 30% / 50%:** mock `mockCancellationFee` của frontend
+> (`frontend/src/api/ticketChangeRequestApi.ts`) là nơi duy nhất trong repo có con số, và mốc 2h chỉ
+> xuất hiện ở dòng dữ liệu giả *"Chuyến khởi hành dưới 2 giờ nên không đủ điều kiện hủy."* Nếu nhóm
+> chốt mức khác, sửa **bảng này + các hằng số trong `CancellationFeeService` + test của nó** — không
+> sửa rải rác.
+
 ## 3. Bảng `TicketChanges` — một yêu cầu ĐỔI CHUYẾN
 
 | Cột | Kiểu | Ghi chú |
@@ -192,7 +223,8 @@ ra = **0** (§8).
    thống nhất một chỗ kiểm chung, đừng mỗi endpoint tự kiểm một nửa).
 2. **Kiểm tra điều kiện thời gian** (*"API gửi yêu cầu huỷ vé + kiểm tra điều kiện thời gian"* — Hiếu,
    dòng 3): cột `DepartureAt` đã có sẵn để so, nhưng luật "còn đủ X giờ mới được huỷ" là luật nghiệp
-   vụ sửa được, không phải ràng buộc CSDL.
+   vụ sửa được, không phải ràng buộc CSDL. Luật này **đã cài** trong `ICancellationFeeService` (§2.1);
+   endpoint của Hiếu gọi service và đọc `CanCancel` thay vì tự so ngưỡng.
 
 ⚠️ **Bộ test chạy trên provider InMemory, mà InMemory KHÔNG cưỡng chế unique index lẫn FK.** Nên bộ
 test xanh **không** nói gì về việc các chỉ mục ở §4.1 có tồn tại hay không. Chốt chống trùng chỉ tồn
@@ -215,10 +247,11 @@ duyệt gộp đọc được cả ba bảng bằng một câu truy vấn.
 
 ## 6. Việc còn lại của người khác
 
-- **Hiếu** (dòng 3) — `POST /cancellation-requests`: kiểm điều kiện thời gian **trước**, rồi mới tính
-  `CancellationFee` và **chụp `DepartureAt`**. Bọc lỗi unique của §4.1 để lượt gọi lại trả về yêu cầu
-  cũ thay vì ném 500. Yêu cầu của **chính** người gọi; người khác thì 404 (đừng 403 — đừng tiết lộ vé
-  có tồn tại, cùng lối `docs/28` §6).
+- **Hiếu** (dòng 3) — `POST /cancellation-requests`: gọi `ICancellationFeeService.GetCancellationFee` (§2.1) để
+  lấy **cả** điều kiện thời gian lẫn phí trong một lần, rồi ghi `CancellationFee` và **chụp
+  `DepartureAt`**. Không chép lại ngưỡng 24h/12h/2h ở endpoint. Bọc lỗi unique của §4.1 để lượt gọi
+  lại trả về yêu cầu cũ thay vì ném 500. Yêu cầu của **chính** người gọi; người khác thì 404 (đừng
+  403 — đừng tiết lộ vé có tồn tại, cùng lối `docs/28` §6).
 - **Kiên** (dòng 4 + dòng 6) — service tính phí huỷ theo quy định 24h/12h/2h: ghi thẳng con số vào
   `CancellationFee` (không để null, `0` = miễn phí). API đổi chuyến: `NewPrice` chụp lại từ `Fares`.
   **Chênh lệch KHÔNG ghi vào CSDL** — nó là `NewPrice - Ticket.Price`, xem §3. Quy ước **dấu**:
