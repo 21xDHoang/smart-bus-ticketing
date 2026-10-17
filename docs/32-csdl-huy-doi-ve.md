@@ -69,30 +69,42 @@ cầu huỷ luôn gắn với một chuyến đã có `DepartureTime`.
 (tiền chỉ rời hệ thống ở bảng `Refunds`, US 8, có vòng đời riêng kèm retry) và **không** có "khách tự
 rút yêu cầu" (chưa task nào của Sprint 4 làm nút đó). Lý do đầy đủ ở doc-comment enum.
 
-### 2.1 Phí huỷ — quy định 24h / 12h / 2h
+### 2.1 Phí huỷ — quy định 24h / 12h / 2h + cửa sổ 10 phút tự huỷ
 
-Service `ICancellationFeeService.GetCancellationFee(ticketPrice, departureAt, now)` (dòng 6 — Nguyễn Duy Kiên) là
-nguồn duy nhất của quy định này. Hàm thuần: không đọc CSDL, không đọc đồng hồ; người gọi truyền
-`Ticket.Price`, giờ chạy và `now` (UTC).
+Service `ICancellationFeeService.GetCancellationFee(ticketPrice, departureAt, now, ticketBookedAt)`
+(dòng 6 — Nguyễn Duy Kiên) là nguồn duy nhất của quy định này. Hàm thuần: không đọc CSDL, không
+đọc đồng hồ; người gọi truyền `Ticket.Price`, giờ chạy, `now` và `Ticket.CreatedAt` (UTC).
+
+**Ngoại lệ 10 phút — chốt 17/10/2026:** vé được tạo **chưa quá 10 phút** thì khách được huỷ **tự
+động, miễn phí, không cần quản lý duyệt**. Cửa sổ này **thắng mốc 2 giờ**: đặt vé sát giờ chạy rồi
+đổi ý ngay vẫn huỷ được. Nó **không thắng** trạng thái "chuyến đã khởi hành" — xe đã chạy thì không
+có gì để huỷ, kể cả vé vừa tạo. `CancellationFeeQuote.AutoApprove = true` là tín hiệu để endpoint
+ghi thẳng `Status = Approved` (`ReviewedByUserId = null`, `ReviewedAt = now`, phí `0`) thay vì xếp
+hàng chờ duyệt.
 
 | Khoảng cách tới giờ chạy lúc khách bấm gửi | Được huỷ? | Phí |
 |---|---|---|
 | `>= 24 giờ` | ✅ | `0` — miễn phí |
 | `>= 12 giờ` và `< 24 giờ` | ✅ | 30% giá vé |
 | `>= 2 giờ` và `< 12 giờ` | ✅ | 50% giá vé |
-| `< 2 giờ` (kể cả đã qua giờ chạy) | ❌ | không có phí — từ chối |
+| `< 2 giờ` (trừ vé còn trong cửa sổ 10 phút) | ❌ | không có phí — từ chối |
+| đã qua giờ chạy (kể cả vé vừa tạo) | ❌ | không có phí — từ chối |
 
-- **Các mốc tính CẢ biên:** đúng 24h = miễn phí, đúng 12h = 30%, đúng 2h = 50%. So bằng `TimeSpan`,
-  không đổi sang "số giờ nguyên" — 11h59m59s vẫn là dưới 12h.
+- **Các mốc tính CẢ biên:** đúng 24h = miễn phí, đúng 12h = 30%, đúng 2h = 50%; **đúng 10 phút kể
+  từ lúc tạo vé vẫn được tự huỷ**, quá 10 phút mới quay về bảng phí. So bằng `TimeSpan`, không đổi
+  sang "số giờ/số phút nguyên" — 11h59m59s vẫn là dưới 12h, 10m00s vẫn trong cửa sổ.
 - **Mốc 2h là điều kiện được huỷ, không phải mức phí thứ ba.** Quá 2h thì không có yêu cầu nào để
   tính phí.
 - **Làm tròn tới đồng nguyên**, `MidpointRounding.AwayFromZero` (cùng lối `VoucherValidationService`).
   Cột vẫn `numeric(12,2)` theo A3 nên lưu với `.00`.
-- **Hiếu** (dòng 3) gọi service này trong `POST /api/cancellation-requests`: dùng `CanCancel` làm
-  điều kiện thời gian, ghi `Fee` vào `CancellationFee` (không null, `0` = miễn phí). Endpoint
-  **không** chép lại ngưỡng.
+- **Hiếu** (dòng 3), khi làm `POST /api/cancellation-requests`, dùng `CanCancel` làm điều kiện thời
+  gian, ghi `Fee` vào `CancellationFee` (không null, `0` = miễn phí), và đọc `AutoApprove` để quyết
+  định `Pending` hay `Approved`. Endpoint **không** chép lại ngưỡng.
 - Phí **chụp lại** vào dòng yêu cầu (§2): sửa quy định hoặc dời chuyến sau đó không được tính lại
   các yêu cầu đã gửi.
+- **AutoApprove không có nghĩa là "bỏ qua kiểm tra":** endpoint vẫn phải xác nhận vé `Paid`, không
+  có yêu cầu huỷ/đổi nào đang `Pending`, rồi mới ghi dòng `Approved`. Cửa sổ 10 phút chỉ miễn bước
+  quản lý duyệt, không miễn các kiểm tra trạng thái.
 
 > ⚠️ **Nguồn của 30% / 50%:** mock `mockCancellationFee` của frontend
 > (`frontend/src/api/ticketChangeRequestApi.ts`) là nơi duy nhất trong repo có con số, và mốc 2h chỉ

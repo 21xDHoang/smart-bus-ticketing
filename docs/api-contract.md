@@ -4026,6 +4026,13 @@ phải viết trong `OnModelCreating` (file của Dăm).
 > dạng dòng** ở dưới, nên màn duyệt của Admin và màn theo dõi của khách đọc được cả hai loại yêu cầu
 > bằng một khuôn.
 
+> **Ngoại lệ 10 phút — chốt 17/10/2026 (docs/32 §2.1):** vé được tạo chưa quá **10 phút** thì yêu cầu
+> huỷ được **tự động duyệt, miễn phí, không cần quản lý xử lý**. Dòng `CancellationRequest` vẫn được
+> tạo bình thường, nhưng `status = "Approved"` ngay, `cancellationFee = 0`, `reviewedByUserId = null`
+> (không có quản lý nào bấm), `reviewedAt` = lúc gửi. Cửa sổ này **thắng mốc < 2 giờ** nhưng **không
+> thắng** trạng thái chuyến đã khởi hành. `POST /cancellation-requests` chưa được cài trong code hiện
+> tại — quy tắc nằm ở `ICancellationFeeService` (`AutoApprove`), phần endpoint thuộc Hiếu nối vào.
+
 ### Hình dạng một dòng yêu cầu — chốt theo bản nháp FE
 
 Hai bảng có tên cột giống nhau ở phần chung (đúng chủ ý của Dăm — xem `docs/32` §3.4), nên hình dạng
@@ -4048,7 +4055,7 @@ response cũng là một. Trường nào của riêng một loại thì **null �
 | `newPrice` | `number \| null` | **Chỉ `"Change"`** — giá chuyến mới, chụp lúc khách gửi |
 | `priceDifference` | `number \| null` | **Chỉ `"Change"`** — `newPrice - price`, **có dấu**: dương = khách trả thêm, âm = nhà xe hoàn lại, `0` = ngang giá |
 | `newTicketId` | `string \| null` | **Chỉ `"Change"` ĐÃ DUYỆT** — vé mới phát hành lúc duyệt; null khi `Pending`/`Rejected`. Mở vé mới bằng `GET /tickets/{newTicketId}` |
-| `reviewedByUserId` | `string \| null` | Quản lý đã xử lý |
+| `reviewedByUserId` | `string \| null` | Quản lý đã xử lý; **null khi tự duyệt trong cửa sổ 10 phút** (không có ai bấm) |
 | `reviewedAt` | `string \| null` | Mốc bấm duyệt / từ chối |
 | `rejectReason` | `string \| null` | Lý do từ chối do quản lý nhập — chỉ có nghĩa khi `"Rejected"` |
 | `createdAt` | `string` | Thời điểm khách gửi |
