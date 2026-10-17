@@ -38,5 +38,11 @@ public enum NotificationTarget
     /// <c>Trip…</c> do task dòng 44 phát; màn đến là chi tiết chuyến / vé của khách. Khác
     /// <c>Refund</c>, một chuyến bị dời giờ nhiều lần sinh nhiều thông báo cùng trỏ về đây.
     /// </summary>
-    Trip
+    Trip,
+
+    /// <summary>
+    /// Trỏ tới một dòng <c>ExportJobs</c> — yêu cầu xuất báo cáo chạy ở nền (Sprint 5 dòng 64).
+    /// Mang hai loại <c>Export…</c>; màn đến là màn trạng thái/tải file của chính người đặt job.
+    /// </summary>
+    ExportJob
 }

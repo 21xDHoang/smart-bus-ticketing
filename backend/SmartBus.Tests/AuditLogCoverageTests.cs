@@ -233,6 +233,14 @@ public class AuditLogCoverageTests
         // suy hành động từ verb (Create), Target "TicketChanges:{id}" — id yêu cầu do service sinh và
         // trả về trong response; middleware đệm response với POST nên đọc được.
         ("POST",   "/api/ticket-changes",                        CachGhi.Middleware),
+
+        // Đặt job xuất báo cáo lớn ở nền — story 24, Vàng Thị Dăm (Sprint 5 dòng 64). Middleware tự
+        // ghi (POST → Create); route không có tham số nào nên tên bảng suy từ đoạn tĩnh cuối là
+        // "Exports", Target là id job mới đọc từ body trả về — cùng lối POST /api/monthly-passes.
+        // ⚠️ GHI NHẬN — tên bảng thật là "ExportJobs", không phải "Exports": cùng nhóm giới hạn với
+        // "Drivers" (bảng thật là Users) ở trên. Id trong Target vẫn tra được đúng dòng ExportJobs;
+        // chỉ tên bảng là tên tài nguyên trên đường dẫn chứ không phải tên bảng CSDL.
+        ("POST",   "/api/exports",                                CachGhi.Middleware),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>
@@ -952,6 +960,28 @@ public class AuditLogCoverageTests
         // ghi chú ở NotificationTemplatesController và docs/api-contract.md). Vẫn đủ để biết "có người
         // sửa mẫu lúc nào".
         await AssertMotBanGhiAsync(factory, AuditAction.Update, "NotificationTemplates", quanLy);
+    }
+
+    // --------------------------------------- Xuất báo cáo bất đồng bộ (story 24, dòng 64)
+
+    // Story 24, Vàng Thị Dăm: đặt job xuất báo cáo lớn ở nền. Việc đặt job CÓ đổi dữ liệu (sinh
+    // một dòng ExportJobs) nên đi qua AuditLogMiddleware như mọi POST khác. Policy ManagerOrAbove
+    // nên đăng nhập bằng tài khoản quản lý, không phải hành khách.
+    [Fact]
+    public async Task Post_exports_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/exports", new { reportType = "revenue", format = "xlsx" });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target ghi "Exports:<id>", KHÔNG phải "ExportJobs:<id>": middleware suy tên
+        // bảng từ đoạn tĩnh cuối trên đường dẫn (api/exports) chứ không đọc entity. Cùng nhóm giới
+        // hạn với "Drivers" (bảng thật là Users). Id vẫn tra đúng dòng ExportJobs.
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"Exports:{await IdOfAsync(response)}", quanLy);
     }
 
     // ------------------------------------------------------------------------------------ Auth

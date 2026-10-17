@@ -22,7 +22,7 @@ namespace SmartBus.Tests;
 /// factory mà phần <c>ConfigureTestServices</c> của TestAppFactory KHÔNG được áp dụng, nghĩa là
 /// DbContext vẫn trỏ PostgreSQL thật và mọi lần seed đi thẳng vào CSDL chung. Factory này chép lại
 /// ba mảnh bắt buộc của TestAppFactory: JWT bằng UseSetting, gỡ DbContext Npgsql thay bằng InMemory,
-/// và gỡ sáu job nền (gỡ hẳn như <c>NhaMaySqlite</c> — hai file test này không có test wiring nào
+/// và gỡ bảy job nền (gỡ hẳn như <c>NhaMaySqlite</c> — hai file test này không có test wiring nào
 /// cần giữ hình dạng đăng ký job, nên không chép sáu lớp noop của TestAppFactory).
 /// </summary>
 internal sealed class TicketValidationTestFactory : WebApplicationFactory<Program>
@@ -35,6 +35,7 @@ internal sealed class TicketValidationTestFactory : WebApplicationFactory<Progra
         typeof(SeatHoldAbuseBackgroundService),
         typeof(RefundRetryBackgroundService),
         typeof(RefundReconciliationBackgroundService),
+        typeof(ExportJobBackgroundService),
     ];
 
     private readonly string _databaseName = $"smartbus-test-{Guid.NewGuid()}";
@@ -67,7 +68,7 @@ internal sealed class TicketValidationTestFactory : WebApplicationFactory<Progra
         });
     }
 
-    /// <summary>Gỡ đúng sáu job nền theo kiểu đăng ký, không gỡ cả <see cref="IHostedService"/>.</summary>
+    /// <summary>Gỡ đúng bảy job nền theo kiểu đăng ký, không gỡ cả <see cref="IHostedService"/>.</summary>
     private static void GoJobNen(IServiceCollection services)
     {
         var canGo = services

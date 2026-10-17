@@ -787,6 +787,25 @@ builder.Services.AddScoped<IMyNotificationsService, MyNotificationsService>();
 // chèn vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
 builder.Services.AddScoped<INotificationTemplateService, NotificationTemplateService>();
 
+// Xuất file lớn bất đồng bộ (US 24 "Xuất dữ liệu", Sprint 5 dòng 64):
+// POST /api/exports, GET /api/exports/{id}, GET /api/exports/{id}/download.
+// Task "Xử lý xuất file lớn bất đồng bộ + thông báo khi xong" — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Bảng ExportJobs là bảng MỚI (migration Sprint5_AsyncExportJobs — xem docs/52), khác ba bản xuất
+// đồng bộ ở khối IRevenueExportService/IFillRateExportService phía trên: chúng trả file ngay trong
+// request, còn bốn dòng dưới đây nhận yêu cầu rồi để job nền dựng file và báo qua Notifications.
+// IExportJobProcessor dùng lại IRevenueExportService + IFillRateReportService đã đăng ký ở trên,
+// nên nó KHÔNG có định nghĩa doanh thu/tỷ lệ lấp đầy thứ hai.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app. Ruột job là
+// IExportJobProcessor/IExportJobService scoped nên vòng lặp mở scope riêng cho mỗi job — giải thích
+// đầy đủ ở đầu ExportJobBackgroundService.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
+builder.Services.AddScoped<IExportJobService, ExportJobService>();
+builder.Services.AddScoped<IExportJobNotifier, ExportJobNotifier>();
+builder.Services.AddScoped<IExportJobProcessor, ExportJobProcessor>();
+builder.Services.AddHostedService<ExportJobBackgroundService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 

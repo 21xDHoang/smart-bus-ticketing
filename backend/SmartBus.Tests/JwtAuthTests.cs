@@ -347,10 +347,11 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Đổi sáu job nền của app sang bản chạy RỖNG trong host test
+    /// Đổi bảy job nền của app sang bản chạy RỖNG trong host test
     /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>,
     /// <see cref="NoopSeatHoldExpiryJob"/>, <see cref="NoopSeatHoldAbuseJob"/>,
-    /// <see cref="NoopRefundRetryJob"/>, <see cref="NoopRefundReconciliationJob"/>).
+    /// <see cref="NoopRefundRetryJob"/>, <see cref="NoopRefundReconciliationJob"/>,
+    /// <see cref="NoopExportJobJob"/>).
     ///
     /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
     /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
@@ -399,6 +400,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         [typeof(SeatHoldAbuseBackgroundService)] = typeof(NoopSeatHoldAbuseJob),
         [typeof(RefundRetryBackgroundService)] = typeof(NoopRefundRetryJob),
         [typeof(RefundReconciliationBackgroundService)] = typeof(NoopRefundReconciliationJob),
+        [typeof(ExportJobBackgroundService)] = typeof(NoopExportJobJob),
     };
 
     /// <summary>
@@ -506,6 +508,25 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopRefundReconciliationJob(
             IServiceScopeFactory scopeFactory,
             ILogger<RefundReconciliationBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="ExportJobBackgroundService"/> cho host test — job mới nhất của
+    /// app (Sprint 5 dòng 64, Vàng Thị Dăm) và cũng là job quét NHANH nhất: 2 giây một lượt. Để bản
+    /// thật chạy, mọi test seed sẵn một dòng <c>ExportJobs</c> sẽ bị nó xử lý chen giữa lúc assert,
+    /// còn mọi test khác thì chịu thêm một truy vấn mỗi 2 giây trong suốt lượt chạy. Gỡ hẳn không
+    /// được vì <c>ExportJobsWiringTests</c> cần thấy hình dạng đăng ký — dùng đúng lối noop đang có.
+    /// </summary>
+    private sealed class NoopExportJobJob : ExportJobBackgroundService
+    {
+        public NoopExportJobJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<ExportJobBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }
