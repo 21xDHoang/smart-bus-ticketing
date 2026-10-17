@@ -4601,9 +4601,10 @@ Ba kiểu dữ liệu dễ khai sai, đã ghim bằng test:
 ## Báo cáo doanh thu — `/reports/revenue`
 
 > Story 19 *"Doanh thu"*. ✅ Backend đã có (`RevenueReportController` — Trần Trung Hiếu, task
-> *"API báo cáo doanh thu theo ngày / tuần / tháng"*, Sprint 4). Mục này là nửa "theo thời gian"
-> của story; **theo tuyến / theo xe / theo phương thức** (Kiên), **so sánh giữa các kỳ** (Hoàng)
-> và **xuất Excel/PDF** (các task sau) sẽ mở rộng trên cùng bề mặt `/reports/revenue`.
+> *"API báo cáo doanh thu theo ngày / tuần / tháng"*; `RevenueComparisonController` — Phùng Duy
+> Hoàng, task *"API so sánh doanh thu giữa các kỳ"*; cùng Sprint 4). Mục này là nửa "theo thời
+> gian" của story; **theo tuyến / theo xe / theo phương thức** (Kiên) và **xuất Excel/PDF** (các
+> task sau) sẽ mở rộng trên cùng bề mặt `/reports/revenue`.
 
 **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 19 là nghiệp vụ của quản lý). Người đã
 đăng nhập nhưng không đủ quyền nhận **403** kèm body
@@ -4658,13 +4659,62 @@ Query — **mọi tham số bỏ trống được**:
   ở cả `errors.from` lẫn `errors.to` · `granularity` lạ → **400** `errors.granularity` ·
   `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
 
+#### `GET /reports/revenue/comparison` — so sánh kỳ hiện tại với kỳ liền trước
+
+Query — **mọi tham số bỏ trống được**, cùng quy tắc mặc định với `GET /reports/revenue`:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu KỲ HIỆN TẠI (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc kỳ hiện tại (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+**Kỳ liền trước** là khoảng **cùng số ngày**, kết thúc ngay trước `from` (tức `from - 1`).
+Ví dụ `from=2026-10-11&to=2026-10-17` (7 ngày) → kỳ trước `2026-10-04 → 2026-10-10` (7 ngày).
+
+```json
+// RevenueComparison — kỳ hiện tại 7 ngày, doanh thu tăng 25%
+{
+  "from": "2026-10-11",
+  "to": "2026-10-17",
+  "previousFrom": "2026-10-04",
+  "previousTo": "2026-10-10",
+  "currentRevenue": 150000000,
+  "previousRevenue": 120000000,
+  "revenueChange": 30000000,
+  "revenueChangePercent": 25.00,
+  "currentPayments": 600,
+  "previousPayments": 500,
+  "paymentsChange": 100,
+  "paymentsChangePercent": 20.00
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `from` / `to` | Kỳ hiện tại sau khi áp dụng mặc định |
+| `previousFrom` / `previousTo` | Kỳ liền trước, cùng độ dài, kết thúc ngay trước `from` |
+| `currentRevenue` / `previousRevenue` | Doanh thu từng kỳ (VND) |
+| `revenueChange` | `currentRevenue - previousRevenue` (VND; âm = giảm) |
+| `revenueChangePercent` | % thay đổi doanh thu, làm tròn **2 chữ số thập phân**; **`null` khi `previousRevenue` = 0** (không có nền để chia — FE hiển thị "—", KHÔNG phải 0%) |
+| `currentPayments` / `previousPayments` | Số giao dịch `Success` từng kỳ |
+| `paymentsChange` / `paymentsChangePercent` | Mức thay đổi số giao dịch; cùng quy tắc `null` khi kỳ trước = 0 |
+
+- **Cùng nền số liệu và cùng trục thời gian với `GET /reports/revenue`**: bảng `Payments` chỉ đếm
+  `Success`, mốc `paidAt` (thiếu thì `createdAt`), ngày theo giờ Việt Nam UTC+7. Endpoint này gọi
+  lại chính service báo cáo gốc hai lần nên hai endpoint không thể lệch số cho cùng một kỳ.
+- **Không có tham số `granularity`.** "Kỳ" ở đây là khoảng `from` → `to` do người gọi chọn; kỳ
+  trước luôn cùng số ngày. Muốn so tuần/tháng, người gọi truyền khoảng ngày tương ứng (tuần bắt
+  đầu thứ Hai, tháng theo lịch dương — đúng quy tắc bucket ở trên).
+- Khoảng kỳ hiện tại tối đa **366 ngày** · `to` trước `from` → **400**, lỗi gắn ở cả `errors.from`
+  lẫn `errors.to` · `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
+- Khoảng kỳ trước vượt giới hạn lịch (chỉ xảy ra khi `from` rơi vào đầu năm 1) → **400**, lỗi gắn
+  ở `errors.from`/`errors.to`.
+
 > **Cho task "API doanh thu theo tuyến, theo xe, theo phương thức thanh toán" (Kiên):** dùng cùng
 > nền `Payments` `Success` và cùng trục thời gian ở trên — mở rộng bằng endpoint mới trên bề mặt
 > `/reports/revenue` (ví dụ `GET /reports/revenue/by-route`) thay vì dựng một nền tính khác, nếu
 > không hai báo cáo sẽ ra hai con số tổng khác nhau cho cùng một kỳ.
-
-> **Cho task "API so sánh doanh thu giữa các kỳ" (Hoàng):** cùng nền, so kỳ hiện tại với kỳ liền
-> trước cùng độ dài — tái dùng quy tắc bucket ở trên thay vì tự định nghĩa lại "tuần/tháng".
 
 > **Vì sao không trả kèm số vé?** Story chỉ hỏi doanh thu; vé đã bán là chuyện của báo cáo tỷ lệ
 > lấp đầy (US 20) — mỗi báo cáo một câu hỏi, trộn lại thì không báo cáo nào đọc được.
