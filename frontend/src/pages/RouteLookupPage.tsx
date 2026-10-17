@@ -22,7 +22,8 @@ import type { StopSuggestion } from '../api/stopSuggestionsApi';
 import type { AppError } from '../api/axiosClient';
 import StopSuggestionPicker from '../components/StopSuggestionPicker';
 import type { SelectedStop } from '../components/StopSuggestionPicker';
-import { EmptyState, PageCard, PageHeader, RouteBadge } from '../components/ui';
+import RouteLookupEmptyState from '../components/RouteLookupEmptyState';
+import { EmptyState, ErrorState, LoadingState, PageCard, PageHeader, RouteBadge } from '../components/ui';
 import { formatVnd } from '../components/ui/format';
 import { rememberRecentRoute } from '../components/ui/recentRoutes';
 
@@ -284,6 +285,18 @@ export default function RouteLookupPage() {
   const [suggestions, setSuggestions] = useState<RouteSuggestionsResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Ba trạng thái ban đầu / đang tải / gọi hỏng phải tách hẳn khỏi "không có tuyến":
+  // - hasSearched: chỉ khi đã bấm tìm thì khối "Khám phá hành trình" mới biến mất;
+  // - searchError: lỗi API có lối thoát riêng, không rơi ngược về trạng thái chưa tìm;
+  // - failedCriteria: giữ đúng tiêu chí của lượt hỏng để nút "Thử lại" gọi lại y nguyên.
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [failedCriteria, setFailedCriteria] = useState<{
+    origin: SelectedStop;
+    destination: SelectedStop;
+    date: Dayjs;
+  } | null>(null);
+
   // Form KHÔNG tự render lại cả trang khi một ô đổi giá trị. `useWatch` là thứ khiến hai ô trạm
   // thấy được lựa chọn của nhau để lọc chéo: chọn điểm đi xong thì ô điểm đến chỉ gợi ý trạm
   // đứng sau nó, và ngược lại.
@@ -336,6 +349,8 @@ export default function RouteLookupPage() {
   const runSearch = async (origin: SelectedStop, destination: SelectedStop, date: Dayjs) => {
     const isoDate = date.format(ISO_DATE);
     setLoading(true);
+    setHasSearched(true);
+    setSearchError(null);
 
     try {
       const found = await routeSuggestionsApi.search({
@@ -346,17 +361,28 @@ export default function RouteLookupPage() {
 
       setSuggestions(found);
       setLastCriteria({ origin, destination, date: isoDate });
+      setFailedCriteria(null);
 
       // Chỉ ghi nhớ lượt tìm CÓ tuyến nối trực tiếp — cặp trạm không nối được mà gợi ý lại ở
       // trang chủ là vô nghĩa.
       if (found.matches.length > 0) rememberRecentRoute(origin.name, destination.name);
     } catch (error) {
       const appError = error as AppError;
-      message.error(appError.customMessage || 'Không thể tra cứu tuyến.');
+      const errorMessage = appError.customMessage || 'Không thể tra cứu tuyến.';
+      message.error(errorMessage);
+      setSearchError(errorMessage);
+      setFailedCriteria({ origin, destination, date });
       setSuggestions(null);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Lỗi mạng là chuyện tạm thời — giữ nguyên tiêu chí vừa gửi để người dùng thử lại một bấm,
+  // không phải chọn lại điểm đi/điểm đến/ngày đi.
+  const handleRetry = () => {
+    if (!failedCriteria) return;
+    void runSearch(failedCriteria.origin, failedCriteria.destination, failedCriteria.date);
   };
 
   const handleSearch = async ({ origin, destination, date }: SearchFormValues) => {
@@ -575,17 +601,47 @@ export default function RouteLookupPage() {
 
           {matches.length === 0 && !hasAlternatives && (
             <div style={{ marginTop: 40 }}>
-              <EmptyState description={describeEmpty(suggestions)} />
+              <EmptyState
+                description={
+                  <div style={{ maxWidth: 460, margin: '0 auto' }}>
+                    <Text strong style={{ display: 'block', marginBottom: 4 }}>
+                      Không tìm thấy tuyến phù hợp
+                    </Text>
+                    <Text type="secondary">{describeEmpty(suggestions)}</Text>
+                    {suggestions.emptyReason !== 'noActiveRoute' && (
+                      <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                        Thử đổi điểm đi, điểm đến hoặc ngày đi rồi tìm lại.
+                      </Text>
+                    )}
+                  </div>
+                }
+              />
             </div>
           )}
         </div>
       )}
 
-      {!suggestions && !loading && (
-        <div style={{ marginTop: 40 }}>
-          <EmptyState description="Nhập điểm đi, điểm đến và ngày đi rồi bấm “Tìm tuyến”." />
+      {loading && (
+        <div style={{ marginTop: 20 }}>
+          <PageCard>
+            <LoadingState description="Đang tìm tuyến phù hợp…" />
+          </PageCard>
         </div>
       )}
+
+      {!loading && searchError && (
+        <div style={{ marginTop: 20 }}>
+          <PageCard>
+            <ErrorState
+              title="Không thể tra cứu tuyến"
+              description={`${searchError} Vui lòng kiểm tra kết nối và thử lại.`}
+              onRetry={failedCriteria ? handleRetry : undefined}
+            />
+          </PageCard>
+        </div>
+      )}
+
+      {!hasSearched && !loading && !searchError && <RouteLookupEmptyState />}
     </div>
   );
 }
