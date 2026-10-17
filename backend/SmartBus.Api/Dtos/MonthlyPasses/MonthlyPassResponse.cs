@@ -19,6 +19,12 @@ public class MonthlyPassResponse
     /// <summary>Mã loại vé trong bảng PassTypes — quyết định thời hạn và giá gói.</summary>
     public string PassTypeCode { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Tên hiển thị của loại vé, đọc từ bảng PassTypes tại thời điểm trả về. Trả kèm để client
+    /// hiển thị thẳng — không phải giữ một bảng loại vé hằng ở frontend rồi tra theo mã.
+    /// </summary>
+    public string PassTypeName { get; set; } = string.Empty;
+
     /// <summary>Số tiền thực trả — ảnh chụp tại thời điểm đăng ký/gia hạn, không tra lại bảng giá.</summary>
     public decimal Price { get; set; }
 

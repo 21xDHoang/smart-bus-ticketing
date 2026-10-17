@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Alert, Button, List, Popconfirm, Space, Typography, message, theme } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import myMonthlyPassApi from '../api/myMonthlyPassApi';
-import { findPassType } from '../api/monthlyPassApi';
 import type { MonthlyPass } from '../api/monthlyPassApi';
 import { fetchRoutes } from '../api/routeApi';
 import type { AppError } from '../api/axiosClient';
@@ -279,7 +278,6 @@ export default function MyMonthlyPassPage() {
           <List<MonthlyPass>
             dataSource={view.passes}
             renderItem={(pass) => {
-              const passType = findPassType(pass.passTypeCode);
               const nextPeriod = nextPeriods[pass.id];
 
               return (
@@ -302,7 +300,7 @@ export default function MyMonthlyPassPage() {
 
                       <div style={{ marginTop: 4 }}>
                         <Text type="secondary" style={{ fontSize: 13 }}>
-                          {passType?.name ?? pass.passTypeCode} · Hiệu lực{' '}
+                          {pass.passTypeName || pass.passTypeCode} · Hiệu lực{' '}
                           {formatDate(pass.validFrom)} → {formatDate(pass.validTo)}
                         </Text>
                       </div>

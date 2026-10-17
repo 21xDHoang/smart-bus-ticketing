@@ -132,7 +132,7 @@ public class MonthlyPassRegistrationService : IMonthlyPassRegistrationService
             return ServiceResult<MonthlyPassResponse>.Conflict(CodeCollisionMessage);
         }
 
-        return ServiceResult<MonthlyPassResponse>.Ok(ToResponse(pass, passType.Code));
+        return ServiceResult<MonthlyPassResponse>.Ok(ToResponse(pass, passType.Code, passType.Name));
     }
 
     /// <summary>
@@ -195,12 +195,16 @@ public class MonthlyPassRegistrationService : IMonthlyPassRegistrationService
         return new string(suffix);
     }
 
-    private static MonthlyPassResponse ToResponse(MonthlyPass pass, string passTypeCode) => new()
+    private static MonthlyPassResponse ToResponse(
+        MonthlyPass pass,
+        string passTypeCode,
+        string passTypeName) => new()
     {
         Id = pass.Id,
         Code = pass.Code,
         RouteId = pass.RouteId,
         PassTypeCode = passTypeCode,
+        PassTypeName = passTypeName,
         Price = pass.Price,
         ValidFrom = pass.ValidFrom,
         ValidTo = pass.ValidTo,

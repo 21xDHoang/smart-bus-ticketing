@@ -11,8 +11,10 @@ namespace SmartBus.Api.Controllers;
 /// Danh mục loại vé tháng (GET/POST/PUT/DELETE /api/pass-types) — bổ sung ngoài story 16, hợp
 /// đồng ở mục "Loại vé tháng — /pass-types" của docs/api-contract.md.
 ///
-/// [Authorize(Policy = ManagerOrAbove)]: giá gói là quyết định kinh doanh — cùng ranh giới với
-/// FaresController (cấu hình giá vé lượt).
+/// [Authorize] trần ở mức lớp: màn đăng ký vé tháng của hành khách đọc danh mục thật từ CSDL để
+/// vẽ ô chọn (tên/thời hạn/giá) thay vì giữ bảng loại vé hằng ở client. Ba action ghi
+/// (POST/PUT/DELETE) gắn thêm policy ManagerOrAbove — giá gói là quyết định kinh doanh, cùng
+/// ranh giới với FaresController (cấu hình giá vé lượt).
 ///
 /// Vì sao service không inject qua DI: đăng ký DI nằm trong Program.cs — file của Phùng Duy
 /// Hoàng, ngoài phạm vi được sửa. Controller nhận AppDbContext (đã có trong DI) rồi khởi tạo
@@ -20,7 +22,7 @@ namespace SmartBus.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/pass-types")]
-[Authorize(Policy = RbacPolicies.ManagerOrAbove)]
+[Authorize]
 public class PassTypesController : ControllerBase
 {
     private readonly PassTypeService _passTypeService;
@@ -37,6 +39,7 @@ public class PassTypesController : ControllerBase
     /// Thêm loại vé; trả 201 kèm loại vé vừa tạo. Trùng mã → 409; vi phạm ràng buộc → 400.
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = RbacPolicies.ManagerOrAbove)]
     public async Task<IActionResult> Create(
         [FromBody] CreatePassTypeRequest request,
         CancellationToken cancellationToken)
@@ -57,6 +60,7 @@ public class PassTypesController : ControllerBase
     /// Sửa tên/thời hạn/giá; trả 200 kèm loại vé sau khi lưu. Mã KHÔNG sửa được.
     /// </summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = RbacPolicies.ManagerOrAbove)]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] UpdatePassTypeRequest request,
@@ -77,6 +81,7 @@ public class PassTypesController : ControllerBase
     /// → 409. Không tồn tại → 404.
     /// </summary>
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = RbacPolicies.ManagerOrAbove)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         var result = await _passTypeService.DeleteAsync(id, cancellationToken);

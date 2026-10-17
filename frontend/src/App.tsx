@@ -198,8 +198,8 @@ function App() {
                 }
               />
               {/* /monthly-passes là màn hình đăng ký vé tháng (US 10) — mọi người đã đăng
-                  nhập đều dùng được. Backend đăng ký vé tháng chưa có nên màn hình đang
-                  chạy dữ liệu giả (xem monthlyPassApi.ts). */}
+                  nhập đều dùng được. Backend đăng ký vé tháng + danh mục loại vé đã có;
+                  màn hình đọc tuyến, loại vé và giá thẳng từ CSDL (xem monthlyPassApi.ts). */}
               <Route path="/monthly-passes" element={<MonthlyPassRegistrationPage />} />
               {/* /admin-monthly-passes là màn hình quản trị vé tháng — danh sách toàn bộ vé,
                   chi tiết, huỷ/mở lại vé, CRUD loại vé và thống kê doanh thu (bổ sung ngoài

@@ -3492,6 +3492,7 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
   "code": "MP-01-A1B2C3",
   "routeId": "9d8c7b6a-0000-0000-0000-000000000000",
   "passTypeCode": "OneMonth",
+  "passTypeName": "Vé tháng 1 tháng",
   "price": 200000,
   "validFrom": "2026-10-01T00:00:00Z",
   "validTo": "2026-11-01T00:00:00Z",
@@ -3506,6 +3507,7 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 | `code` | string | Mã vé tháng = nội dung mã QR soát vé. Duy nhất toàn hệ thống, khuôn `MP-{mã tuyến}-{6 ký tự A–Z/0–9}` |
 | `routeId` | GUID | Tuyến mà vé cho phép đi lại |
 | `passTypeCode` | string | Mã loại vé trong bảng `PassTypes` — quyết định thời hạn và giá gói |
+| `passTypeName` | string | Tên hiển thị của loại vé, đọc từ bảng `PassTypes` tại thời điểm trả về — client hiển thị thẳng, **không giữ bảng loại vé riêng** |
 | `price` | number | Số tiền THỰC TRẢ lúc đăng ký/gia hạn — **ảnh chụp**, không tra lại bảng giá |
 | `validFrom` / `validTo` | ISO 8601 UTC | Khoảng hiệu lực, **tính cả hai mốc**. Nguồn sự thật về hiệu lực của vé |
 | `status` | string | `Active` / `Expired` / `Cancelled` — trạng thái LƯU. `Active`/`Expired` có độ trễ (xem trên); `Cancelled` do quản trị viên đặt và là chặn cứng |
@@ -3797,11 +3799,16 @@ tháng, không đọc cột `status` — nên khác con số khi lọc `status=E
 
 > Bảng `PassTypes` (thời hạn + giá gói) đã có từ story 16 nhưng trước đây chỉ được **đọc** lúc
 > đăng ký/gia hạn: chưa có endpoint nào để quản trị viên xem hay sửa danh mục. Bốn endpoint dưới
-> đây bổ sung phần đó. **Tất cả sau policy `ManagerOrAbove`.**
+> đây bổ sung phần đó.
+>
+> **`GET /pass-types` chỉ yêu cầu đăng nhập**, không gắn policy vai trò: màn đăng ký vé tháng của
+> hành khách phải đọc danh mục thật từ CSDL (tên/thời hạn/giá) để vẽ ô chọn thay vì giữ một bảng
+> hằng ở client. Ba endpoint ghi (POST/PUT/DELETE) vẫn đứng sau policy `ManagerOrAbove` — sửa giá
+> gói là quyết định kinh doanh.
 
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
-| GET | `/pass-types` | Danh mục loại vé + số vé đang dùng mỗi loại | — | `PassTypeResponse[]` (mảng trần) |
+| GET | `/pass-types` | Danh mục loại vé + số vé đang dùng mỗi loại — **mọi người dùng đã đăng nhập** | — | `PassTypeResponse[]` (mảng trần) |
 | POST | `/pass-types` | Thêm loại vé | `CreatePassTypeRequest` | `PassTypeResponse` (**201**) |
 | PUT | `/pass-types/{id}` | Sửa tên / thời hạn / giá | `UpdatePassTypeRequest` | `PassTypeResponse` |
 | DELETE | `/pass-types/{id}` | Xoá loại vé chưa từng được dùng | — | `PassTypeResponse` |

@@ -40,22 +40,31 @@ public class MonthlyPassLookupService : IMonthlyPassLookupService
                 && p.ValidFrom <= now && p.ValidTo >= now)
             .OrderBy(p => p.ValidTo)
             .ThenBy(p => p.Code)
-            .Select(p => new { Pass = p, PassTypeCode = p.PassType!.Code })
+            .Select(p => new
+            {
+                Pass = p,
+                PassTypeCode = p.PassType!.Code,
+                PassTypeName = p.PassType!.Name,
+            })
             .ToListAsync(cancellationToken);
 
-        return rows.Select(row => ToResponse(row.Pass, row.PassTypeCode)).ToList();
+        return rows.Select(row => ToResponse(row.Pass, row.PassTypeCode, row.PassTypeName)).ToList();
     }
 
     /// <summary>
     /// Chép từ MonthlyPassRenewalService.ToResponse — cố ý, cùng lối các controller chép
     /// ValidationError thay vì tách lớp dùng chung: tách ra thì phải sửa file của người khác.
     /// </summary>
-    private static MonthlyPassResponse ToResponse(MonthlyPass pass, string passTypeCode) => new()
+    private static MonthlyPassResponse ToResponse(
+        MonthlyPass pass,
+        string passTypeCode,
+        string passTypeName) => new()
     {
         Id = pass.Id,
         Code = pass.Code,
         RouteId = pass.RouteId,
         PassTypeCode = passTypeCode,
+        PassTypeName = passTypeName,
         Price = pass.Price,
         ValidFrom = pass.ValidFrom,
         ValidTo = pass.ValidTo,

@@ -2,7 +2,6 @@ import { Alert, Space, Typography } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { formatDate } from './ui/format';
 import type { MonthlyPass } from '../api/monthlyPassApi';
-import { findPassType } from '../api/monthlyPassApi';
 import { getExpiringSoonPasses } from './monthlyPassReminder';
 
 const { Text } = Typography;
@@ -14,9 +13,9 @@ interface MonthlyPassExpiryReminderProps {
   now?: Dayjs;
 }
 
-/** Tên loại vé để nhắc — ví dụ "Vé tháng 1 tháng"; tra cứu lỗi thì hiện mã loại vé. */
+/** Tên loại vé backend trả kèm (đọc từ PassTypes); thiếu thì hiện mã loại vé. */
 function passTypeLabel(pass: MonthlyPass): string {
-  return findPassType(pass.passTypeCode)?.name ?? pass.passTypeCode;
+  return pass.passTypeName || pass.passTypeCode;
 }
 
 /**
