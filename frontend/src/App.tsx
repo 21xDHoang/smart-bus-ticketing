@@ -45,6 +45,8 @@ import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OverloadAlertPage from './pages/OverloadAlertPage';
 import TicketValidationStatsPage from './pages/TicketValidationStatsPage';
 import RevenueByRoutePage from './pages/RevenueByRoutePage';
+import NotificationsPage from './pages/NotificationsPage';
+import NotificationDetailPage from './pages/NotificationDetailPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -451,6 +453,15 @@ function App() {
                   </RouteGuard>
                 }
               />
+              {/* /notifications là màn hình danh sách thông báo (US 10 "Thông báo trạm", Sprint 5,
+                  task của Dương Thị Hạnh): lịch sử thông báo của chính người dùng, bấm dòng mở
+                  màn chi tiết. Mọi người đã đăng nhập đều dùng được, không giới hạn vai trò.
+                  Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là
+                  file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route path="/notifications" element={<NotificationsPage />} />
+              {/* /notifications/:id là màn hình chi tiết thông báo — đọc thẳng từ dòng đã tải về,
+                  không có endpoint GET /notifications/{id} (api-contract.md mục /notifications). */}
+              <Route path="/notifications/:id" element={<NotificationDetailPage />} />
               {/* /notification-templates là màn hình Admin quản lý mẫu thông báo (US 10, Sprint 5,
                   dòng 24, task của Dương Thị Hạnh) — soạn câu chữ cho từng loại thông báo; mẫu là
                   phần GHI ĐÈ câu mặc định (docs/37 §2.1), loại chưa soạn hoặc đang tắt vẫn gửi bằng
