@@ -3,6 +3,7 @@ import type { MenuProps } from 'antd';
 import {
   ApartmentOutlined,
   BarChartOutlined,
+  BellOutlined,
   CalendarOutlined,
   CarOutlined,
   ClockCircleOutlined,
@@ -34,6 +35,7 @@ import {
   TagsOutlined,
   TeamOutlined,
   UserOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 
 // Bảng điều hướng của cả app — NGUỒN DUY NHẤT cho: menu ngang (khách), Sider/Drawer (quản
@@ -43,7 +45,7 @@ import {
 // Quy ước nhóm: mỗi vai trò nhiều nhất 5 mục cấp cao nhất, mục nào có nhiều màn con thì gom
 // thành nhóm thả xuống. Khách: Trang chủ · Tra cứu tuyến · Vé · Khuyến mãi · Hỗ trợ.
 // Quản trị/Quản lý: Quản lý dữ liệu · Điều hành chuyến · Hệ thống. Tài xế: Trang chủ · Tra
-// cứu tuyến · Soát vé.
+// cứu tuyến · Soát vé · Hành khách đã lên xe.
 
 /** Một mục mở thẳng một màn hình. `icon` bắt buộc — rail thu gọn (80px) và thẻ lối vào cần icon. */
 export interface NavLeaf {
@@ -105,6 +107,12 @@ const NAV: NavEntry[] = [
     label: 'Soát vé',
     roles: DRIVER,
     icon: <ScanOutlined />,
+  },
+  {
+    to: '/trip-passengers',
+    label: 'Hành khách đã lên xe',
+    roles: DRIVER,
+    icon: <TeamOutlined />,
   },
 
   // ── Khách: gom 3 màn liên quan tới vé vào một nhóm để cấp cao nhất chỉ còn 5 mục.
@@ -276,6 +284,12 @@ const NAV: NavEntry[] = [
         icon: <FileDoneOutlined />,
       },
       {
+        to: '/notification-templates',
+        label: 'Mẫu thông báo',
+        roles: ADMIN_MANAGER,
+        icon: <BellOutlined />,
+      },
+      {
         to: '/admin-users',
         label: 'Người dùng',
         roles: ADMIN,
@@ -301,10 +315,22 @@ const NAV: NavEntry[] = [
         icon: <PercentageOutlined />,
       },
       {
+        to: '/overload-alerts',
+        label: 'Cảnh báo chuyến quá tải',
+        roles: ADMIN_MANAGER,
+        icon: <WarningOutlined />,
+      },
+      {
         to: '/revenue-dashboard',
         label: 'Dashboard doanh thu',
         roles: ADMIN_MANAGER,
         icon: <FundOutlined />,
+      },
+      {
+        to: '/ticket-validation-stats',
+        label: 'Thống kê lượt soát',
+        roles: ADMIN_MANAGER,
+        icon: <ScanOutlined />,
       },
       {
         to: '/revenue-by-route',

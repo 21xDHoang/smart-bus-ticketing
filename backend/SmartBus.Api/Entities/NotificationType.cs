@@ -24,9 +24,15 @@ namespace SmartBus.Api.Entities;
 /// truy vấn chéo sang bảng yêu cầu — bảng yêu cầu có thể đã bị xoá theo thời gian, còn thông báo là
 /// thứ khách đọc lại được (A8.5).
 ///
-/// ⚠️ Tập giá trị này CÒN DÀI RA: Sprint 5 (US 10/US 11 — thông báo trạm, trễ chuyến, sự cố) sẽ
-/// thêm giá trị cho các loại khác. Thêm giá trị enum KHÔNG tốn migration (cột là varchar, không có
-/// CHECK constraint), nhưng là thay đổi hợp đồng với frontend — phải báo trước khi thêm, đúng luật 5.
+/// Hai giá trị <c>Trip…</c> là thông báo trễ/đổi lịch trình chuyến thuộc US 10 — task Sprint 4
+/// *"Service thông báo trễ chuyến / thay đổi lịch trình"* (Phùng Duy Hoàng, dòng 44): báo cho mọi
+/// hành khách có vé <c>Paid</c> của chuyến khi quản lý sửa giờ chạy qua
+/// <c>PUT /routes/{routeId}/trips/{id}</c>. Chính sách đầy đủ ở doc-comment hai giá trị dưới và
+/// docs/44-thong-bao-tre-chuyen-doi-lich-trinh.md.
+///
+/// ⚠️ Tập giá trị này CÒN DÀI RA: Sprint 5 (US 10/US 11 — thông báo trạm, sự cố) sẽ thêm giá trị
+/// cho các loại khác. Thêm giá trị enum KHÔNG tốn migration (cột là varchar, không có CHECK
+/// constraint), nhưng là thay đổi hợp đồng với frontend — phải báo trước khi thêm, đúng luật 5.
 /// Cố ý chưa khai sẵn các giá trị đó ở đây: khai một giá trị chưa ai ghi vào là mở một nhánh không
 /// có dữ liệu, trong khi thêm sau chỉ là một dòng.
 /// </summary>
@@ -59,5 +65,21 @@ public enum NotificationType
     /// nhau. Khoản còn <see cref="RefundStatus.Pending"/> (cổng chưa trả lời) cũng không phát — chưa
     /// có gì để nói, và đoán là chuyện hệ thống này không làm.
     /// </summary>
-    RefundFailed
+    RefundFailed,
+
+    /// <summary>
+    /// Chuyến bị <b>lùi giờ</b>: ít nhất một mốc (khởi hành hoặc tới dự kiến) đổi, <b>mọi</b> mốc đổi
+    /// đều ra sau, và <see cref="Trip.ArrivalTime"/> không đổi giữa null và có giá trị. Phát cho mọi
+    /// hành khách có vé <c>Paid</c> của chuyến, ngay sau khi lượt PUT đã lưu. Một chuyến bị dời hai
+    /// lần là HAI sự kiện — không có chốt chống trùng cho loại này (xem docs/44 §3).
+    /// </summary>
+    TripDelayed,
+
+    /// <summary>
+    /// Lịch trình chuyến đổi theo hướng khác "lùi giờ": có mốc <b>sớm hơn</b>, hoặc
+    /// <see cref="Trip.ArrivalTime"/> đổi giữa null và có giá trị (thêm/bỏ mốc tới). Đây là loại
+    /// duy nhất còn lại khi giờ thực sự đổi, nên hai loại <c>Trip…</c> phủ kín mọi lần đổi giờ.
+    /// Cùng đối tượng nhận và cùng lối phát với <see cref="TripDelayed"/>.
+    /// </summary>
+    TripScheduleChanged
 }

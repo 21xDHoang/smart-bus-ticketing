@@ -61,7 +61,21 @@ builder.Services.AddScoped<ITripService, TripService>();
 // Task story 13 — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
 // Đặt tên RouteTrips để tránh đụng ITripService/TripService của API chi tiết chuyến /trips/{id}
 // (Vàng Thị Dăm) — cùng khuôn cặp IStopService / IRouteStopService ở Sprint 1.
-builder.Services.AddScoped<IRouteTripsService, RouteTripsService>();
+// Thông báo trễ/đổi lịch trình (US 10, dòng 44 Sprint 4 — Phùng Duy Hoàng): từ đây
+// IRouteTripsService resolve ra LỚP BỌC NotifyingRouteTripsService thay vì lớp trần, nên mọi lượt
+// sửa chuyến qua PUT /routes/{routeId}/trips/{id} đều đi qua chỗ báo tin mà RouteTripsService (file
+// của Hiếu — luật E1) không phải sửa. Cùng lối RefundAttemptService bên dưới: lớp trần trước, lớp bọc
+// sau; DI lấy bản đăng ký sau cùng nên ai thêm dòng IRouteTripsService nữa ở dưới sẽ thay thế im lặng
+// (TripScheduleChangeWiringTests ghim đúng chỗ nối này). Notifier tự quyết định "có gì để báo" bằng
+// cách so ảnh chụp giờ cũ với dữ liệu đã lưu; hợp đồng không-bao-giờ-ném-lỗi + lý do bọc decorator ở
+// Services/ITripScheduleChangeNotifier.cs và NotifyingRouteTripsService.cs.
+builder.Services.AddScoped<RouteTripsService>();
+builder.Services.AddScoped<ITripScheduleChangeNotifier, TripScheduleChangeNotifier>();
+builder.Services.AddScoped<IRouteTripsService>(provider => new NotifyingRouteTripsService(
+    provider.GetRequiredService<RouteTripsService>(),
+    provider.GetRequiredService<ITripScheduleChangeNotifier>(),
+    provider.GetRequiredService<AppDbContext>(),
+    provider.GetRequiredService<ILogger<NotifyingRouteTripsService>>()));
 
 // Job sinh chuyến tự động cho những ngày sắp tới (US 13).
 // Task "BackgroundService sinh chuyến tự động từ lịch trình theo ngày" — Nguyễn Duy Kiên.
@@ -441,6 +455,15 @@ builder.Services.AddScoped<IVoucherAdminService, VoucherAdminService>();
 // Đặt sau khối voucher vì cùng nhóm "đọc tổng hợp từ bảng đã có" — báo cáo không ghi dữ liệu.
 builder.Services.AddScoped<IRevenueReportService, RevenueReportService>();
 
+// So sánh doanh thu kỳ hiện tại với kỳ liền trước cùng độ dài: GET /api/reports/revenue/comparison
+// (US 19 "Doanh thu", Sprint 4). Task "API so sánh doanh thu giữa các kỳ (tăng/giảm %)" —
+// Phùng Duy Hoàng. Cùng bề mặt /reports/revenue với báo cáo của Hiếu nhưng controller riêng
+// (RevenueComparisonController) — mỗi task một controller.
+// Service KHÔNG tự truy vấn Payments: gọi IRevenueReportService hai lần (kỳ hiện tại + kỳ trước)
+// để hai endpoint dùng chung đúng một nguồn số. Đặt ngay sau báo cáo gốc vì phụ thuộc trực tiếp
+// vào nó — nhìn danh sách đăng ký là thấy quan hệ.
+builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
@@ -526,6 +549,21 @@ builder.Services.AddScoped<ITicketRequestResultNotifier, TicketRequestResultNoti
 // khác (luật E1), chứ bản thân lớp bọc không có ích gì. Interface này không có factory nào bọc.
 builder.Services.AddScoped<ITicketRequestReviewService, TicketRequestReviewService>();
 
+// Gửi yêu cầu đổi chuyến — POST /api/ticket-changes (US 5, dòng 4 Sprint 4 — Nguyễn Duy Kiên):
+// kiểm vé thuộc người gọi + còn Paid, kiểm không có yêu cầu chờ trên cùng vé (ràng buộc liên bảng
+// với CancellationRequests), kiểm chuyến/ghế mới, chụp NewPrice từ Fares rồi ghi một dòng Pending.
+// KHÔNG đụng dòng vé và KHÔNG giữ ghế mới — hai việc đó thuộc nửa duyệt ở trên. Chênh lệch giá là
+// trường suy ra trong response, không ghi cột nào (docs/32 §6). Không có factory/decorator nào bọc.
+// ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
+builder.Services.AddScoped<ITicketChangeSubmissionService, TicketChangeSubmissionService>();
+
+// Tính phí huỷ vé theo quy định 24h / 12h / 2h (US 5, dòng 6 Sprint 4 — Nguyễn Duy Kiên): hàm thuần,
+// không đọc CSDL lẫn đồng hồ; người gọi truyền Ticket.Price, CancellationRequest.DepartureAt và now.
+// Hiếu (dòng 3) tiêm interface này ở POST /api/cancellation-requests để lấy CẢ điều kiện thời gian
+// lẫn con số ghi vào CancellationFee — đừng chép lại ngưỡng ở endpoint. Quy định: docs/32 §2.1.
+// ⚠️ File này của Hoàng — nhờ Hoàng xem qua dòng đăng ký này trong PR.
+builder.Services.AddScoped<ICancellationFeeService, CancellationFeeService>();
+
 // Ghi nhật ký soát vé + chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (US 15, dòng 18 Sprint 4 —
 // Phùng Duy Hoàng). Endpoint soát vé POST /tickets/validate (dòng 15, Trần Trung Hiếu) tiêm interface
 // này rồi gọi SAU khi đã xác thực chữ ký và tính xong kết quả — cả lượt online lẫn lượt đồng bộ đều đi
@@ -564,13 +602,19 @@ builder.Services.AddScoped<ISeatHoldExpiryService>(provider => new NotifyingSeat
 // Ba người gọi phân biệt bằng trigger (chi tiết ở IRefundAttemptService): service hoàn tiền tự
 // động khi duyệt huỷ vé (dòng 28 — Kiên, chưa dựng) → Initial; nút "Thử lại" của màn Admin
 // (dòng 35 — Băng, chưa nối) → ManualRetry; job theo lịch ngay dưới → ScheduledRetry.
-// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu — chưa dựng), nên hôm nay
-// IRefundGatewayCaller trỏ vào Placeholder: mọi lượt gọi trả Unresolved → khoản giữ nguyên Pending,
-// TUYỆT ĐỐI không ghi Succeeded giả. Khi dòng 29 vào thì đổi ĐÚNG MỘT dòng đăng ký dưới đây sang
-// client thật.
+// Cổng hoàn tiền THẬT là task dòng 29 (Trần Trung Hiếu) — đã dựng: RefundGatewayCaller tra client
+// theo MethodCode của giao dịch gốc (docs/40 §2.5) và bọc lỗi vận chuyển thành Unresolved, TUYỆT ĐỐI
+// không đoán. Thay chỗ đăng ký Placeholder trước đây (class Placeholder vẫn nằm ở Services/ — file
+// của Hoàng, nhờ Hoàng xem qua PR này).
+// Ba client đăng ký qua AddHttpClient (transient) và chỉ được dựng khi có lời gọi — máy cấu hình
+// thiếu cổng nào thì cổng đó không kéo sập dây chuyền (cùng lối PaymentGatewayResolver).
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
-builder.Services.AddScoped<IRefundGatewayCaller, PlaceholderRefundGatewayCaller>();
+builder.Services.Configure<VnPayRefundOptions>(builder.Configuration.GetSection(VnPayRefundOptions.SectionName));
+builder.Services.AddScoped<IRefundGatewayCaller, RefundGatewayCaller>();
+builder.Services.AddHttpClient<MoMoRefundClient>();
+builder.Services.AddHttpClient<VnPayRefundClient>();
+builder.Services.AddHttpClient<ZaloPayRefundClient>();
 // Thông báo kết quả hoàn tiền cho khách (US 8, dòng 34 Sprint 4 — Phùng Duy Hoàng): từ đây
 // IRefundAttemptService resolve ra LỚP BỌC NotifyingRefundAttemptService thay vì lớp trần, nên CẢ BA
 // đường gọi cổng ở trên đi qua chỗ báo tin mà không đường nào phải tự nhớ — kể cả hai đường chưa
@@ -615,6 +659,43 @@ builder.Services.AddHostedService<RefundRetryBackgroundService>();
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR ghế, trước phần hạ tầng JWT/RBAC/CORS) để không
 // chèn vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
 builder.Services.AddScoped<IRefundLookupService, RefundLookupService>();
+
+// Đăng ký / huỷ theo dõi thông báo theo tuyến và trạm: GET/POST/DELETE /api/subscriptions.
+// Task "API đăng ký / huỷ theo dõi thông báo theo tuyến và trạm" (US 10, Sprint 5 dòng 17) —
+// Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Bảng Subscriptions đứng NGOÀI danh sách A9 nên service đọc thẳng DbSet (docs/37); hai service
+// của Kiên (bắn tin khi xe cách trạm <500m, đẩy sự cố theo tuyến) và component công tắc của Thịnh
+// sẽ đọc cùng bảng này ở Sprint 5.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR ghế, trước phần hạ tầng JWT/RBAC/CORS) để không
+// chèn vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
+// Thông báo trong ứng dụng (US 10, Sprint 5), phần đọc của hành khách:
+// GET /api/notifications/me.
+// Task "API lịch sử thông báo đã nhận của hành khách" (dòng 19 Sprint 5) — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR (cùng lối đã làm ở khối IRefundLookupService
+// ngay trên, commit d5bd049).
+// Yêu cầu đăng nhập nhưng KHÔNG gắn policy vai trò — hành khách tự xem thông báo của mình, quyền sở
+// hữu kiểm ngay trong truy vấn theo userId. Đây là bề mặt REST của thông báo; kênh ĐẨY vẫn là
+// NotificationHub ở /hubs/notifications (đăng ký phía trên, trong khối SignalR).
+// Chỉ đọc nên không có migration kèm theo: bảng Notifications và chỉ mục (UserId, CreatedAt) đã dựng
+// từ 20261013143603_Sprint4_Notifications.
+// Các phần CÒN LẠI của bề mặt thông báo chưa dựng và không thuộc task này: service bắn thông báo khi
+// xe cách trạm dưới 500m (Kiên, dòng 15), API đăng ký/huỷ theo dõi trạm (Hiếu, dòng 17), màn quản lý
+// mẫu thông báo (dòng 24) và test luồng thông báo (Giàng A Vàng, dòng 30) — chưa có dòng đăng ký nào
+// ở đây vì chưa có service.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
+builder.Services.AddScoped<IMyNotificationsService, MyNotificationsService>();
+
+// Màn quản lý mẫu thông báo (US 10, Sprint 5 dòng 24) — GET/PUT /api/notification-templates.
+// Task "Màn hình Admin quản lý mẫu thông báo" — Dương Thị Hạnh.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR (cùng lối các khối Sprint 5 ngay trên).
+// Mẫu là phần GHI ĐÈ của câu mặc định (docs/37 §2.1): bảng NotificationTemplates đã dựng từ
+// 20261014164805_Sprint4_NotificationTemplates_Subscriptions, không cần migration mới.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không
+// chèn vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
+builder.Services.AddScoped<INotificationTemplateService, NotificationTemplateService>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);

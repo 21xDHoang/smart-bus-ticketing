@@ -7,9 +7,10 @@
 > 🟢 **Trạng thái 10/10/2026:** entity `Ticket` + cấu hình `AppDbContext.Ticket.cs` **đã xong**, và
 > migration `Sprint3_Payments_Vouchers_Tickets` (Vàng Thị Dăm, task Sprint 3 *"Migrate bảng Tickets,
 > TicketQRCodes"*) **đã sinh + đã soát** — xem §8. Cùng lệnh đó trả luôn nợ migration của `Payments`
-> (dòng 27) và `Vouchers` + `VoucherUsages` (dòng 50). **Chưa merge, chưa áp lên CSDL chung**: bảng
-> `Tickets` chỉ có thật sau khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp
-> vẫn chạy được trên EF InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem cảnh báo ở §3.
+> (dòng 27) và `Vouchers` + `VoucherUsages` (dòng 50). **Đã merge** vào `main` và **đã áp lên CSDL
+> chung** — kiểm lại 17/10/2026: `dotnet ef migrations list` liệt kê **18/18** migration, **0** dòng
+> `(Pending)`. Cảnh báo ở cuối câu cũ **vẫn giữ nguyên giá trị**: test tích hợp chạy trên EF InMemory,
+> mà InMemory **không** cưỡng chế chỉ mục/FK — xem §3.
 
 ## 1. Bảng `Tickets` — một vé đã phát hành
 
@@ -167,8 +168,8 @@ seed thêm dòng `Tickets` thật, đừng nới FK.
   Hình dạng response **không đổi** — đã chốt trong `api-contract.md`. Lưu ý thêm: nhánh `'Held'`
   trong chỉ mục §3 không sinh ra dòng nào, nên chỉ cần hỏi `'Paid'`.
 - **Băng / Hạnh** — `frontend/src/api/ticketApi.ts` đang `USE_MOCK_DATA = true` và ném lỗi ở nhánh
-  thật. Bảng **có thật sau khi PR migration được merge + `database update`** (§8) nhưng **endpoint
-  chưa** — chờ Hiếu xong rồi mới lật cờ, đừng lật trước.
+  thật. Bảng **đã có thật trên CSDL chung** (áp xong, §8) nhưng **endpoint chưa** — chờ Hiếu xong rồi
+  mới lật cờ, đừng lật trước.
 - **Ai cần thêm cột** — nhắn Dăm, không tự sửa `Migrations/*`, `ModelSnapshot.cs`, `Entities/`.
 
 ## 7. Việc cần báo nhóm (không phải việc code)
@@ -225,10 +226,13 @@ trong tài liệu sẽ không trượt.
 
 **Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4:**
 
-1. PR nhánh này → có người khác approve → **Squash and merge** vào `main`.
-2. **Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.
-   Trước bước đó, CSDL chung **chưa có** `Tickets`, `Payments`, `Vouchers`, `VoucherUsages` — endpoint
-   nào chạm bốn bảng này sẽ lỗi `relation "…" does not exist`.
+✅ **Cả hai bước đã xong** (kiểm lại 17/10/2026) — giữ nguyên hai dòng dưới làm mốc lịch sử:
+
+1. ~~PR nhánh này → có người khác approve → **Squash and merge** vào `main`.~~
+   ✅ Đã merge.
+2. ~~**Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.~~
+   ✅ Đã chạy. CSDL chung nay **đã có** `Tickets`, `Payments`, `Vouchers`, `VoucherUsages` —
+   **18/18** migration đã áp, **0** dòng `(Pending)`.
 
 Máy chưa có `appsettings.Development.json` (file bị .gitignore, repo public) thì mọi lệnh `dotnet ef`
 cần hai biến môi trường **giá trị giả** để host design-time dựng được model — `migrations add` và
