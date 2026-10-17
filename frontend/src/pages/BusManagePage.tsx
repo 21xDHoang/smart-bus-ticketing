@@ -143,23 +143,31 @@ const hasAssignedDriver = (bus: Bus) =>
   Boolean((bus.currentTrip ?? bus.nextTrip)?.driverId);
 
 /**
- * Cột "Ghế đã sinh": số ghế THẬT so với sức chứa khai báo. Lệch nghĩa là xe chưa cấu hình
- * sơ đồ ghế (hoặc sơ đồ vừa đổi) — đánh dấu đỏ để quản lý thấy ngay thay vì phát hiện lúc
- * hành khách không chọn được ghế.
+ * Cột "Sức chứa / Ghế": gộp sức chứa khai báo và số ghế THẬT đã sinh vào một ô để bảng
+ * hiện đủ cột mà không phải cuộn ngang. Lệch nghĩa là xe chưa cấu hình sơ đồ ghế (hoặc sơ
+ * đồ vừa đổi) — đánh dấu đỏ để quản lý thấy ngay thay vì phát hiện lúc hành khách không
+ * chọn được ghế.
  */
-const renderSeats = (_: unknown, bus: Bus) => {
+const renderCapacitySeats = (_: unknown, bus: Bus) => {
   const { seatsCreated, capacity, isComplete, layout } = bus.seatSummary;
   const text = `${seatsCreated}/${capacity} ghế`;
   const title = layout
     ? `Sơ đồ: ${layout.numberOfFloors} tầng · ${layout.rowsPerFloor} hàng × ${layout.columnsPerRow} cột · ${layout.vipSeatCount} ghế VIP`
     : 'Loại xe chưa cấu hình sơ đồ ghế';
 
-  return isComplete ? (
-    <span title={title}>{text}</span>
-  ) : (
-    <Typography.Text type="danger" title={title}>
-      {text}
-    </Typography.Text>
+  return (
+    <Space direction="vertical" size={0}>
+      <span>{bus.capacity} chỗ</span>
+      {isComplete ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }} title={title}>
+          {text}
+        </Typography.Text>
+      ) : (
+        <Typography.Text type="danger" style={{ fontSize: 12 }} title={title}>
+          {text}
+        </Typography.Text>
+      )}
+    </Space>
   );
 };
 
@@ -171,30 +179,27 @@ const buildBaseColumns = (
   onAssignDriver: (bus: Bus) => void,
 ): NonNullable<TableProps<Bus>['columns']> => [
   {
-    title: 'Biển số',
-    dataIndex: 'licensePlate',
-    key: 'licensePlate',
-    width: 130,
-    render: (licensePlate: string) => <StatusTag color="blue">{licensePlate}</StatusTag>,
-  },
-  {
-    title: 'Loại xe',
-    dataIndex: 'busType',
-    key: 'busType',
-    width: 180,
-  },
-  {
-    title: 'Sức chứa',
-    dataIndex: 'capacity',
-    key: 'capacity',
-    width: 110,
-    render: (capacity: number) => `${capacity} chỗ`,
+    // Gộp biển số + loại xe + ngày tạo vào một cột. Bảng dùng tableLayout="fixed" với bề
+    // rộng theo % để luôn nằm trọn trong thân card; gộp cột là cách giữ đủ thông tin mà
+    // không phát sinh thanh cuộn ngang.
+    title: 'Xe',
+    key: 'bus',
+    width: '15%',
+    render: (_, bus) => (
+      <Space direction="vertical" size={0}>
+        <StatusTag color="blue">{bus.licensePlate}</StatusTag>
+        <span>{bus.busType}</span>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          Tạo {formatDate(bus.createdAt)}
+        </Typography.Text>
+      </Space>
+    ),
   },
   {
     title: 'Trạng thái',
     dataIndex: 'status',
     key: 'status',
-    width: 170,
+    width: '10%',
     render: (status: BusStatus) => {
       // Backend chỉ trả 'Active' | 'Maintenance' | 'Inactive'. Lỡ có giá trị lạ thì hiện
       // nguyên văn, không để màn hình vỡ vì tra meta không thấy.
@@ -205,19 +210,19 @@ const buildBaseColumns = (
   {
     title: 'Tuyến được phân công',
     key: 'assignedRoutes',
-    width: 200,
+    width: '14%',
     render: renderAssignedRoutes,
   },
   {
     title: 'Đang chạy / chuyến kế tiếp',
     key: 'trip',
-    width: 240,
+    width: '20%',
     render: renderTrip,
   },
   {
     title: 'Tài xế',
     key: 'driver',
-    width: 210,
+    width: '14%',
     render: (_, bus) => (
       <Space direction="vertical" size={2}>
         {renderDriver(_, bus)}
@@ -240,17 +245,10 @@ const buildBaseColumns = (
     ),
   },
   {
-    title: 'Ghế đã sinh',
+    title: 'Sức chứa / Ghế',
     key: 'seats',
-    width: 130,
-    render: renderSeats,
-  },
-  {
-    title: 'Ngày tạo',
-    dataIndex: 'createdAt',
-    key: 'createdAt',
-    width: 130,
-    render: (createdAt: string) => formatDate(createdAt),
+    width: '12%',
+    render: renderCapacitySeats,
   },
 ];
 
@@ -426,10 +424,16 @@ const BusManagePage = () => {
     {
       title: 'Hành động',
       key: 'actions',
-      width: 180,
+      width: '15%',
       render: (_, bus) => (
-        <Space>
-          <Button type="link" size="small" onClick={() => openEdit(bus)}>
+        // Xếp dọc để nhãn "Ngừng khai thác" không bị đẩy tràn ô khi card hẹp.
+        <Space direction="vertical" size={0}>
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, height: 'auto' }}
+            onClick={() => openEdit(bus)}
+          >
             Sửa
           </Button>
           <Popconfirm
@@ -440,7 +444,7 @@ const BusManagePage = () => {
             okButtonProps={{ danger: true }}
             onConfirm={() => handleDelete(bus.id)}
           >
-            <Button type="link" size="small" danger>
+            <Button type="link" size="small" danger style={{ padding: 0, height: 'auto' }}>
               Ngừng khai thác
             </Button>
           </Popconfirm>
@@ -531,7 +535,9 @@ const BusManagePage = () => {
           columns={columns}
           dataSource={data}
           loading={loading}
-          scroll={{ x: 1600 }}
+          // Không đặt scroll.x: bảng co giãn theo thân card (cột chia %), hiện đủ cột thay
+          // vì bắt người dùng kéo ngang.
+          tableLayout="fixed"
           locale={{ emptyText: 'Không tìm thấy xe buýt nào' }}
           pagination={tablePagination({
             page,
