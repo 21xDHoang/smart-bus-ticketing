@@ -4004,7 +4004,9 @@ bắt buộc ở chỗ gọi:
 > HMAC-SHA512 + kiểm chữ ký tham số cổng trả về — không gọi mạng nên test được ngay. **Client cổng
 > ZaloPay cũng đã có** (`ZaloPayGatewayService` — Nguyễn Duy Kiên, mục "Cấu hình cổng ZaloPay"):
 > tạo đơn, xác thực callback, hỏi trạng thái — test bằng HTTP giả như MoMo. Endpoint dưới
-> đây sẽ có khi migration xong; mục này chốt hình dạng để FE (`frontend/src/api/paymentApi.ts` —
+> ✅ **Cập nhật (task "Tạo giao dịch + gọi cổng" — Hiếu):** endpoint dưới đây **đã dựng** —
+> migration `Payments` merge từ lâu (PR #144) và đã áp lên CSDL chung. Mục này chốt hình dạng để FE
+> (`frontend/src/api/paymentApi.ts` —
 > Băng đã code màn chờ, Hạnh đang code màn chọn phương thức) dựa vào.
 
 > ⚠️ **Việc cần báo nhóm (xung đột tài liệu):** bảng phân công Sprint 3 giao migration Payments ở
@@ -4051,11 +4053,12 @@ về y hệt nhau (cùng `vnp_SecureHash`, cùng `vnp_TxnRef`). Endpoint không 
 | Method | Endpoint | Task | Trạng thái |
 |---|---|---|---|
 | GET | `/payment-methods` | Danh sách phương thức đang mở — chưa có chủ trong bảng phân công (gợi ý: thuộc phần adapter của Hoàng, màn của Hạnh) | Chưa làm |
-| POST | `/payments` | Tạo giao dịch + gọi cổng — Trần Trung Hiếu | Chờ bảng |
-| POST | `/payments/momo/callback` | IPN MoMo — Trần Trung Hiếu | Chờ bảng |
-| GET | `/payments/vnpay/callback` | IPN VNPay (**GET + query string**, khác MoMo POST JSON) — Nguyễn Duy Kiên | Chờ bảng |
-| GET | `/payments/{paymentCode}` | *"API kiểm tra trạng thái giao dịch"* — Trần Trung Hiếu | Chờ bảng |
-| — | *job đối soát* | *"đối soát tự động"* — Trần Trung Hiếu | Chờ bảng — chốt dưới |
+| POST | `/payments` | Tạo giao dịch + gọi cổng — Trần Trung Hiếu | ✅ đã làm |
+| POST | `/payments/momo/callback` | IPN MoMo — Trần Trung Hiếu | ✅ đã làm |
+| POST | `/payments/zalopay/callback` | IPN ZaloPay — Trần Trung Hiếu. **Bổ sung ở task "Tạo giao dịch + gọi cổng"** — bảng endpoint cũ thiếu dòng này dù mục cấu hình ZaloPay đã mô tả đủ cấu trúc callback + câu merchant trả lời; không có nó thì giao dịch ZaloPay chỉ ngã ngũ qua job đối soát, chậm hơn một nhịp 1 phút so với màn chờ 60 giây của FE | ✅ đã làm |
+| GET | `/payments/vnpay/callback` | IPN VNPay (**GET + query string**, khác MoMo POST JSON) — Nguyễn Duy Kiên | Chờ Kiên |
+| GET | `/payments/{paymentCode}` | *"API kiểm tra trạng thái giao dịch"* — Trần Trung Hiếu | ✅ đã làm |
+| — | *job đối soát* | *"đối soát tự động"* — Trần Trung Hiếu | ✅ đã làm — chốt dưới |
 
 #### `POST /payments` — tạo giao dịch (đã có client cổng, chờ bảng để lưu)
 
@@ -4930,7 +4933,7 @@ EF ghi đủ cột của model, **bình thường, đừng xoá** — còn SQL g
 |---|---|
 | **Mỗi khách chỉ dùng một lần?** Luật "mỗi người một lượt" chưa có trong bảng phân công, bản nháp FE cũng chỉ có `quantity`/`usedCount` **toàn cục** (không phải mỗi người) | **Chưa cài.** `VoucherUsage.UserId` đã ghi sẵn nên thêm luật này sau **không phải migrate lại** — chỉ thêm một điều kiện `EXISTS` vào chuỗi kiểm tra |
 | **Một đơn dùng được nhiều mã?** Hợp đồng và bản nháp FE đều là **một** `code` mỗi đơn | Một mã. `VoucherUsages` nhiều dòng cho một `paymentCode` là chuyện chưa chốt — unique index trên `paymentCode` đang **chặn cứng** điều đó |
-| **Đẩy `VoucherCode` + `DiscountAmount` lên `Payments`?** | Chưa — xem 📌 ở mục "Thanh toán". Hiện đọc qua `VoucherUsages` |
+| **Đẩy `VoucherCode` + `DiscountAmount` lên `Payments`?** | 🔴 **Đã gặp thật khi dựng endpoint (Hiếu, task "Tạo giao dịch + gọi cổng"):** bước "tiêu thụ voucher lúc tiền về" (mục "Áp dụng voucher vào giao dịch") KHÔNG chạy được — callback chỉ biết `paymentCode`, mà `VoucherCode`/`OrderAmount` (trước giảm) không nằm ở đâu giữa lúc tạo giao dịch và lúc tiền về. Endpoint tạo giao dịch vẫn kiểm + trừ giá theo mã, nhưng dòng `VoucherUsages`/`usedCount` chỉ có thể ghi khi nhóm chốt một chỗ lưu (thêm cột vào `Payments` — nhắn Dăm — hoặc chấp nhận ghi usage ngay lúc tạo). **Nhóm cần chốt để nối bước tiêu thụ.** |
 | **Voucher sinh từ đâu?** Bảng phân công chỉ có CRUD tay (dòng 51); không có story nào cho mã tự sinh hay phát theo chiến dịch | Ngoài phạm vi — CRUD tay |
 | **US 18 thuộc sprint nào?** Bảng tính xếp **Sprint 3**; `docs/02-sprint-roadmap.md` lại đề xuất chuyển US 18 từ Sprint 5 sang **Sprint 4**; quy ước A9 xếp nhóm bảng này ở Sprint 4 | Nhóm cần chốt **một** bảng phân công (cùng dạng xung đột đã ghi ở mục "Thanh toán") |
 

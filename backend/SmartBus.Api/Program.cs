@@ -408,6 +408,22 @@ builder.Services.AddScoped<IPaymentGatewayResolver, PaymentGatewayResolver>();
 // không chèn vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
 builder.Services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
 
+// Bề mặt thanh toán (US 6, nợ Sprint 3): POST /payments + GET /payments/{paymentCode} + hai
+// callback MoMo/ZaloPay + job đối soát + phát hành vé khi tiền về. Task "Tạo giao dịch + gọi
+// cổng", "API kiểm tra trạng thái giao dịch", "đối soát tự động", "API phát hành vé điện tử sau
+// khi thanh toán thành công" — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// - PaymentOptions: chỉ chứa FrontendBaseUrl công khai (dựng ReturnUrl gửi cổng) — không bí mật.
+// - IPaymentTicketIssuer: phát hành vé + lật giữ chỗ, idempotent theo paymentCode.
+// - Job đối soát: hosted service singleton + ruột scoped, cùng lối RefundRetryBackgroundService;
+//   nhớ thêm vào BanNoopCuaJob của TestAppFactory khi thêm job mới (đã làm cùng nhánh).
+// Đặt ở CUỐI danh sách đăng ký (sau khối adapter cổng, trước phần hạ tầng JWT/RBAC/CORS) để
+// không chèn vào đúng khe mà các nhánh Sprint 3 khác đang thêm dòng.
+builder.Services.Configure<PaymentOptions>(builder.Configuration.GetSection(PaymentOptions.SectionName));
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPaymentTicketIssuer, PaymentTicketIssuer>();
+builder.Services.AddScoped<IPaymentReconciliationService, PaymentReconciliationService>();
+builder.Services.AddHostedService<PaymentReconciliationBackgroundService>();
+
 // Voucher (US 18): kiểm tra mã cho một đơn hàng (POST /vouchers/validate) và tiêu thụ mã khi giao
 // dịch đã thu được tiền. Task "API kiểm tra và áp dụng voucher vào đơn hàng" — Nguyễn Duy Kiên.
 // File này của Hoàng nên nhờ Hoàng xem qua trong PR.
