@@ -98,9 +98,9 @@ Token vẫn chuyển tiếp nguyên vẹn cho **lượt gọi cổng** (hợp đ
 
 ### 5.2 Hợp đồng frontend (Băng / Thịnh — dòng 35–36)
 
-Đây là **thay đổi hợp đồng**: `NotificationType` từ bốn giá trị thành **sáu**; `NotificationTarget` thêm `Refund`. Màn thông báo hiện chưa có mã nào cho hai loại mới — cần:
-- hiện đúng tiêu đề/nội dung (bảng **§6** — backend ghi sẵn cả `Title` lẫn `Body`, frontend chỉ hiển thị);
-- điều hướng `RelatedEntityType = Refund` về màn **"Hoàn tiền của tôi"** (dòng 33 của Hạnh), dùng `RelatedEntityId` để mở chi tiết khoản.
+Đây là **thay đổi hợp đồng**: `NotificationType` từ bốn giá trị thành **sáu**; `NotificationTarget` thêm `Refund`. `frontend/src/api/notificationApi.ts` đã cập nhật đủ sáu loại + ba target và gọi thẳng `GET /notifications/me` (Băng đồng ý cho sửa; nhánh dữ liệu giả đã bỏ). Việc còn lại ở UI:
+- hiện đúng tiêu đề/nội dung (bảng **§6** — backend ghi sẵn cả `Title` lẫn `Body`, frontend chỉ hiển thị) — đã có;
+- điều hướng `RelatedEntityType = Refund` về màn **"Hoàn tiền của tôi"** (dòng 33 của Hạnh), dùng `RelatedEntityId` để mở chi tiết khoản — **chưa làm**, hiện dòng thông báo chưa bấm được.
 
 `api-contract.md` (mục thông báo, bảng "Sáu loại") là bản hợp đồng đã cập nhật — đọc ở đó khi nối UI.
 

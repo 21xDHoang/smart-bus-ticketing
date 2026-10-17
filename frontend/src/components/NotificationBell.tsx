@@ -67,15 +67,22 @@ function formatRelativeTime(iso: string): string {
   return formatDateTime(iso);
 }
 
-/** Loại thông báo được DUYỆT (đối lập với bị từ chối) — quyết định biểu tượng. */
-function isApproved(type: NotificationType): boolean {
-  return type === 'CancellationApproved' || type === 'TicketChangeApproved';
+/**
+ * Loại thông báo mang tin TỐT (duyệt yêu cầu / hoàn tiền thành công) — quyết định biểu
+ * tượng. Ba loại còn lại đều là tin xấu: từ chối yêu cầu hoặc hoàn tiền thất bại.
+ */
+function isPositiveOutcome(type: NotificationType): boolean {
+  return (
+    type === 'CancellationApproved' ||
+    type === 'TicketChangeApproved' ||
+    type === 'RefundSucceeded'
+  );
 }
 
 /** Một mục trong danh sách thông báo — biểu tượng theo kết quả, nội dung xuống dòng được. */
 function NotificationItem({ notification }: { notification: AppNotification }) {
   const { token } = theme.useToken();
-  const approved = isApproved(notification.type);
+  const positive = isPositiveOutcome(notification.type);
 
   return (
     <div style={{ display: 'flex', gap: 10, padding: '10px 4px' }}>
@@ -85,10 +92,10 @@ function NotificationItem({ notification }: { notification: AppNotification }) {
           flexShrink: 0,
           fontSize: 18,
           lineHeight: '22px',
-          color: approved ? token.colorSuccess : token.colorError,
+          color: positive ? token.colorSuccess : token.colorError,
         }}
       >
-        {approved ? <CheckCircleFilled /> : <CloseCircleFilled />}
+        {positive ? <CheckCircleFilled /> : <CloseCircleFilled />}
       </span>
 
       <div style={{ minWidth: 0 }}>
