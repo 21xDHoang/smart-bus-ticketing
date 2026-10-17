@@ -3848,13 +3848,14 @@ Màn "Mã QR vé" mở trực tiếp một vé trong danh sách bằng id trên 
 ```
 POST /api/tickets/validate
 Authorization: Bearer <JWT>          ← Driver hoặc Manager
-Body:  { "code": "SBT1:…", "tripId": "…uuid…", "clientScanId": "…uuid…", "scannedAt": "…ISO-8601…" }
+Body:  { "code": "SBT1:…", "tripId": "…uuid…", "boardingStopId": "…uuid…", "clientScanId": "…uuid…", "scannedAt": "…ISO-8601…" }
 ```
 
 | Trường request | Kiểu | Ghi chú |
 |---|---|---|
 | `code` | `string`, bắt buộc | NGUYÊN VĂN chuỗi mã QR quét được, định dạng `SBT1:{ticketId}.{blob}` (106 ký tự, docs/30). Server tự xác thực chữ ký. Thiếu/rỗng → 400 `errors.code`; dài quá 200 ký tự → 400 `errors.scannedCode` |
 | `tripId` | `string` (GUID), tuỳ chọn | Chuyến phụ xe ĐANG CHẠY lúc quét — nguồn duy nhất kết luận được `WrongTrip`. Chuyến không tồn tại → **404**. Thiếu hẳn → bỏ phép đối chiếu chuyến |
+| `boardingStopId` | `string` (GUID), tuỳ chọn | Trạm khách **thực tế** lên xe, phụ xe ghi lúc quét — khác `Tickets.BoardingStopId` (trạm khách chọn lúc mua, A8.1) và chỉ được ghi cho lượt `Valid`. Trạm không thuộc tuyến của chuyến trên vé → 400 `errors.boardingStopId`. Bỏ trống → nhật ký để null (dòng 17, Kiên) |
 | `clientScanId` | `string` (GUID), tuỳ chọn | Mã lượt soát do MÁY QUÉT sinh NGAY LÚC QUÉT — khoá chống trùng khi hàng đợi ngoại tuyến đồng bộ lại (docs/39 §4.1). Vắng cả hai trường ngoại tuyến = lượt online kiểu cũ |
 | `scannedAt` | `string` (ISO-8601), tuỳ chọn | Giờ máy quét ghi nhận lượt soát. Ngoài cửa sổ hợp lý (nhanh hơn server quá 5 phút / cũ hơn 72 giờ) → 400 `errors.scannedAt` |
 
@@ -3887,6 +3888,13 @@ qua `ITicketValidationRecorder` (docs/34 §2.2). Endpoint **KHÔNG** lật `Tick
 việc của dòng 16 (Kiên); cho tới khi dòng 16 có, hai lượt soát cùng một vé còn `Paid` đều trả
 `Valid` và mỗi lượt ghi một dòng.
 
+**Trạm lên xe thực tế** (`boardingStopId`, dòng 17 — Kiên): chỉ lượt `Valid` mới là một lượt lên
+xe, nên chỉ lượt đó mới ghi `TicketValidations.BoardingStopId`; lượt bị từ chối ghi `null` kể cả
+khi request có gửi trạm. Trạm phải nằm trong `RouteStops` của tuyến mà **chuyến trên vé** đi —
+không đối chiếu với `Tickets.BoardingStopId` (trạm khách chọn lúc mua). Sai tuyến → 400
+`errors.boardingStopId` và **không ghi dòng nhật ký nào**. Gửi lại cùng `clientScanId` không xét
+lại trạm: dòng đã ghi giữ nguyên trạm của lần đầu (docs/39 §2.4).
+
 **Gửi lại cùng `clientScanId`** (mất mạng, app bị kill, thử lại) → 200 với **kết quả ĐÃ GHI của lần
 đầu**, không tính lại — kể cả khi trạng thái vé đã đổi từ lần đầu (docs/39 §4.2).
 
@@ -3894,6 +3902,7 @@ việc của dòng 16 (Kiên); cho tới khi dòng 16 có, hai lượt soát cù
 |---|---|
 | Thiếu/rỗng `code`, sai khuôn body | 400 `{ message, errors }` |
 | `scannedCode` quá dài, `scannedAt` ngoài cửa sổ | 400 `{ message, errors }` (do recorder) |
+| `boardingStopId` không thuộc tuyến của chuyến trên vé | 400 `{ message, errors.boardingStopId }` |
 | `tripId` trỏ chuyến không tồn tại | 404 |
 | Hết phiên đăng nhập | 401 |
 | Vai trò không phải Tài xế/Quản lý | 403 |

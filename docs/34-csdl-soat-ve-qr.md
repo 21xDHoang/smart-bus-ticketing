@@ -244,8 +244,11 @@ Dăm.
 - **Kiên** (dòng 16) — chống soát trùng: lượt thắng lật `Tickets.Status = 'Used'` + `Tickets.UsedAt`;
   lượt thua **ghi một dòng `Result = 'AlreadyUsed'`** vào bảng này rồi trả `valid: false`. Đây là chỗ
   §4.3 mục 2 được thực hiện — **đừng** để lượt thua ghi `Valid`.
-- **Kiên** (dòng 17) — ghi `BoardingStopId` của lượt lên xe. ⚠️ Đây là trạm **thực tế**, khác
-  `Tickets.BoardingStopId` (trạm khách chọn lúc mua) — xem §2.1.
+- **Kiên** (dòng 17) — ✅ **đã xong**: `ITicketBoardingStopService` quyết định giá trị
+  `TicketValidations.BoardingStopId`, endpoint soát vé chuyển sang `ITicketValidationRecorder`. Chỉ
+  lượt `Valid` mới ghi trạm, và trạm phải thuộc `RouteStops` của tuyến chuyến TRÊN VÉ. ⚠️ Đây là
+  trạm **thực tế**, khác `Tickets.BoardingStopId` (trạm khách chọn lúc mua) — xem §2.1 và
+  `docs/41-api-soat-ve-qr.md` §3.5.
 - **Hoàng** (dòng 18) — hàng đợi ngoại tuyến: sinh `ClientScanId` ở **máy quét**, gửi kèm
   `ScannedAt`. Bắt lỗi unique của §4.1 và coi lượt gửi lại là **thành công** (idempotent), **đừng**
   để nó thành 500. Kiểm khoảng hợp lý của `ScannedAt` (§4.2).
