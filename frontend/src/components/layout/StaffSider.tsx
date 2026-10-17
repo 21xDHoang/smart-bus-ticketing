@@ -34,6 +34,7 @@ export default function StaffSider({ role }: { role: string | null }) {
       theme="light"
       style={{
         position: 'sticky',
+        // Header phủ hết chiều ngang và nằm trên hàng chứa Sider, nên cột bám ngay dưới Header.
         top: 'var(--app-header-h)',
         height: 'calc(100vh - var(--app-header-h))',
         overflowY: 'auto',
