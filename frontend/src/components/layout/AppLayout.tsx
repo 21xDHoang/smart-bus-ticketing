@@ -42,20 +42,22 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      {showSider && <StaffSider role={role} />}
+      <AppHeader showMenuButton={showDrawer} onOpenMenu={() => setDrawerOpen(true)}>
+        {showTopNav && <TopNav role={role} />}
+      </AppHeader>
 
       <Layout>
-        <AppHeader showMenuButton={showDrawer} onOpenMenu={() => setDrawerOpen(true)}>
-          {showTopNav && <TopNav role={role} />}
-        </AppHeader>
+        {showSider && <StaffSider role={role} />}
 
-        <Content>
-          <PageContainer hasBottomNav={showBottomNav}>
-            <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
-          </PageContainer>
-        </Content>
+        <Layout>
+          <Content>
+            <PageContainer hasBottomNav={showBottomNav}>
+              <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
+            </PageContainer>
+          </Content>
 
-        <AppFooter hidden={showBottomNav} />
+          <AppFooter hidden={showBottomNav} />
+        </Layout>
       </Layout>
 
       {showBottomNav && <BottomNav role={role} />}

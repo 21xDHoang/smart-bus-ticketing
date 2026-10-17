@@ -34,11 +34,9 @@ export default function StaffSider({ role }: { role: string | null }) {
       theme="light"
       style={{
         position: 'sticky',
-        // Sider nằm cạnh Layout chứa Header (không nằm dưới Header), nên phải bám đỉnh
-        // màn hình. Dùng top bằng chiều cao Header sẽ đẩy cả cột xuống, để lại khoảng
-        // trống phía trên menu.
-        top: 0,
-        height: '100vh',
+        // Header phủ hết chiều ngang và nằm trên hàng chứa Sider, nên cột bám ngay dưới Header.
+        top: 'var(--app-header-h)',
+        height: 'calc(100vh - var(--app-header-h))',
         overflowY: 'auto',
         overflowX: 'hidden',
         borderRight: '1px solid var(--app-border)',
