@@ -209,6 +209,81 @@ hai đường khác nhau.
 > động ghi — đụng vào controller của người khác nhiều hơn hẳn việc thêm một endpoint chỉ-đọc. Ngoài
 > ra `GET /stops` trả **hết** trạm kèm toạ độ trong một lượt, còn ô gợi ý chỉ cần một lát cắt.
 
+## Gợi ý trạm cho tra cứu tuyến — `/stops/suggestions`
+
+> 📌 **Hợp đồng chốt ở đây.** Backend: `StopsSuggestionsController` + `StopSuggestionService`.
+> Mục này do Vàng Thị Dăm bổ sung cho lỗi *"ô điểm đi/điểm đến gợi ý cả trạm của tuyến đã xoá"*
+> (Sprint 5, sửa lỗi trải nghiệm màn "Tra cứu tuyến").
+>
+> **Endpoint CÔNG KHAI**, cùng nhóm với `/stops/search`, `/routes/search`, `/trips/search`.
+>
+> **Vì sao cần endpoint mới thay vì sửa `/stops/search`?** `/stops/search` là ô chọn trạm dùng
+> chung (vé tháng, quản lý tuyến) và trả **mọi** trạm trong CSDL — đúng yêu cầu của nó. Ô tra cứu
+> tuyến lại chỉ được phép gợi ý **trạm có thật trên một tuyến đang khai thác**; nếu lọc cứng trong
+> `/stops/search` thì các màn khác mất những trạm chưa gắn tuyến. Tách endpoint để không đổi hình
+> dạng API đã có (⛔5).
+
+### Endpoint
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/stops/suggestions` | Gợi ý trạm **chỉ thuộc tuyến `Active`** cho ô điểm đi/điểm đến (**công khai**) | — | `StopSuggestion[]` |
+
+Tham số query:
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `keyword` | `string` | — | Từ khoá — khớp **tên trạm hoặc địa chỉ**, **không phân biệt hoa thường và không phân biệt dấu**. Bỏ trống = lấy đầu danh sách |
+| `limit` | `number` | 10 | Số gợi ý tối đa, **1..50** |
+| `originStopId` | `string` (GUID) | — | Điểm đi đã chọn. Có tham số này thì **chỉ gợi ý trạm đứng SAU điểm đi** trên cùng tuyến — dùng cho ô điểm đến |
+| `destinationStopId` | `string` (GUID) | — | Điểm đến đã chọn. Có tham số này thì **chỉ gợi ý trạm đứng TRƯỚC điểm đến** trên cùng tuyến — dùng cho ô điểm đi |
+
+```json
+// StopSuggestion[] — ví dụ GET /stops/suggestions?keyword=tan&originStopId=3f2a...
+[
+  {
+    "id": "9d2f5c33-0000-0000-0000-000000000000",
+    "name": "Phường Tân Long",
+    "address": "Tân Long, Thái Nguyên",
+    "latitude": 21.5858,
+    "longitude": 105.8252,
+    "routes": [
+      { "routeId": "a1b2c3d4-0000-0000-0000-000000000000", "routeCode": "01TL-PY", "routeName": "Tân Long — Phổ Yên" }
+    ]
+  }
+]
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá trạm — màn hình gửi thẳng làm `originStopId`/`destinationStopId` cho `/routes/suggestions` |
+| `name` | `string` | Tên trạm |
+| `address` | `string` | Địa chỉ — phân biệt hai trạm trùng tên |
+| `latitude` | `number` | Vĩ độ |
+| `longitude` | `number` | Kinh độ |
+| `routes[]` | `StopSuggestionRoute[]` | Các tuyến `Active` **đi qua trạm này trong đúng ngữ cảnh lọc** (khi có `originStopId`/`destinationStopId`, chỉ những tuyến thoả điều kiện thứ tự trạm) |
+
+- **Chỉ trả trạm thuộc ít nhất một tuyến `Active`.** Trạm mồ côi (tuyến đã xoá/ngừng khai thác)
+  không bao giờ xuất hiện — đây chính là lỗi màn tra cứu đang mắc.
+- `routes[]` rỗng không xảy ra: trạm vào danh sách thì phải có ít nhất một tuyến.
+- Không có trạm nào khớp → `[]`, **không** phải 404.
+- `limit` ngoài khoảng 1..50 → **400** `errors.limit`.
+- `originStopId`/`destinationStopId` sai định dạng GUID → **400** `errors.originStopId` /
+  `errors.destinationStopId`.
+- Trạm đã chọn không tồn tại, hoặc không thuộc tuyến `Active` nào → `[]` (bộ lọc mềm). Màn hình
+  hiển thị cảnh báo ngay dưới ô nhập thay vì chặn hành khách.
+- Nếu cả hai tham số cùng có mặt, trạm gợi ý phải thoả **cả hai**: sau điểm đi **và** trước điểm đến.
+- Xếp hạng giống `/stops/search`: tên bắt đầu bằng từ khoá → tên chứa từ khoá → chỉ khớp địa chỉ;
+  cùng hạng xếp theo tên (`vi`), trùng tên xếp theo `id`.
+- Không phân biệt dấu, gồm cả `đ` → `d` — cùng thuật toán với `/stops/search`.
+
+> **Vì sao lọc theo thứ tự trạm?** Hành khách chọn điểm đi trước, ô điểm đến phải gợi ý những trạm
+> **xe thực sự chạy tới** theo chiều của tuyến. Không lọc thì dropdown đầy trạm ngược chiều, chọn
+> xong mới biết không có tuyến — đúng kiểu bất tiện cần sửa.
+
+> **Vì sao không trả luôn `minPrice`/`distance`?** Ô gợi ý chỉ cần đủ để chọn đúng trạm. Giá và
+> khoảng cách là việc của `/routes/suggestions` sau khi đã có cặp trạm.
+
 ## Tuyến đường — `/routes`
 
 > ✅ Backend đã có (`RoutesController` — Trần Trung Hiếu, story 12).
@@ -837,6 +912,156 @@ Tham số query:
 > với các trạm trên tuyến, trả mảng trần kèm trạm và giá để hành khách lựa chọn, và phải công
 > khai cho người chưa đăng nhập. Trộn hai thứ vào một endpoint thì hình dạng response phải biến
 > đổi theo người gọi — trái lối "mỗi bề mặt một controller" của dự án.
+
+## Gợi ý tuyến cho ngày đã chọn — `/routes/suggestions`
+
+> 📌 **Hợp đồng chốt ở đây.** Backend: `RouteSuggestionsController` + `RouteSuggestionService`.
+> Mục này do Vàng Thị Dăm bổ sung cho yêu cầu *"ngày đó không có tuyến thì gợi ý tuyến gần nhất,
+> tuyến chạy hằng ngày thì hiển thị thế nào"* (Sprint 5, sửa lỗi trải nghiệm màn "Tra cứu tuyến").
+>
+> **Endpoint CÔNG KHAI**, cùng nhóm với `/routes/search`. Khác `/routes/search` ở **câu hỏi**:
+> `/routes/search` lọc **theo ngày** nên ngày không có chuyến trả `[]` — màn hình rơi vào ô trống
+> "Không tìm thấy tuyến phù hợp". Endpoint này tách **sự tồn tại của tuyến** khỏi **lịch chạy**:
+> luôn trả tuyến nối được hai trạm, kèm thông tin ngày nào chạy, ngày gần nhất, và lý do trống.
+
+### Endpoint
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes/suggestions` | Gợi ý tuyến nối hai trạm, kèm lịch chạy quanh ngày đã chọn (**công khai**) | — | `RouteSuggestionsResponse` |
+
+Tham số query:
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `originStopId` | `string` (GUID) | — | **Bắt buộc nếu không có `origin`.** Điểm đi — khoá trạm |
+| `destinationStopId` | `string` (GUID) | — | **Bắt buộc nếu không có `destination`.** Điểm đến — khoá trạm |
+| `origin` | `string` | — | Tên điểm đi — chỉ dùng khi không có `originStopId`; khớp **không dấu, không hoa thường** |
+| `destination` | `string` | — | Tên điểm đến — cùng lối |
+| `date` | `string` (`yyyy-MM-dd`) | hôm nay (giờ Việt Nam) | Ngày hành khách muốn đi. **Chỉ ảnh hưởng thông tin lịch chạy**, không loại tuyến khỏi kết quả |
+| `windowDays` | `number` | 7 | Số ngày nhìn tới để tính lịch chạy, **1..14**. Ngày cuối = `bookingHorizonEnd` |
+
+```json
+// RouteSuggestionsResponse
+{
+  "selectedDate": "2026-10-25",
+  "bookingHorizonEnd": "2026-10-23",
+  "origin": {
+    "id": "3f2a1b0c-0000-0000-0000-000000000000",
+    "name": "Tân Long",
+    "address": "Tân Long, Thái Nguyên",
+    "onActiveRoute": true
+  },
+  "destination": {
+    "id": "9d2f5c33-0000-0000-0000-000000000000",
+    "name": "Phổ Yên",
+    "address": "Phổ Yên, Thái Nguyên",
+    "onActiveRoute": true
+  },
+  "matches": [
+    {
+      "routeId": "a1b2c3d4-0000-0000-0000-000000000000",
+      "routeCode": "01TL-PY",
+      "routeName": "Tân Long — Phổ Yên",
+      "origin": "Tân Long",
+      "destination": "Phổ Yên",
+      "distanceKm": 32.5,
+      "stops": [
+        { "stopId": "3f2a1b0c-0000-0000-0000-000000000000", "stopName": "Tân Long", "stopOrder": 1 },
+        { "stopId": "9d2f5c33-0000-0000-0000-000000000000", "stopName": "Phổ Yên", "stopOrder": 11 }
+      ],
+      "minPrice": 15000,
+      "hasTripsOnDate": false,
+      "runsDaily": true,
+      "availableDates": ["2026-10-17", "2026-10-18", "2026-10-19"],
+      "nearestAvailableDate": "2026-10-23",
+      "nextDeparture": "2026-10-23T06:00:00+07:00",
+      "departureCountOnNearestDate": 4
+    }
+  ],
+  "alternatives": {
+    "fromOrigin": [],
+    "toDestination": []
+  },
+  "emptyReason": "dateBeyondHorizon"
+}
+```
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `selectedDate` | `string` (`yyyy-MM-dd`) | Ngày đã chọn sau khi chuẩn hoá (mặc định hôm nay giờ Việt Nam) |
+| `bookingHorizonEnd` | `string` (`yyyy-MM-dd`) | Ngày xa nhất hệ thống đã sinh chuyến — hôm nay + `windowDays` − 1 |
+| `origin` / `destination` | `StopSuggestionInfo` | Trạm đã giải được từ id hoặc tên |
+| `matches[]` | `RouteSuggestion[]` | Tuyến `Active` nối **đúng** hai trạm, **không phụ thuộc ngày**. Mảng rỗng khi không có tuyến nào |
+| `alternatives.fromOrigin[]` | `RouteSuggestion[]` | Tuyến `Active` đi qua điểm đi nhưng **không** tới điểm đến — gợi ý "đi từ đây đi đâu được". Chỉ có dữ liệu khi `matches` rỗng |
+| `alternatives.toDestination[]` | `RouteSuggestion[]` | Tuyến `Active` đi qua điểm đến nhưng **không** từ điểm đi. Chỉ có dữ liệu khi `matches` rỗng |
+| `emptyReason` | `string` \| `null` | `null` khi có tuyến khớp **và** có chuyến trong ngày; xem bảng mã bên dưới |
+
+`StopSuggestionInfo`:
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `id` | `string` (GUID) | Khoá trạm |
+| `name` | `string` | Tên trạm |
+| `address` | `string` | Địa chỉ |
+| `onActiveRoute` | `boolean` | Trạm có thuộc ít nhất một tuyến `Active` không |
+
+`RouteSuggestion` — **đúng các trường của `RouteSearchResult`** (mục `/routes/search`) **cộng**:
+
+| Trường | Kiểu | Mô tả |
+|---|---|---|
+| `hasTripsOnDate` | `boolean` | Có ít nhất một chuyến `Scheduled` trong **trọn ngày `selectedDate`** giờ Việt Nam |
+| `runsDaily` | `boolean` | Có chuyến **mỗi ngày** từ hôm nay đến `bookingHorizonEnd` |
+| `availableDates[]` | `string[]` | Các ngày trong cửa sổ 7 ngày (từ hôm nay) có chuyến, tăng dần, tối đa 7 phần tử |
+| `nearestAvailableDate` | `string` \| `null` | Ngày gần `selectedDate` nhất có chuyến; hoà khoảng cách thì **chọn ngày tương lai**; `null` nếu cả cửa sổ không có chuyến |
+| `nextDeparture` | `string` (`ISO 8601`) \| `null` | Giờ khởi hành sớm nhất trong `nearestAvailableDate`, kèm offset `+07:00` |
+| `departureCountOnNearestDate` | `number` | Số chuyến `Scheduled` trong `nearestAvailableDate`; 0 nếu không có |
+
+Mã `emptyReason`:
+
+| Mã | Khi nào |
+|---|---|
+| `noActiveRoute` | CSDL không có tuyến `Active` nào |
+| `originNotServed` | Trạm đi tồn tại nhưng không thuộc tuyến `Active` nào |
+| `destinationNotServed` | Trạm đến tồn tại nhưng không thuộc tuyến `Active` nào |
+| `noRouteBetweenStops` | Cả hai trạm đều có tuyến, nhưng không tuyến nào nối được theo đúng chiều |
+| `dateBeyondHorizon` | Có tuyến khớp nhưng `selectedDate` **sau** `bookingHorizonEnd` (lịch bán vé chưa mở tới ngày đó) |
+| `noTripsThatDay` | Có tuyến khớp, ngày nằm trong cửa sổ nhưng không tuyến nào có chuyến ngày đó |
+| `null` | Có tuyến khớp và ít nhất một tuyến có chuyến trong ngày |
+
+- **Tuyến khớp không phụ thuộc ngày.** Ngày chỉ quyết định `hasTripsOnDate`, `nearestAvailableDate`,
+  `runsDaily` và `emptyReason`.
+- Chỉ trả tuyến `Active`; trạm đi phải đứng **trước** trạm đến theo `stopOrder` — cùng luật
+  `/routes/search`.
+- `originStopId`/`destinationStopId` được ưu tiên hơn `origin`/`destination` khi cùng có mặt.
+- Thiếu cả id lẫn tên ở một đầu → **400** `errors.origin` / `errors.destination`.
+- Hai đầu trùng nhau → **400** `errors.destination` "Điểm đi và điểm đến không được trùng nhau".
+- Id không tồn tại, hoặc tên không khớp trạm nào → **404** `{ "message": "Không tìm thấy trạm …" }`.
+  (Khác `/routes/search` trả `[]`: ở đây màn hình đã cho chọn trạm từ `/stops/suggestions`, nên
+  một id lạ là lỗi dữ liệu chứ không phải "không có tuyến".)
+- `date` sai định dạng → **400** `errors.date`; `windowDays` ngoài 1..14 → **400** `errors.windowDays`.
+- `alternatives` chỉ được điền khi `matches` rỗng — tránh payload phình mà màn hình không dùng.
+  `fromOrigin` và `toDestination` không trùng nhau: tuyến đã nằm ở `fromOrigin` bị loại khỏi
+  `toDestination`.
+- Thứ tự trong mọi mảng tuyến: `routeCode` tăng dần, trùng mã xếp theo `routeId`.
+- `availableDates`/`runsDaily` tính từ **hôm nay** (giờ Việt Nam), không phải từ `selectedDate`:
+  đó là lịch bán vé thực tế mà hệ thống đã sinh chuyến.
+- `bookingHorizonEnd` = hôm nay + `windowDays` − 1. Với `windowDays` mặc định 7, đây cũng là ngày
+  xa nhất background job sinh chuyến — màn hình dùng nó để báo *"Lịch bán vé hiện đến …"*.
+
+> **Vì sao tách khỏi `/routes/search`?** `/routes/search` đã vào `main`, dùng ở màn kết quả tìm
+> chuyến và có hợp đồng riêng (mảng trần, lọc theo ngày). Thêm trường vào đó là **đổi hình dạng
+> API** (⛔5) và buộc mọi nơi gọi phải biết thêm khái niệm ngày gần nhất. Endpoint mới giữ
+> `/routes/search` nguyên vẹn cho luồng cũ, còn màn tra cứu tuyến chuyển sang đây.
+
+> **Vì sao `runsDaily` là cờ riêng thay vì bắt frontend tự so 7 ngày?** Quy tắc "ngày nào cũng
+> chạy" là quy tắc nghiệp vụ, phải nằm một chỗ. Frontend chỉ hiển thị badge *"Chạy hằng ngày"*;
+> đổi cửa sổ hay cách sinh chuyến về sau chỉ sửa backend.
+
+> **Vì sao ngày ngoài tầm vẫn trả tuyến?** Background job sinh chuyến trước 7 ngày
+> (`TripGenerationService.HorizonDays`). Ngày xa hơn **không phải** "không có tuyến" — đó là
+> *"chưa mở bán"*. Trả tuyến kèm `dateBeyondHorizon` để màn hình hiển thị tuyến và ngày gần nhất,
+> thay vì ô trống gây hiểu nhầm tuyến đã bị xoá.
 
 ## Chuyến xe — `/trips`
 
