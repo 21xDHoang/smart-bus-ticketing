@@ -59,7 +59,9 @@ const BASE_COLUMNS: TableProps<Bus>['columns'] = [
 
 const BusManagePage = () => {
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<BusStatus>();
+  // Mặc định chỉ hiện xe ĐANG khai thác: "xoá" (ngừng khai thác) xong xe biến mất khỏi danh
+  // sách, khớp kỳ vọng "xoá = không còn thấy". Muốn xem xe đã ngừng thì chọn bộ lọc.
+  const [status, setStatus] = useState<BusStatus>('Active');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -128,7 +130,7 @@ const BusManagePage = () => {
     {
       title: 'Hành động',
       key: 'actions',
-      width: 140,
+      width: 180,
       render: (_, bus) => (
         <Space>
           <Button type="link" size="small" onClick={() => openEdit(bus)}>
@@ -143,7 +145,7 @@ const BusManagePage = () => {
             onConfirm={() => handleDelete(bus.id)}
           >
             <Button type="link" size="small" danger>
-              Xoá
+              Ngừng khai thác
             </Button>
           </Popconfirm>
         </Space>
@@ -213,6 +215,9 @@ const BusManagePage = () => {
 
             <Select<BusStatus>
               allowClear
+              // Hiện trạng thái đang lọc để bộ lọc mặc định "Đang khai thác" không bị ẩn —
+              // không có dòng này thì danh sách đã lọc mà ô chọn trông như chưa chọn gì.
+              value={status}
               placeholder="Trạng thái"
               style={{ width: 200 }}
               options={BUS_STATUS_OPTIONS}
