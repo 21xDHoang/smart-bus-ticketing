@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,7 @@ using UserEntity = SmartBus.Api.Entities.User;
 namespace SmartBus.Tests;
 
 /// <summary>
-/// Test tích hợp cho API xuất nhật ký kiểm toán ra Excel —
+/// Test tích hợp cho API xuất nhật ký kiểm toán ra Excel/PDF —
 /// <c>GET /api/audit-logs/export</c> (task story 23 — Phùng Duy Hoàng).
 ///
 /// Dùng lại <see cref="TestAppFactory"/> của JwtAuthTests: chạy trên app thật, mỗi test một CSDL
@@ -33,6 +34,8 @@ public class AuditLogExportTests
 
     private const string XlsxContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    private const string PdfContentType = "application/pdf";
 
     /// <summary>Hàng tiêu đề cột — hàng 1–2 là khối tự mô tả, hàng 3 để trống.</summary>
     private const int HeaderRow = 4;
@@ -103,6 +106,98 @@ public class AuditLogExportTests
         var response = await client.GetAsync(ExportUrl);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Định dạng file
+    // ---------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Format_pdf_tra_dung_file_pdf()
+    {
+        using var factory = new TestAppFactory();
+        var client = await SignInAsync(factory, RoleIds.Admin, RoleCodes.Admin);
+
+        await SeedLogAsync(factory, DateTime.UtcNow.AddHours(-1), target: "Routes:xuat-pdf");
+
+        var response = await client.GetAsync($"{ExportUrl}?format=pdf");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(PdfContentType, response.Content.Headers.ContentType?.MediaType);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+
+        // Magic bytes của PDF: không có thì trình duyệt tải về một file .pdf mở không được.
+        Assert.Equal("%PDF-", Encoding.ASCII.GetString(bytes, 0, 5));
+
+        // Tên file ASCII không dấu, cùng mốc thời gian UTC, đổi đuôi theo định dạng.
+        var fileName = response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        Assert.Matches(@"^nhat-ky-kiem-toan_\d{8}-\d{6}Z\.pdf$", fileName);
+    }
+
+    [Fact]
+    public async Task Format_la_tra_400_theo_truong_format()
+    {
+        using var factory = new TestAppFactory();
+        var client = await SignInAsync(factory, RoleIds.Admin, RoleCodes.Admin);
+
+        var response = await client.GetAsync($"{ExportUrl}?format=docx");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        var json = await BodyAsync(response);
+        Assert.True(json.GetProperty("errors").TryGetProperty("format", out _));
+    }
+
+    [Fact]
+    public async Task Pdf_voi_ky_rong_van_ra_file_chu_khong_404()
+    {
+        using var factory = new TestAppFactory();
+        var client = await SignInAsync(factory, RoleIds.Admin, RoleCodes.Admin);
+
+        var response = await client.GetAsync($"{ExportUrl}?format=pdf");
+
+        // Bảng rỗng vẫn hợp lệ: PDF có tiêu đề và đầu cột, người đọc thấy "không có dòng nào".
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(PdfContentType, response.Content.Headers.ContentType?.MediaType);
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal("%PDF-", Encoding.ASCII.GetString(bytes, 0, 5));
+    }
+
+    [Fact]
+    public async Task Vuot_tran_pdf_thi_tra_400_chu_khong_tra_file()
+    {
+        using var factory = new TestAppFactory();
+        var client = await SignInAsync(factory, RoleIds.Admin, RoleCodes.Admin);
+
+        var start = DateTime.UtcNow.AddHours(-1);
+        var logs = Enumerable.Range(0, AuditLogExportService.MaxPdfRows + 1)
+            .Select(i => new AuditLog
+            {
+                CreatedAt = start.AddTicks(i),
+                Action = AuditAction.Create,
+                Target = $"Routes:{i}",
+            })
+            .ToList();
+
+        await factory.SeedAsync(db => db.AuditLogs.AddRange(logs));
+
+        var response = await client.GetAsync($"{ExportUrl}?format=pdf");
+
+        // Trần PDF thấp hơn Excel (2.000 so với 10.000) — cùng một khoảng dữ liệu có thể xuất
+        // được .xlsx nhưng phải bị TỪ CHỐI khi xin .pdf, và lỗi phải gắn vào cả hai ô ngày.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        var json = await BodyAsync(response);
+        Assert.Contains($"vượt trần {AuditLogExportService.MaxPdfRows}", MessageOf(json));
+        Assert.Contains("PDF", MessageOf(json));
+
+        var errors = json.GetProperty("errors");
+        Assert.True(errors.TryGetProperty("from", out _));
+        Assert.True(errors.TryGetProperty("to", out _));
     }
 
     // ---------------------------------------------------------------------------------------
