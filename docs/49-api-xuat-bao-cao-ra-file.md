@@ -238,9 +238,15 @@ SQLite đã biết là flaky — đỏ ở bước mở kết nối thì chạy 
   tự ghép; `errors.from`/`errors.to` gắn vào hai ô ngày, `errors.format` vào ô chọn định dạng.
 - **Hiếu:** không cần làm gì — dùng lại `IRevenueReportService` và `IReportPdfService`, không đổi
   chữ ký.
-- **Kiên:** JSON `GET /reports/fill-rate` (dòng 66) nên **rút phép tính lấp đầy ra dùng chung**
-  thay vì chép công thức từ `FillRateExportService`, nếu không màn hình và file sẽ lệch nhau ngay
-  lần đầu ai đó sửa một bên. Endpoint xuất không phụ thuộc JSON nên không bị chặn.
+- **Kiên:** JSON `GET /reports/fill-rate` (dòng 66) đã vào `main` (`FillRateReportService`) trong
+  lúc nhánh này mở, nên giờ có **hai chỗ tự tính** — `FillRateReportService` và `FillRateExportService`.
+  Tỷ lệ từng chuyến và ngưỡng 80/50 khớp nhau, nhưng **trung bình khác định nghĩa**: bản xuất lấy
+  trung bình cộng tỷ lệ từng chuyến (không trọng số), JSON lấy `totalPassengers / totalSeats` (có
+  trọng số). Hai bên chỉ lệch khi sức chứa các chuyến khác nhau — đã ghi rõ trong `api-contract.md`,
+  đừng coi là một. Ngoài ra bản xuất **chưa nhận khung `night`** (JSON có): gửi `night` → 400
+  `errors.timeSlot`. Việc tiếp theo — chốt một định nghĩa trung bình (JSON có lập luận chặt hơn) rồi
+  cho bản xuất gọi lại `IFillRateReportService`, kèm test — cố ý **không gộp vào PR sửa merge** để
+  không trộn đổi hành vi với việc giải quyết xung đột.
 - **Vàng (test dòng 82):** hợp đồng chi tiết ở mục tương ứng của `docs/api-contract.md`; các test
   hiện có trong ba lớp trên đã ghim phần lớn nội dung — viết thêm thì tránh lặp lại nguyên xi.
 - **Dăm:** không có migration.

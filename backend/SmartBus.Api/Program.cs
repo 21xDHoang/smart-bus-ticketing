@@ -487,6 +487,14 @@ builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>(
 // phải bucket thời gian, nên không dùng chung khoá đệm của RevenueReportCache.
 builder.Services.AddScoped<IRevenueBreakdownService, RevenueBreakdownService>();
 
+// Tỷ lệ lấp đầy theo chuyến / tuyến / khung giờ: GET /api/reports/fill-rate (US 20 "Tỷ lệ lấp
+// đầy", Sprint 4). Task "API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ" — Nguyễn Duy
+// Kiên. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cùng nền Trips + vé Paid/Used + trục giờ Việt Nam với báo cáo khung giờ cao điểm, nhưng mẫu số
+// là sức chứa của xe (Buses.Capacity) chứ không phải số chuyến; một endpoint trả cả ba cách nhìn
+// nên không tái dùng IPeakHoursReportService. Không đệm, không migration.
+builder.Services.AddScoped<IFillRateReportService, FillRateReportService>();
+
 // Xuất báo cáo doanh thu ra Excel/PDF: GET /api/reports/revenue/export (US 24 "Xuất dữ liệu",
 // Sprint 4 dòng 78). Task "API xuất báo cáo doanh thu / lấp đầy / nhật ký ra file" — Phùng Duy
 // Hoàng. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
@@ -497,9 +505,10 @@ builder.Services.AddScoped<IRevenueExportService, RevenueExportService>();
 
 // Xuất báo cáo tỷ lệ lấp đầy ra Excel/PDF: GET /api/reports/fill-rate/export (US 20 "Tỷ lệ lấp
 // đầy", Sprint 4 dòng 78). Cùng task — Phùng Duy Hoàng.
-// Service đọc thẳng Trips/Buses/Tickets theo định nghĩa đã chốt trong docs/api-contract.md; chưa
-// phụ thuộc báo cáo JSON GET /reports/fill-rate (dòng 66, việc của Kiên). Khi báo cáo JSON ra đời,
-// rút phép tính ở đây ra dùng chung thay vì chép công thức. Không ghi dữ liệu, không migration.
+// Service đọc thẳng Trips/Buses/Tickets theo định nghĩa đã chốt trong docs/api-contract.md. Báo cáo
+// JSON cùng nội dung đã có ở GET /reports/fill-rate (dòng 66, Kiên), nhưng service xuất cố ý chưa
+// gọi lại để PR này không phụ thuộc thứ tự merge; gộp phép tính về một chỗ là việc tiếp theo
+// (docs/49 §6). Không ghi dữ liệu, không migration.
 builder.Services.AddScoped<IFillRateExportService, FillRateExportService>();
 
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
