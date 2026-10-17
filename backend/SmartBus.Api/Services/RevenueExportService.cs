@@ -1,5 +1,4 @@
 using System.Globalization;
-using ClosedXML.Excel;
 using SmartBus.Api.Dtos.Reports;
 
 namespace SmartBus.Api.Services;
@@ -37,13 +36,16 @@ public sealed class RevenueExportService : IRevenueExportService
 
     private readonly IRevenueReportService _revenueReportService;
     private readonly IReportPdfService _reportPdfService;
+    private readonly IReportExcelService _reportExcelService;
 
     public RevenueExportService(
         IRevenueReportService revenueReportService,
-        IReportPdfService reportPdfService)
+        IReportPdfService reportPdfService,
+        IReportExcelService reportExcelService)
     {
         _revenueReportService = revenueReportService;
         _reportPdfService = reportPdfService;
+        _reportExcelService = reportExcelService;
     }
 
     public async Task<ServiceResult<ReportExportFile>> ExportAsync(
@@ -70,7 +72,7 @@ public sealed class RevenueExportService : IRevenueExportService
 
         var content = format == ReportExportFormat.Pdf
             ? BuildPdf(data, generatedAtUtc, exportedBy)
-            : BuildWorkbook(data, generatedAtUtc, exportedBy);
+            : BuildExcel(data, generatedAtUtc, exportedBy);
 
         return ServiceResult<ReportExportFile>.Ok(new ReportExportFile
         {
@@ -110,61 +112,41 @@ public sealed class RevenueExportService : IRevenueExportService
         };
     }
 
-    private static byte[] BuildWorkbook(
+    /// <summary>
+    /// Dàn các bucket ra khuôn Excel chung. Không còn tự dựng workbook: phép vẽ nằm ở
+    /// <see cref="IReportExcelService"/> (task dòng 61 — Kiên), ba báo cáo dùng chung một khuôn.
+    /// </summary>
+    private byte[] BuildExcel(
         RevenueReportResponse report,
         DateTime generatedAtUtc,
         string? exportedBy)
     {
-        using var workbook = new XLWorkbook();
-        var sheet = workbook.Worksheets.Add(SheetName);
+        var rows = report.Buckets
+            .Select(bucket => new ReportExcelRow
+            {
+                // Kỳ là chuỗi ĐÚNG giá trị periodStart của JSON. Doanh thu và số giao dịch là SỐ
+                // THẬT để người nhận cộng/lọc/sort được trong Excel — gán chuỗi là mất nửa giá
+                // trị của bản xuất.
+                Cells =
+                [
+                    ReportExcelCell.Text(bucket.PeriodStart),
+                    ReportExcelCell.Number(bucket.Revenue),
+                    ReportExcelCell.Number(bucket.Payments),
+                ],
+            })
+            .ToList();
 
-        // Cùng khối tự mô tả với bản xuất nhật ký: file rời khỏi hệ thống nên phải tự nói nó phủ
-        // khoảng nào, tổng bao nhiêu, ai xuất lúc nào.
-        sheet.Cell(1, 1).Value = DocumentTitle;
-        sheet.Cell(1, 1).Style.Font.Bold = true;
-        sheet.Cell(1, 1).Style.Font.FontSize = 14;
-
-        sheet.Cell(2, 1).Value = MetadataLine(report, generatedAtUtc, exportedBy);
-
-        for (var i = 0; i < Headers.Length; i++)
+        var model = new ReportExcelModel
         {
-            var cell = sheet.Cell(HeaderRow, i + 1);
-            cell.Value = Headers[i];
-            cell.Style.Font.Bold = true;
-        }
+            SheetName = SheetName,
+            Title = DocumentTitle,
+            Subtitle = MetadataLine(report, generatedAtUtc, exportedBy),
+            Headers = Headers,
+            Rows = rows,
+            ColumnWidths = ColumnWidths,
+        };
 
-        var rowIndex = HeaderRow + 1;
-
-        foreach (var bucket in report.Buckets)
-        {
-            // Kỳ là chuỗi ĐÚNG giá trị periodStart của JSON. Doanh thu và số giao dịch là SỐ
-            // THẬT để người nhận cộng/lọc/sort được trong Excel — gán chuỗi là mất nửa giá trị
-            // của bản xuất.
-            sheet.Cell(rowIndex, 1).Value = bucket.PeriodStart;
-
-            var revenueCell = sheet.Cell(rowIndex, 2);
-            revenueCell.Value = bucket.Revenue;
-            revenueCell.Style.NumberFormat.Format = "#,##0";
-
-            var paymentsCell = sheet.Cell(rowIndex, 3);
-            paymentsCell.Value = bucket.Payments;
-            paymentsCell.Style.NumberFormat.Format = "#,##0";
-
-            rowIndex++;
-        }
-
-        for (var i = 0; i < ColumnWidths.Length; i++)
-        {
-            sheet.Column(i + 1).Width = ColumnWidths[i];
-        }
-
-        sheet.Range(HeaderRow, 1, HeaderRow, Headers.Length).SetAutoFilter();
-        sheet.SheetView.FreezeRows(HeaderRow);
-
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-
-        return stream.ToArray();
+        return _reportExcelService.GenerateExcel(model);
     }
 
     private byte[] BuildPdf(

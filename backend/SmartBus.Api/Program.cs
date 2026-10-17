@@ -225,6 +225,13 @@ builder.Services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 // Đặt cạnh khối xuất nhật ký ra Excel ở trên vì cùng chủ đề "xuất file" của Sprint 4.
 builder.Services.AddScoped<IReportPdfService, ReportPdfService>();
 
+// Service xuất Excel dùng chung (US 21 "Xuất dữ liệu", Sprint 5): ba báo cáo doanh thu / tỷ lệ
+// lấp đầy / nhật ký cùng dựng file qua một khuôn thay vì ba bản BuildWorkbook lặp lại.
+// Task dòng 61 "Service dùng chung để xuất Excel (ClosedXML) cho mọi báo cáo" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service thuần (không CSDL, không mạng): nhận ReportExcelModel đã gom sẵn từ bên gọi.
+builder.Services.AddScoped<IReportExcelService, ReportExcelService>();
+
 
 // Xử lý phản ánh phía quản trị: GET/PATCH /api/admin/feedbacks, GET /api/admin/feedbacks/{id},
 // POST /api/admin/feedbacks/{id}/replies (US 24).

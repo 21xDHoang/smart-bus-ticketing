@@ -1,5 +1,4 @@
 using System.Globalization;
-using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using SmartBus.Api.Data;
 using SmartBus.Api.Dtos.Reports;
@@ -69,11 +68,16 @@ public sealed class FillRateExportService : IFillRateExportService
 
     private readonly AppDbContext _db;
     private readonly IReportPdfService _reportPdfService;
+    private readonly IReportExcelService _reportExcelService;
 
-    public FillRateExportService(AppDbContext db, IReportPdfService reportPdfService)
+    public FillRateExportService(
+        AppDbContext db,
+        IReportPdfService reportPdfService,
+        IReportExcelService reportExcelService)
     {
         _db = db;
         _reportPdfService = reportPdfService;
+        _reportExcelService = reportExcelService;
     }
 
     public async Task<ServiceResult<ReportExportFile>> ExportAsync(
@@ -246,7 +250,7 @@ public sealed class FillRateExportService : IFillRateExportService
 
         var content = format == ReportExportFormat.Pdf
             ? BuildPdf(rows, fromDate, toDate, routeLabel, slot, generatedAtUtc, exportedBy)
-            : BuildWorkbook(rows, fromDate, toDate, routeLabel, slot, generatedAtUtc, exportedBy);
+            : BuildExcel(rows, fromDate, toDate, routeLabel, slot, generatedAtUtc, exportedBy);
 
         return ServiceResult<ReportExportFile>.Ok(new ReportExportFile
         {
@@ -314,7 +318,11 @@ public sealed class FillRateExportService : IFillRateExportService
                 cancellationToken);
     }
 
-    private static byte[] BuildWorkbook(
+    /// <summary>
+    /// Dàn các dòng ra khuôn Excel chung. Phép vẽ workbook nằm ở <see cref="IReportExcelService"/>;
+    /// ở đây chỉ chọn kiểu từng ô để giữ đúng ngữ nghĩa của báo cáo.
+    /// </summary>
+    private byte[] BuildExcel(
         IReadOnlyList<ExportRow> rows,
         DateOnly fromDate,
         DateOnly toDate,
@@ -323,64 +331,39 @@ public sealed class FillRateExportService : IFillRateExportService
         DateTime generatedAtUtc,
         string? exportedBy)
     {
-        using var workbook = new XLWorkbook();
-        var sheet = workbook.Worksheets.Add(SheetName);
-
-        sheet.Cell(1, 1).Value = DocumentTitle;
-        sheet.Cell(1, 1).Style.Font.Bold = true;
-        sheet.Cell(1, 1).Style.Font.FontSize = 14;
-
-        sheet.Cell(2, 1).Value = MetadataLine(
-            rows, fromDate, toDate, routeLabel, slot, generatedAtUtc, exportedBy);
-
-        for (var i = 0; i < Headers.Length; i++)
+        var model = new ReportExcelModel
         {
-            var cell = sheet.Cell(HeaderRow, i + 1);
-            cell.Value = Headers[i];
-            cell.Style.Font.Bold = true;
-        }
+            SheetName = SheetName,
+            Title = DocumentTitle,
+            Subtitle = MetadataLine(
+                rows, fromDate, toDate, routeLabel, slot, generatedAtUtc, exportedBy),
+            Headers = Headers,
+            Rows = rows
+                .Select(row => new ReportExcelRow
+                {
+                    Cells =
+                    [
+                        ReportExcelCell.Text(row.TripCode),
+                        ReportExcelCell.Text(row.RouteText),
 
-        var rowIndex = HeaderRow + 1;
+                        // Giờ khởi hành để CHUỖI theo giờ Việt Nam: gán DateTime thì Excel diễn
+                        // giải lại theo múi giờ máy người mở, có thể lệch 7 tiếng so với giờ in
+                        // trên vé.
+                        ReportExcelCell.Text(
+                            row.DepartureVietnam.ToString(
+                                "yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)),
 
-        foreach (var row in rows)
-        {
-            sheet.Cell(rowIndex, 1).Value = row.TripCode;
-            sheet.Cell(rowIndex, 2).Value = row.RouteText;
+                        ReportExcelCell.Text(row.LicensePlate),
+                        ReportExcelCell.Number(row.Capacity),
+                        ReportExcelCell.Number(row.Passengers),
+                        ReportExcelCell.Number(row.FillRatePct, "0.0"),
+                    ],
+                })
+                .ToList(),
+            ColumnWidths = ColumnWidths,
+        };
 
-            // Giờ khởi hành để CHUỖI theo giờ Việt Nam: gán DateTime thì Excel diễn giải lại theo
-            // múi giờ máy người mở, có thể lệch 7 tiếng so với giờ in trên vé.
-            sheet.Cell(rowIndex, 3).Value =
-                row.DepartureVietnam.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-
-            sheet.Cell(rowIndex, 4).Value = row.LicensePlate;
-
-            var capacityCell = sheet.Cell(rowIndex, 5);
-            capacityCell.Value = row.Capacity;
-            capacityCell.Style.NumberFormat.Format = "#,##0";
-
-            var passengersCell = sheet.Cell(rowIndex, 6);
-            passengersCell.Value = row.Passengers;
-            passengersCell.Style.NumberFormat.Format = "#,##0";
-
-            var fillRateCell = sheet.Cell(rowIndex, 7);
-            fillRateCell.Value = row.FillRatePct;
-            fillRateCell.Style.NumberFormat.Format = "0.0";
-
-            rowIndex++;
-        }
-
-        for (var i = 0; i < ColumnWidths.Length; i++)
-        {
-            sheet.Column(i + 1).Width = ColumnWidths[i];
-        }
-
-        sheet.Range(HeaderRow, 1, HeaderRow, Headers.Length).SetAutoFilter();
-        sheet.SheetView.FreezeRows(HeaderRow);
-
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-
-        return stream.ToArray();
+        return _reportExcelService.GenerateExcel(model);
     }
 
     private byte[] BuildPdf(
