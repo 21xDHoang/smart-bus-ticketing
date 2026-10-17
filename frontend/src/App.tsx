@@ -22,6 +22,7 @@ import TripFrequencyPage from './pages/TripFrequencyPage';
 import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
+import MonthlyPassManagePage from './pages/MonthlyPassManagePage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import MyRefundsPage from './pages/MyRefundsPage';
 import MyTicketRequestsPage from './pages/MyTicketRequestsPage';
@@ -197,9 +198,24 @@ function App() {
                 }
               />
               {/* /monthly-passes là màn hình đăng ký vé tháng (US 10) — mọi người đã đăng
-                  nhập đều dùng được. Backend đăng ký vé tháng chưa có nên màn hình đang
-                  chạy dữ liệu giả (xem monthlyPassApi.ts). */}
+                  nhập đều dùng được. Backend đăng ký vé tháng + danh mục loại vé đã có;
+                  màn hình đọc tuyến, loại vé và giá thẳng từ CSDL (xem monthlyPassApi.ts). */}
               <Route path="/monthly-passes" element={<MonthlyPassRegistrationPage />} />
+              {/* /admin-monthly-passes là màn hình quản trị vé tháng — danh sách toàn bộ vé,
+                  chi tiết, huỷ/mở lại vé, CRUD loại vé và thống kê doanh thu (bổ sung ngoài
+                  story 16; hợp đồng ở mục "Vé tháng — /monthly-passes" và "Loại vé tháng —
+                  /pass-types" của docs/api-contract.md). Nhóm endpoint yêu cầu vai trò Manager
+                  hoặc Admin. Dòng route này do Nguyễn Duy Kiên thêm hộ: màn hình cần đường vào,
+                  mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR
+                  để Băng xem. */}
+              <Route
+                path="/admin-monthly-passes"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <MonthlyPassManagePage />
+                  </RouteGuard>
+                }
+              />
               {/* /my-monthly-passes là màn hình quản lý vé tháng của tôi + nút gia hạn
                   (US 16, task Sprint 2 dòng 45 của Hoàng Văn Thịnh) — mọi người đã đăng nhập
                   đều dùng được, mỗi người chỉ thấy vé của chính mình (backend lọc theo token).

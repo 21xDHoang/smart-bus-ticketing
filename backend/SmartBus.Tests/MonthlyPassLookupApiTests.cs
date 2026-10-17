@@ -105,7 +105,12 @@ public class MonthlyPassLookupApiTests
         Assert.Equal(ve.Id, item.GetProperty("id").GetGuid());
         Assert.Equal("MP-01-ABC123", item.GetProperty("code").GetString());
         Assert.Equal(route.Id, item.GetProperty("routeId").GetGuid());
+        // Tuyến trả kèm mã + tên đọc từ bảng Routes: màn hành khách hiển thị thẳng, không gọi
+        // GET /routes (endpoint đó sau policy ManagerOrAbove — hành khách nhận 403).
+        Assert.Equal(route.Code, item.GetProperty("routeCode").GetString());
+        Assert.Equal(route.Name, item.GetProperty("routeName").GetString());
         Assert.Equal("OneMonth", item.GetProperty("passTypeCode").GetString());
+        Assert.Equal("Vé OneMonth", item.GetProperty("passTypeName").GetString());
         Assert.Equal(200_000m, item.GetProperty("price").GetDecimal());
         Assert.Equal(ve.ValidFrom, item.GetProperty("validFrom").GetDateTime());
         Assert.Equal(ve.ValidTo, item.GetProperty("validTo").GetDateTime());
@@ -115,9 +120,10 @@ public class MonthlyPassLookupApiTests
         // Hình dạng khoá lại đúng hợp đồng: thêm/bớt trường là ĐỔI HÌNH DẠNG API (⛔5) — phải sửa
         // api-contract.md trước rồi báo người viết frontend. KHÔNG có userId (người gọi chỉ thấy
         // vé của mình, trả id chủ vé là mời dò người khác) và KHÔNG có passTypeId (màn hình cần
-        // mã loại vé, không cần id nội bộ).
+        // mã + tên loại vé, không cần id nội bộ). passTypeName trả kèm để client hiển thị thẳng,
+        // không phải giữ bảng loại vé hằng — hợp đồng mục "Entity MonthlyPass".
         Assert.Equal(
-            ["code", "createdAt", "id", "passTypeCode", "price", "routeId", "status", "validFrom", "validTo"],
+            ["code", "createdAt", "id", "passTypeCode", "passTypeName", "price", "routeCode", "routeId", "routeName", "status", "validFrom", "validTo"],
             PropertyNamesOf(item));
     }
 

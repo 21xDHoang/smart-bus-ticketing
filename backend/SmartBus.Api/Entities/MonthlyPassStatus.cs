@@ -22,8 +22,11 @@ namespace SmartBus.Api.Entities;
 ///   - Truy vấn "vé tháng đang hoạt động của tôi" cũng phải so ValidFrom &lt;= now &lt;= ValidTo.
 ///   - Expired chỉ dùng để LỌC và THỐNG KÊ cho rẻ, không phải nguồn sự thật về hiệu lực.
 ///
-/// KHÔNG có Cancelled: không story nào cho hành khách tự huỷ vé tháng, và A8.2 không nhắc tới
-/// hoàn tiền vé tháng. Vé tháng hết hạn là hết hiệu lực, không có nghiệp vụ thu hồi.
+/// Có <see cref="Cancelled"/> từ đợt bổ sung màn "Quản lý vé tháng" cho Admin/Quản lý
+/// (17/10/2026): hành khách vẫn KHÔNG tự huỷ vé, nhưng quản trị viên cần huỷ/mở lại một vé
+/// (khách báo mất mã QR, thu hồi vé bán nhầm…). Trạng thái này KHÔNG suy ra được từ ngày tháng,
+/// nên nó là nguồn sự thật duy nhất cho câu "vé đã bị huỷ chưa" — khác Active/Expired.
+/// Huỷ vé không hoàn tiền: chưa có nghiệp vụ hoàn tiền vé tháng (A8.2).
 /// </summary>
 public enum MonthlyPassStatus
 {
@@ -34,5 +37,16 @@ public enum MonthlyPassStatus
     /// Đã quá <see cref="MonthlyPass.ValidTo"/>, do BackgroundService lật. Xem cảnh báo ở trên:
     /// giá trị này có độ trễ, không được dùng làm nguồn sự thật về hiệu lực.
     /// </summary>
-    Expired
+    Expired,
+
+    /// <summary>
+    /// Quản trị viên huỷ vé trước hạn (hoặc vé bị thu hồi). KHÁC hai giá trị trên ở một điểm
+    /// quyết định: đây là **chặn cứng** — vé đã huỷ không còn hiệu lực kể cả khi
+    /// <c>ValidFrom &lt;= bây giờ &lt;= ValidTo</c>. Mọi truy vấn hỏi "vé này còn dùng được
+    /// không" phải loại trạng thái này ra.
+    ///
+    /// Do quản trị viên đặt qua <c>PATCH /monthly-passes/{id}/status</c>, KHÔNG do job hết hạn
+    /// (job chỉ lật Active → Expired). Có thể mở lại thành Active khi vé chưa quá ValidTo.
+    /// </summary>
+    Cancelled
 }

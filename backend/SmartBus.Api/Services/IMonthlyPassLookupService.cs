@@ -14,8 +14,9 @@ public interface IMonthlyPassLookupService
 {
     /// <summary>
     /// Vé của <paramref name="userId"/> có hiệu lực NGAY LÚC NÀY: validFrom &lt;= bây giờ &lt;= validTo
-    /// (tính cả hai mốc). KHÔNG đọc cột Status — cột đó có độ trễ (job quét vé hết hạn của Kiên),
-    /// so nó là so sai.
+    /// (tính cả hai mốc). KHÔNG đọc cột Status cho Active/Expired — cột đó có độ trễ (job quét vé
+    /// hết hạn của Kiên), so nó là so sai. NGOẠI LỆ: <c>Status == Cancelled</c> luôn bị loại —
+    /// huỷ vé là chặn cứng, không suy ra được từ ngày tháng.
     ///
     /// Sắp theo validTo tăng dần rồi theo code cho ổn định. Không có vé nào là mảng rỗng —
     /// không phải lỗi, nên không có nhánh ServiceResult.

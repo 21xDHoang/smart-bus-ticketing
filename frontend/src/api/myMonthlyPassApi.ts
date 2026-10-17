@@ -8,11 +8,10 @@ import type { MonthlyPass, PassTypeCode } from './monthlyPassApi';
 //   GET  /monthly-passes/me          → MonthlyPass[]  (mảng trần, vé ĐANG có hiệu lực)
 //   POST /monthly-passes/{id}/renew  → MonthlyPass    (dòng MỚI của kỳ kế tiếp)
 //
-// Khác monthlyPassApi.ts (màn hình ĐĂNG KÝ của Dương Thị Hạnh, còn chạy dữ liệu giả), hai
-// endpoint ở đây backend đã có thật và đã đo được: GET .../me → 200, POST .../renew → 200
-// cho vai trò hành khách (docs/bao-cao-kiem-thu-cheo-ve-thang.md). Vì vậy file này
-// KHÔNG có nhánh dữ liệu giả và không có cờ USE_MOCK_DATA: dựng thêm một nhánh giả cho
-// endpoint đã chạy được chỉ tạo thêm một đường im lặng để màn hình chạy trên số liệu bịa.
+// Cùng monthlyPassApi.ts, cả hai endpoint ở đây backend đã có thật và đã đo được: GET .../me
+// → 200, POST .../renew → 200 cho vai trò hành khách (docs/bao-cao-kiem-thu-cheo-ve-thang.md).
+// Vì vậy file này KHÔNG có nhánh dữ liệu giả và không có cờ USE_MOCK_DATA: dựng thêm một nhánh
+// giả cho endpoint đã chạy được chỉ tạo thêm một đường im lặng để màn hình chạy trên số liệu bịa.
 //
 // Kiểu MonthlyPass / PassTypeCode dùng lại từ monthlyPassApi.ts để hai component của
 // Nguyễn Đình Băng (MonthlyPassStatusTag, MonthlyPassExpiryReminder) nhận thẳng props mà

@@ -32,25 +32,48 @@ public class MonthlyPassLookupService : IMonthlyPassLookupService
         // kết quả, không cần kiểm quyền sở hữu ở tầng trên.
         var rows = await _db.MonthlyPasses
             .AsNoTracking()
-            .Where(p => p.UserId == userId && p.ValidFrom <= now && p.ValidTo >= now)
+            // Cancelled là CHẶN CỨNG (xem MonthlyPassStatus): vé quản trị viên đã huỷ không
+            // còn hiệu lực dù cặp mốc vẫn bao quanh "bây giờ". Đây là ngoại lệ duy nhất của
+            // luật "hiệu lực suy từ ValidFrom/ValidTo".
+            .Where(p => p.UserId == userId
+                && p.Status != MonthlyPassStatus.Cancelled
+                && p.ValidFrom <= now && p.ValidTo >= now)
             .OrderBy(p => p.ValidTo)
             .ThenBy(p => p.Code)
-            .Select(p => new { Pass = p, PassTypeCode = p.PassType!.Code })
+            .Select(p => new
+            {
+                Pass = p,
+                RouteCode = p.Route!.Code,
+                RouteName = p.Route!.Name,
+                PassTypeCode = p.PassType!.Code,
+                PassTypeName = p.PassType!.Name,
+            })
             .ToListAsync(cancellationToken);
 
-        return rows.Select(row => ToResponse(row.Pass, row.PassTypeCode)).ToList();
+        return rows
+            .Select(row => ToResponse(
+                row.Pass, row.RouteCode, row.RouteName, row.PassTypeCode, row.PassTypeName))
+            .ToList();
     }
 
     /// <summary>
     /// Chép từ MonthlyPassRenewalService.ToResponse — cố ý, cùng lối các controller chép
     /// ValidationError thay vì tách lớp dùng chung: tách ra thì phải sửa file của người khác.
     /// </summary>
-    private static MonthlyPassResponse ToResponse(MonthlyPass pass, string passTypeCode) => new()
+    private static MonthlyPassResponse ToResponse(
+        MonthlyPass pass,
+        string routeCode,
+        string routeName,
+        string passTypeCode,
+        string passTypeName) => new()
     {
         Id = pass.Id,
         Code = pass.Code,
         RouteId = pass.RouteId,
+        RouteCode = routeCode,
+        RouteName = routeName,
         PassTypeCode = passTypeCode,
+        PassTypeName = passTypeName,
         Price = pass.Price,
         ValidFrom = pass.ValidFrom,
         ValidTo = pass.ValidTo,

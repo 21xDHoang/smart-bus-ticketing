@@ -16,8 +16,23 @@ public class MonthlyPassResponse
 
     public Guid RouteId { get; set; }
 
+    /// <summary>
+    /// Mã và tên tuyến, đọc từ bảng Routes tại thời điểm trả về. Trả kèm để màn hành khách hiển
+    /// thị thẳng — không gọi GET /routes (endpoint đó sau policy ManagerOrAbove, hành khách nhận
+    /// 403) và không rút mã tuyến từ mã vé.
+    /// </summary>
+    public string RouteCode { get; set; } = string.Empty;
+
+    public string RouteName { get; set; } = string.Empty;
+
     /// <summary>Mã loại vé trong bảng PassTypes — quyết định thời hạn và giá gói.</summary>
     public string PassTypeCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Tên hiển thị của loại vé, đọc từ bảng PassTypes tại thời điểm trả về. Trả kèm để client
+    /// hiển thị thẳng — không phải giữ một bảng loại vé hằng ở frontend rồi tra theo mã.
+    /// </summary>
+    public string PassTypeName { get; set; } = string.Empty;
 
     /// <summary>Số tiền thực trả — ảnh chụp tại thời điểm đăng ký/gia hạn, không tra lại bảng giá.</summary>
     public decimal Price { get; set; }
