@@ -47,6 +47,7 @@ import TicketValidationStatsPage from './pages/TicketValidationStatsPage';
 import RevenueByRoutePage from './pages/RevenueByRoutePage';
 import NotificationsPage from './pages/NotificationsPage';
 import NotificationDetailPage from './pages/NotificationDetailPage';
+import ReportTemplateConfigPage from './pages/ReportTemplateConfigPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -473,6 +474,20 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <NotificationTemplateManagePage />
+                  </RouteGuard>
+                }
+              />
+              {/* /report-templates là màn hình cấu hình mẫu báo cáo (US 21 "Xuất báo cáo Excel/PDF",
+                  Sprint 5, task của Dương Thị Hạnh) — soạn sẵn mẫu báo cáo: chọn loại, cột hiển thị
+                  và khoảng thời gian để dùng lại khi xuất file. Cấu hình lưu trong trình duyệt vì
+                  chưa có bảng CSDL (reportTemplateApi.ts). Chỉ Admin và Manager vào được. Dòng route
+                  này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung
+                  §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/report-templates"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <ReportTemplateConfigPage />
                   </RouteGuard>
                 }
               />

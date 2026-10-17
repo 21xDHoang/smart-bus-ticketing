@@ -16,6 +16,7 @@ import {
   EnvironmentOutlined,
   FieldTimeOutlined,
   FileDoneOutlined,
+  FileTextOutlined,
   FundOutlined,
   GiftOutlined,
   HistoryOutlined,
@@ -288,6 +289,12 @@ const NAV: NavEntry[] = [
         label: 'Mẫu thông báo',
         roles: ADMIN_MANAGER,
         icon: <BellOutlined />,
+      },
+      {
+        to: '/report-templates',
+        label: 'Mẫu báo cáo',
+        roles: ADMIN_MANAGER,
+        icon: <FileTextOutlined />,
       },
       {
         to: '/admin-users',
