@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Empty, List, Popover, Spin, Typography, theme } from 'antd';
 import { BellOutlined, CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -127,6 +128,7 @@ type LoadState = 'loading' | 'error' | 'done';
 export default function NotificationBell() {
   const { user, isAuthenticated } = useAuth();
   const { token } = theme.useToken();
+  const navigate = useNavigate();
 
   const userId = user?.id ?? null;
 
@@ -217,11 +219,31 @@ export default function NotificationBell() {
       )}
 
       {loadState === 'done' && items.length > 0 && (
-        <List
-          dataSource={items}
-          renderItem={(item) => <NotificationItem notification={item} />}
-          style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}
-        />
+        <>
+          <List
+            dataSource={items}
+            renderItem={(item) => <NotificationItem notification={item} />}
+            style={{ borderTop: `1px solid ${token.colorBorderSecondary}` }}
+          />
+          <div
+            style={{
+              textAlign: 'center',
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+              paddingTop: 4,
+            }}
+          >
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                setOpen(false);
+                navigate('/notifications');
+              }}
+            >
+              Xem tất cả
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );
