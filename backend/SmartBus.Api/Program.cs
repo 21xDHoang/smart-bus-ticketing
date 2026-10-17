@@ -111,6 +111,20 @@ builder.Services.AddScoped<IStopSearchService, StopSearchService>();
 // tuyến của quản lý, sau policy Admin/Manager).
 builder.Services.AddScoped<IRouteSearchService, RouteSearchService>();
 
+// Gợi ý trạm cho ô điểm đi/điểm đến của màn tra cứu tuyến: GET /api/stops/suggestions.
+// Sửa lỗi trải nghiệm màn "Tra cứu tuyến" (Sprint 5 — Vàng Thị Dăm). Khác IStopSearchService ở
+// trên: chỉ trả trạm thuộc tuyến Active và lọc được theo thứ tự trạm, để ô điểm đến không gợi ý
+// trạm của tuyến đã xoá hay trạm ngược chiều.
+// File này của Hoàng (Phùng Duy Hoàng) nên nhờ Hoàng xem qua trong PR.
+builder.Services.AddScoped<IStopSuggestionService, StopSuggestionService>();
+
+// Gợi ý tuyến kèm lịch chạy quanh ngày đã chọn: GET /api/routes/suggestions.
+// Sửa lỗi trải nghiệm màn "Tra cứu tuyến" (Sprint 5 — Vàng Thị Dăm). Khác IRouteSearchService ở
+// trên ở chỗ ngày KHÔNG lọc tuyến: ngày không có chuyến vẫn trả tuyến kèm ngày gần nhất và mã lý
+// do trống, thay vì mảng rỗng.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
+
 // Tìm chuyến cho hành khách: GET /api/trips/search (giá vé phổ thông + giờ chạy + số ghế còn trống).
 // Task story 1 — Phùng Duy Hoàng (file này cũng của Hoàng).
 // Công khai có chủ đích: story 1 là luồng tra cứu của hành khách, đăng nhập là bước của màn hình
