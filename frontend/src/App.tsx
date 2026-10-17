@@ -29,6 +29,7 @@ import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
 import TicketChangeRequestPage from './pages/TicketChangeRequestPage';
 import TicketScanPage from './pages/TicketScanPage';
+import TripPassengerListPage from './pages/TripPassengerListPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import VoucherManagePage from './pages/VoucherManagePage';
@@ -239,6 +240,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Driver']}>
                     <TicketScanPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /trip-passengers là màn hình danh sách hành khách đã lên xe theo chuyến
+                  (US 15, Sprint 4, dòng 22, task của Dương Thị Hạnh): tài xế chọn chuyến đang
+                  chạy rồi xem ai đã được soát vé hợp lệ và lên xe — màn đi cùng "Soát vé".
+                  Backend endpoint này chưa có nên màn hình đang chạy dữ liệu giả
+                  (tripPassengerListApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn hình
+                  cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã
+                  ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/trip-passengers"
+                element={
+                  <RouteGuard allowedRoles={['Driver']}>
+                    <TripPassengerListPage />
                   </RouteGuard>
                 }
               />
