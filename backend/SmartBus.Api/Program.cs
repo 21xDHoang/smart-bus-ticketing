@@ -688,6 +688,15 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 // vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
 builder.Services.AddScoped<IMyNotificationsService, MyNotificationsService>();
 
+// Màn quản lý mẫu thông báo (US 10, Sprint 5 dòng 24) — GET/PUT /api/notification-templates.
+// Task "Màn hình Admin quản lý mẫu thông báo" — Dương Thị Hạnh.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR (cùng lối các khối Sprint 5 ngay trên).
+// Mẫu là phần GHI ĐÈ của câu mặc định (docs/37 §2.1): bảng NotificationTemplates đã dựng từ
+// 20261014164805_Sprint4_NotificationTemplates_Subscriptions, không cần migration mới.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không
+// chèn vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
+builder.Services.AddScoped<INotificationTemplateService, NotificationTemplateService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 

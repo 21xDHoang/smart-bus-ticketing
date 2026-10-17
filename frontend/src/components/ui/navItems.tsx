@@ -3,6 +3,7 @@ import type { MenuProps } from 'antd';
 import {
   ApartmentOutlined,
   BarChartOutlined,
+  BellOutlined,
   CalendarOutlined,
   CarOutlined,
   ClockCircleOutlined,
@@ -281,6 +282,12 @@ const NAV: NavEntry[] = [
         label: 'Duyệt huỷ/đổi vé',
         roles: ADMIN_MANAGER,
         icon: <FileDoneOutlined />,
+      },
+      {
+        to: '/notification-templates',
+        label: 'Mẫu thông báo',
+        roles: ADMIN_MANAGER,
+        icon: <BellOutlined />,
       },
       {
         to: '/admin-users',

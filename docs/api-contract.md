@@ -5719,3 +5719,120 @@ lượt theo dõi nào đang tồn tại.
 > **Cho task "API lịch sử thông báo đã nhận" (dòng 19 — Dăm):** endpoint `GET /notifications/me`
 > mà `frontend/src/api/notificationApi.ts` đã draft KHÔNG thuộc mục này — bề mặt `/subscriptions`
 > chỉ trả lời *"đang theo dõi gì"*, không trả lời *"đã nhận những gì"*.
+
+## Màn quản lý mẫu thông báo — `/notification-templates`
+
+> Story 10 *"Thông báo trạm"*. 🟢 **Bảng `NotificationTemplates` — migration ĐÃ SINH, ĐÃ SOÁT**
+> (nhánh `feature/8-migrate-notification-templates-subscriptions`, Vàng Thị Dăm — task *"Migrate
+> bảng Notifications, NotificationTemplates, Subscriptions"*, Sprint 5 dòng 14). Chi tiết CSDL:
+> `docs/37-csdl-mau-thong-bao-va-theo-doi.md` (bảng này **không** nằm trong A9 — nhóm cần bổ sung).
+>
+> Mục này chốt bề mặt REST của task *"Màn hình Admin quản lý mẫu thông báo"* (Sprint 5 dòng 24 —
+> Dương Thị Hạnh): quản trị viên soạn câu chữ cho từng loại thông báo. **Mẫu là phần GHI ĐÈ, không
+> phải điều kiện để gửi** (docs/37 §2.1): loại chưa có mẫu, hoặc mẫu đang tắt, thì tầng notifier
+> dùng câu mặc định trong code — bảng này không phải nguồn duy nhất của nội dung thông báo.
+
+### Phân quyền
+
+Cả hai endpoint yêu cầu vai trò **Admin hoặc Manager** (`[Authorize(Policy = ManagerOrAbove)]`) —
+sửa câu chữ thông báo là việc của vận hành, cùng quyền màn quản lý voucher (`/vouchers`).
+
+### Hình dạng `NotificationTemplate`
+
+```json
+{
+  "id": "8f2b1d64-0000-0000-0000-000000000000",
+  "type": "CancellationApproved",
+  "title": "Đã duyệt yêu cầu huỷ vé",
+  "body": "Yêu cầu huỷ vé của bạn đã được duyệt.",
+  "isActive": true,
+  "createdAt": "2026-10-17T02:00:00Z",
+  "updatedAt": "2026-10-17T03:00:00Z"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | string (GUID) | khoá chính |
+| `type` | string | một trong **tám** loại — bảng "Tám loại thông báo" ở mục `/notifications` |
+| `title` | string | dòng tiêu đề, tối đa 200 ký tự |
+| `body` | string | nội dung đầy đủ, **xuống dòng tự do**, không đặt trần độ dài |
+| `isActive` | boolean | mẫu đang dùng; tắt = quay về câu mặc định (docs/37 §2.2) |
+| `createdAt` | string (ISO 8601, UTC) | thời điểm tạo mẫu |
+| `updatedAt` | string (ISO 8601, UTC) `\|` null | thời điểm sửa gần nhất; null với dòng chưa sửa lần nào |
+
+| Method | Endpoint | Trạng thái |
+|---|---|---|
+| GET | `/notification-templates` | ✅ đã làm (dòng 24) |
+| PUT | `/notification-templates/{type}` | ✅ đã làm (dòng 24) |
+
+### `GET /notification-templates` — danh sách mẫu
+
+```json
+// 200 — mảng trần, sắp theo thứ tự khai báo enum NotificationType
+[
+  { "id": "…", "type": "CancellationApproved", "title": "…", "body": "…",
+    "isActive": true, "createdAt": "…", "updatedAt": "…" }
+]
+```
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Luôn trả về — chưa soạn mẫu nào thì mảng rỗng |
+| 401 | Không có token |
+| 403 | Đã đăng nhập nhưng không phải Admin/Manager |
+
+- **Chỉ trả các dòng GHI ĐÈ đã soạn** — loại chưa có mẫu KHÔNG xuất hiện. Màn hình tự vẽ đủ tám
+  loại rồi ghép dòng đã soạn vào; loại không có dòng hiển thị *"dùng câu mặc định"*.
+- **Không phân trang** — bảng mỗi loại tối đa một mẫu (chỉ mục duy nhất trên `Type`), nên tối đa
+  tám dòng.
+
+### `PUT /notification-templates/{type}` — soạn hoặc sửa mẫu
+
+Upsert theo `{type}` (tên enum, đúng chữ hoa thường): chưa có mẫu cho loại đó thì tạo, có rồi thì
+sửa `title`/`body`/`isActive`.
+
+```json
+// Request
+{ "title": "Đã duyệt yêu cầu huỷ vé", "body": "Yêu cầu huỷ vé của bạn đã được duyệt.", "isActive": true }
+```
+
+```json
+// 200 — trả nguyên dòng vừa lưu (hình dạng NotificationTemplate ở trên)
+{ "id": "…", "type": "CancellationApproved", "title": "…", "body": "…",
+  "isActive": true, "createdAt": "…", "updatedAt": "…" }
+```
+
+```json
+// 400 — chỗ trống không hợp lệ (xem "Chỗ trống trong mẫu")
+{ "message": "Chỗ trống trong mẫu không hợp lệ.",
+  "errors": { "body": ["Chỗ trống {StopName} không được dùng cho loại thông báo này."] } }
+```
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Đã tạo hoặc sửa mẫu |
+| 400 | Thiếu `title`/`body`, `title` quá 200 ký tự, hoặc chỗ trống không hợp lệ (`errors.title`/`errors.body`) |
+| 401 | Không có token |
+| 403 | Không phải Admin/Manager |
+| 404 | `type` không phải một trong tám loại |
+| 409 | Hai lượt soạn cùng loại song song — làm mới danh sách rồi thử lại |
+
+- **Không có DELETE**: tắt mẫu (`isActive = false`) là đủ để quay về câu mặc định mà vẫn giữ phần
+  chữ đã soạn (docs/37 §2.2); xoá dòng là mất chữ vĩnh viễn, nên không mở endpoint xoá.
+- Ghi nhật ký: `PUT` đi qua `AuditLogMiddleware` (Update). Vì khoá trên đường dẫn là `{type}` chứ
+  không phải `{id}`, Target ghi `NotificationTemplates` không kèm id — đủ biết *"có người sửa mẫu
+  lúc nào"*, chấp nhận được.
+
+### Chỗ trống trong mẫu
+
+Mẫu có thể chứa chỗ trống để điền dữ liệu lúc gửi, viết trong cặp ngoặc nhọn `{Tên}` — ví dụ
+`"Chuyến xe tuyến {RouteName} bị trễ."`. Quy ước này do docs/37 §6.1 **ĐỀ XUẤT, nhóm chưa chốt**;
+endpoint lưu mẫu kiểm ngay từ bây giờ để một chỗ trống gõ sai tên không bao giờ đi thẳng ra thông
+báo của khách.
+
+| Loại | Chỗ trống dùng được |
+|---|---|
+| `CancellationRejected`, `TicketChangeRejected` | `{RejectReason}` — lý do từ chối do quản lý nhập |
+| `TripDelayed`, `TripScheduleChanged` | `{RouteName}`, `{OldDepartureTime}`, `{NewDepartureTime}`, `{OldArrivalTime}`, `{NewArrivalTime}` |
+| còn lại | *(không dùng chỗ trống nào — số tiền bị cấm trong nội dung thông báo)* |

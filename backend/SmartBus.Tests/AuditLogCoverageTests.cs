@@ -223,6 +223,12 @@ public class AuditLogCoverageTests
         ("POST",   "/api/subscriptions",                          CachGhi.Middleware),
         ("DELETE", "/api/subscriptions/{id:guid}",                CachGhi.Middleware),
 
+        // Màn quản lý mẫu thông báo — story 10, Dương Thị Hạnh (Sprint 5 dòng 24). PUT tự ghi qua
+        // AuditLogMiddleware (Update). Khoá trên đường dẫn là {type} chứ không phải {id} nên tên bảng
+        // suy ra là "NotificationTemplates" nhưng Target KHÔNG kèm id — đủ biết "có người sửa mẫu
+        // lúc nào", chấp nhận được (đã ghi chú ở controller và docs/api-contract.md).
+        ("PUT",    "/api/notification-templates/{type}",          CachGhi.Middleware),
+
         // Gửi yêu cầu đổi chuyến (US 5, dòng 4 Sprint 4 — Nguyễn Duy Kiên). POST thường: middleware
         // suy hành động từ verb (Create), Target "TicketChanges:{id}" — id yêu cầu do service sinh và
         // trả về trong response; middleware đệm response với POST nên đọc được.
@@ -923,6 +929,29 @@ public class AuditLogCoverageTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"SeatLayouts:{layout.Id}", admin);
+    }
+
+    // ------------------------------------------------- Mẫu thông báo (story 10, dòng 24)
+
+    // Story 10, Dương Thị Hạnh: quản trị viên soạn/sửa mẫu thông báo. PUT đi qua AuditLogMiddleware
+    // (Update); policy ManagerOrAbove nên đăng nhập bằng tài khoản quản lý, không phải hành khách.
+    [Fact]
+    public async Task Put_notification_templates_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/notification-templates/CancellationApproved",
+            new { title = "Đã duyệt yêu cầu huỷ vé", body = "Yêu cầu huỷ vé của bạn đã được duyệt.", isActive = true });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target là "NotificationTemplates" KHÔNG kèm id: khoá trên đường dẫn là {type}
+        // chứ không phải {id}, nên AuditLogMiddleware suy được tên bảng nhưng không đọc được id (đã
+        // ghi chú ở NotificationTemplatesController và docs/api-contract.md). Vẫn đủ để biết "có người
+        // sửa mẫu lúc nào".
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, "NotificationTemplates", quanLy);
     }
 
     // ------------------------------------------------------------------------------------ Auth
