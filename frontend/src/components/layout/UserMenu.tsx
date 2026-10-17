@@ -38,6 +38,10 @@ export default function UserMenu() {
       onClick: async () => {
         await logout();
         message.info('Đã đăng xuất tài khoản.');
+        // Quay về trang chủ để lần đăng nhập tiếp theo (có thể bằng vai trò khác) không dính
+        // lại URL màn hình quản trị cũ. Nếu không, đăng xuất khỏi /stops rồi đăng nhập lại
+        // bằng tài khoản khách tại chính URL đó sẽ gặp ngay trang 403 "Không có quyền truy cập".
+        navigate('/', { replace: true });
       },
     },
   ];
