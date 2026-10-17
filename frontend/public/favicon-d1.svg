@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="tileBg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="64">
+      <stop offset="0" stop-color="#2E8BFF"/>
+      <stop offset="1" stop-color="#0B4FC4"/>
+    </linearGradient>
+    <mask id="perfHoles" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <g stroke="#000" stroke-width="1.7" stroke-linecap="round" stroke-dasharray="0 2.8">
+        <line x1="37" y1="13" x2="37" y2="25"/>
+        <line x1="27" y1="49" x2="27" y2="61"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#tileBg)"/>
+  <circle cx="52" cy="13" r="10" fill="#FFFFFF" opacity=".06"/>
+  <path d="M45 19H29A9 9 0 0 0 29 37h6a9 9 0 0 1 0 18H19" fill="none" stroke="#FFFFFF" stroke-width="6.4" stroke-linecap="round" stroke-linejoin="round" mask="url(#perfHoles)"/>
+</svg>

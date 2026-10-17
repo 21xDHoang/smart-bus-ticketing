@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Button, Layout } from 'antd';
 import { MenuOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
+import { BrandMark, BrandWordmark } from '../ui/Brand';
 import { ThemeModeToggle } from '../ui';
 import NotificationBell from '../NotificationBell';
 import UserMenu from './UserMenu';
@@ -52,24 +53,11 @@ export default function AppHeader({
 
       <Link
         to="/"
+        aria-label="Smart Bus Ticket — về trang chủ"
         style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
       >
-        <span aria-hidden="true" style={{ fontSize: 24 }}>
-          🚌
-        </span>
-        <span
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            background: 'var(--app-brand-gradient)',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Smart Bus Ticket
-        </span>
+        <BrandMark />
+        <BrandWordmark />
       </Link>
 
       {children}

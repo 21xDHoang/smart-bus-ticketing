@@ -68,36 +68,40 @@
 
 .auth-header {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
-.logo-icon {
-  display: inline-block;
-  padding: 12px;
-  margin-bottom: 8px;
-  font-size: 42px;
-  line-height: 1;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--app-primary) 12%, transparent);
+/* Khoá thương hiệu "Dải vé S": dấu 54 px + wordmark hai tông. Cả cụm canh giữa thẻ;
+   chữ trong khối canh trái để đường tuyến bên dưới bắt đầu đúng chân wordmark. */
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
 }
 
-/* Tên thương hiệu tô gradient primary→teal của từng chế độ (biến đã tính sẵn độ tương
-   phản trên nền thẻ). Bề rộng ôm khít chữ để gradient trải đúng trên chữ, không dồn
-   về nửa trái. */
-.auth-header h2 {
-  width: fit-content;
-  margin: 4px auto;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  background: var(--app-brand-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+.auth-brand-copy {
+  min-width: 0;
+  text-align: left;
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.1;
+}
+
+/* Co theo bề rộng khối chữ ở màn hẹp — SVG giữ đúng tỉ lệ nên hai mốc tròn vẫn tròn. */
+.auth-route {
+  display: block;
+  width: 100%;
+  max-width: 196px;
+  height: auto;
+  margin-top: 8px;
 }
 
 .auth-header p {
-  margin: 0;
+  margin: 10px 0 0;
   font-size: 14px;
   color: var(--app-text-muted);
 }

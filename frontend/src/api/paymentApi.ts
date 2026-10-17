@@ -77,7 +77,7 @@ export interface PaymentMethodOption {
   /** Một câu mô tả ngắn để hành khách biết phương thức này thanh toán kiểu gì. */
   description: string;
 
-  /** Biểu tượng hiển thị — emoji ngắn gọn, cùng lối 🚌 của app. */
+  /** Biểu tượng hiển thị — emoji ngắn gọn, đồng bộ với lối biểu tượng của app. */
   icon: string;
 }
 
