@@ -96,12 +96,25 @@ public class StopService : IStopService
             return ServiceResult<bool>.NotFound(StopNotFoundMessage);
         }
 
-        // Trạm nằm trên tuyến thì FK của RouteStops chặn xoá (Restrict — quy ước A5).
+        // Trạm nằm trên tuyến ĐANG KHAI THÁC thì FK của RouteStops chặn xoá (Restrict — quy ước A5).
         // Kiểm tra trước để người dùng nhận 409 kèm thông báo hiểu được, thay vì lỗi 500.
-        if (await _db.RouteStops.AnyAsync(rs => rs.StopId == id, cancellationToken))
+        // Tuyến đã ngừng khai thác (Inactive) KHÔNG tính: trạm của tuyến ngừng vẫn xoá được.
+        var onActiveRoute = await _db.RouteStops.AnyAsync(
+            rs => rs.StopId == id
+                && _db.Routes.Any(r => r.Id == rs.RouteId && r.Status == RouteStatus.Active),
+            cancellationToken);
+
+        if (onActiveRoute)
         {
             return ServiceResult<bool>.Conflict(StopInUseMessage);
         }
+
+        // Gỡ các dòng RouteStops "mồ côi" — trỏ tới tuyến đã ngừng khai thác — trước rồi mới xoá
+        // trạm. Để nguyên thì FK Restrict vẫn chặn lượt xoá trạm ở bên dưới.
+        var orphanedRouteStops = await _db.RouteStops
+            .Where(rs => rs.StopId == id)
+            .ToListAsync(cancellationToken);
+        _db.RouteStops.RemoveRange(orphanedRouteStops);
 
         _db.Stops.Remove(stop);
 

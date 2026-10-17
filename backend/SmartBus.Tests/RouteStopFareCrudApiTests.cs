@@ -1065,6 +1065,33 @@ public class RouteStopFareCrudApiTests
     }
 
     [Fact]
+    public async Task Delete_duoc_tram_cua_tuyen_da_ngung_khai_thac()
+    {
+        using var factory = new TestAppFactory();
+        var client = await SignInAsManagerAsync(factory);
+
+        var route = await SeedRouteAsync(factory, code: "01", status: RouteStatus.Inactive);
+        var stop = await SeedStopAsync(factory, "Trạm Cầu Giấy");
+        await SeedRouteStopAsync(factory, route.Id, stop.Id, stopOrder: 1);
+
+        var response = await client.DeleteAsync(StopUrl(stop.Id));
+
+        // Tuyến đã ngừng khai thác không còn chặn trạm: xoá được trạm, đồng thời dọn dòng
+        // RouteStops mồ côi (trỏ vào tuyến ngừng) để khỏi trỏ vào hư không.
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var stopStored = await QueryAsync(
+            factory,
+            db => db.Stops.FirstOrDefaultAsync(s => s.Id == stop.Id));
+        Assert.Null(stopStored);
+
+        var routeStopStored = await QueryAsync(
+            factory,
+            db => db.RouteStops.FirstOrDefaultAsync(rs => rs.StopId == stop.Id));
+        Assert.Null(routeStopStored);
+    }
+
+    [Fact]
     public async Task Delete_tram_khong_ton_tai_tra_404()
     {
         using var factory = new TestAppFactory();
