@@ -1,5 +1,4 @@
 using System.Globalization;
-using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using SmartBus.Api.Data;
 using SmartBus.Api.Dtos.AuditLogs;
@@ -58,16 +57,21 @@ public sealed class AuditLogExportService : IAuditLogExportService
         "Mã người dùng",
     ];
 
-    /// <summary>Độ rộng cột đặt cứng — xem chú thích ở <see cref="BuildWorkbook"/>.</summary>
+    /// <summary>Độ rộng cột đặt cứng — xem chú thích ở <see cref="BuildExcel"/>.</summary>
     private static readonly double[] ColumnWidths = [22, 24, 16, 12, 30, 16, 38];
 
     private readonly AppDbContext _db;
     private readonly IReportPdfService _reportPdfService;
+    private readonly IReportExcelService _reportExcelService;
 
-    public AuditLogExportService(AppDbContext db, IReportPdfService reportPdfService)
+    public AuditLogExportService(
+        AppDbContext db,
+        IReportPdfService reportPdfService,
+        IReportExcelService reportExcelService)
     {
         _db = db;
         _reportPdfService = reportPdfService;
+        _reportExcelService = reportExcelService;
     }
 
     public async Task<ServiceResult<AuditLogExportFile>> ExportAsync(
@@ -155,7 +159,7 @@ public sealed class AuditLogExportService : IAuditLogExportService
         {
             Content = format == ReportExportFormat.Pdf
                 ? BuildPdf(rows, fromDate, toDate, generatedAtUtc, exportedBy)
-                : BuildWorkbook(rows, fromDate, toDate, generatedAtUtc, exportedBy),
+                : BuildExcel(rows, fromDate, toDate, generatedAtUtc, exportedBy),
 
             ContentType = format.ContentType(),
 
@@ -263,75 +267,55 @@ public sealed class AuditLogExportService : IAuditLogExportService
         });
     }
 
-    private static byte[] BuildWorkbook(
+    private byte[] BuildExcel(
         IReadOnlyList<ExportRow> rows,
         DateOnly fromDate,
         DateOnly toDate,
         DateTime generatedAtUtc,
         string? exportedBy)
     {
-        using var workbook = new XLWorkbook();
-        var sheet = workbook.Worksheets.Add(SheetName);
-
         // Khối tự mô tả. File xuất ra là chứng từ RỜI KHỎI hệ thống — nằm trong thư mục tải về,
         // được gửi kèm email — nên nó phải tự nói được nó phủ khoảng nào và ai xuất.
         //
         // Đây cũng là chỗ DUY NHẤT ghi nhận việc xuất đã xảy ra: AuditLogMiddleware chỉ ghi
         // POST/PUT/PATCH/DELETE, nên chính thao tác xuất này không để lại dòng nào ở AuditLogs.
-        sheet.Cell(1, 1).Value = DocumentTitle;
-        sheet.Cell(1, 1).Style.Font.Bold = true;
-        sheet.Cell(1, 1).Style.Font.FontSize = 14;
-
-        sheet.Cell(2, 1).Value =
-            $"Khoảng thời gian: {fromDate:yyyy-MM-dd} → {toDate:yyyy-MM-dd} (UTC, trọn ngày) · " +
-            $"Số dòng: {rows.Count} · " +
-            $"Xuất lúc: {generatedAtUtc:yyyy-MM-dd HH:mm:ss} UTC · " +
-            $"Người xuất: {exportedBy ?? UnknownActor}";
-
-        for (var i = 0; i < Headers.Length; i++)
+        var model = new ReportExcelModel
         {
-            var cell = sheet.Cell(HeaderRow, i + 1);
-            cell.Value = Headers[i];
-            cell.Style.Font.Bold = true;
-        }
+            SheetName = SheetName,
+            Title = DocumentTitle,
+            Subtitle =
+                $"Khoảng thời gian: {fromDate:yyyy-MM-dd} → {toDate:yyyy-MM-dd} (UTC, trọn ngày) · " +
+                $"Số dòng: {rows.Count} · " +
+                $"Xuất lúc: {generatedAtUtc:yyyy-MM-dd HH:mm:ss} UTC · " +
+                $"Người xuất: {exportedBy ?? UnknownActor}",
+            Headers = Headers,
+            Rows = rows
+                .Select(row => new ReportExcelRow
+                {
+                    // Ô thời gian PHẢI gán DateTime thật, không gán chuỗi: gán chuỗi thì ô thành
+                    // text và người kiểm toán mất khả năng sắp xếp, lọc theo thời gian — mất nửa
+                    // giá trị của bản xuất. Các cột còn lại để nguyên kiểu text nên Excel không
+                    // diễn giải lại "0912345678" thành số.
+                    Cells =
+                    [
+                        ReportExcelCell.Date(row.CreatedAt, TimeNumberFormat),
+                        ReportExcelCell.Text(row.UserFullName ?? UnknownActor),
+                        ReportExcelCell.Text(row.UserPhoneNumber),
+                        ReportExcelCell.Text(row.Action.ToString()),
+                        ReportExcelCell.Text(row.Target),
+                        ReportExcelCell.Text(row.IpAddress),
+                        ReportExcelCell.Text(row.UserId?.ToString()),
+                    ],
+                })
+                .ToList(),
 
-        var rowIndex = HeaderRow + 1;
+            // Độ rộng đặt CỨNG, không gọi AdjustToContent(): hàm đó phải đo font — đúng chỗ sinh
+            // lỗi "missing font" trên Linux — và chậm trên sheet lớn. Cứng thì kết quả giống
+            // nhau ở máy dev lẫn trên CI.
+            ColumnWidths = ColumnWidths,
+        };
 
-        foreach (var row in rows)
-        {
-            // Ô thời gian PHẢI gán DateTime thật, không gán chuỗi: gán chuỗi thì ô thành text và
-            // người kiểm toán mất khả năng sắp xếp, lọc theo thời gian — mất nửa giá trị của
-            // bản xuất. Các cột còn lại để nguyên kiểu text nên Excel không diễn giải lại
-            // "0912345678" thành số.
-            var timeCell = sheet.Cell(rowIndex, 1);
-            timeCell.Value = row.CreatedAt;
-            timeCell.Style.DateFormat.Format = TimeNumberFormat;
-
-            sheet.Cell(rowIndex, 2).Value = row.UserFullName ?? UnknownActor;
-            sheet.Cell(rowIndex, 3).Value = row.UserPhoneNumber ?? string.Empty;
-            sheet.Cell(rowIndex, 4).Value = row.Action.ToString();
-            sheet.Cell(rowIndex, 5).Value = row.Target ?? string.Empty;
-            sheet.Cell(rowIndex, 6).Value = row.IpAddress ?? string.Empty;
-            sheet.Cell(rowIndex, 7).Value = row.UserId?.ToString() ?? string.Empty;
-
-            rowIndex++;
-        }
-
-        // Độ rộng đặt CỨNG, không gọi AdjustToContent(): hàm đó phải đo font — đúng chỗ sinh lỗi
-        // "missing font" trên Linux — và chậm trên sheet lớn. Cứng thì kết quả giống nhau ở máy
-        // dev lẫn trên CI.
-        for (var i = 0; i < ColumnWidths.Length; i++)
-        {
-            sheet.Column(i + 1).Width = ColumnWidths[i];
-        }
-
-        sheet.Range(HeaderRow, 1, HeaderRow, Headers.Length).SetAutoFilter();
-        sheet.SheetView.FreezeRows(HeaderRow);
-
-        using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-
-        return stream.ToArray();
+        return _reportExcelService.GenerateExcel(model);
     }
 
     /// <summary>
