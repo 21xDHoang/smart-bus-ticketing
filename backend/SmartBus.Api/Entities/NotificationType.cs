@@ -30,6 +30,10 @@ namespace SmartBus.Api.Entities;
 /// <c>PUT /routes/{routeId}/trips/{id}</c>. Chính sách đầy đủ ở doc-comment hai giá trị dưới và
 /// docs/44-thong-bao-tre-chuyen-doi-lich-trinh.md.
 ///
+/// Giá trị thứ chín — <c>RefundReconciliationAlert</c> — là cảnh báo VẬN HÀNH của bước đối soát hoàn
+/// tiền hằng ngày (dòng 32 Sprint 4, Nguyễn Duy Kiên): loại đầu tiên gửi cho Admin/Manager thay vì
+/// hành khách. Lý do đầy đủ ở doc-comment giá trị đó và docs/48-doi-soat-hoan-tien-hang-ngay.md.
+///
 /// ⚠️ Tập giá trị này CÒN DÀI RA: Sprint 5 (US 10/US 11 — thông báo trạm, sự cố) sẽ thêm giá trị
 /// cho các loại khác. Thêm giá trị enum KHÔNG tốn migration (cột là varchar, không có CHECK
 /// constraint), nhưng là thay đổi hợp đồng với frontend — phải báo trước khi thêm, đúng luật 5.
@@ -81,5 +85,33 @@ public enum NotificationType
     /// duy nhất còn lại khi giờ thực sự đổi, nên hai loại <c>Trip…</c> phủ kín mọi lần đổi giờ.
     /// Cùng đối tượng nhận và cùng lối phát với <see cref="TripDelayed"/>.
     /// </summary>
-    TripScheduleChanged
+    TripScheduleChanged,
+
+    /// <summary>
+    /// Cảnh báo VẬN HÀNH: lượt đối soát hoàn tiền hằng ngày tìm thấy lệch số liệu (US 8 — task
+    /// *"Đối soát hoàn tiền hằng ngày + cảnh báo khi lệch số liệu"*, dòng 32 Sprint 4, Nguyễn Duy
+    /// Kiên).
+    ///
+    /// <para>
+    /// ⚠️ Đây là loại thông báo ĐẦU TIÊN không nhắm vào hành khách: người nhận là mọi tài khoản
+    /// <c>Admin</c>/<c>Manager</c> đang hoạt động. Nó trỏ vào NHIỀU khoản hoàn cùng lúc, nên
+    /// <see cref="Notification.RelatedEntityType"/> và <see cref="Notification.RelatedEntityId"/> để
+    /// null — gán một mã đại diện là nói dối về phạm vi của thông báo. Mã các khoản hoàn liên quan
+    /// nằm trong <see cref="Notification.Body"/> để quản trị mở đúng dòng ở màn quản lý.
+    /// </para>
+    ///
+    /// <para>
+    /// Nội dung KHÔNG có số tiền — cùng luật với mọi loại khác (docs/api-contract.md, mục "Chín loại
+    /// thông báo"): số tiền tra ở chính dòng <c>Refunds</c>, chép vào đây là dựng bản sao thứ hai có
+    /// thể lệch. Chỉ báo khi CÓ lệch, và tối đa một lần mỗi ngày — xem
+    /// <c>RefundReconciliationNotifier</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ Frontend <c>notificationApi.ts</c> chưa khai loại thứ chín (file của Nguyễn Đình Băng).
+    /// <c>NotificationBell</c> sẽ xếp nó vào nhóm đỏ mặc định — đúng hướng cho một cảnh báo — nhưng
+    /// nhãn và biểu tượng riêng cần Băng bổ sung; đã ghi ở docs/api-contract.md và docs/48.
+    /// </para>
+    /// </summary>
+    RefundReconciliationAlert
 }

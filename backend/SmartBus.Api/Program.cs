@@ -642,6 +642,28 @@ builder.Services.AddScoped<IRefundAttemptService>(provider => new NotifyingRefun
 builder.Services.AddScoped<IRefundRetryService, RefundRetryService>();
 builder.Services.AddHostedService<RefundRetryBackgroundService>();
 
+// Đối soát hoàn tiền hằng ngày + cảnh báo khi lệch số liệu (US 8, Sprint 4):
+// job chạy 00:05 UTC (07:05 giờ Việt Nam), kiểm bất biến sổ nội bộ (bằng chứng cổng báo thành công
+// trên khoản chưa Succeeded, khoản Pending quá 24 giờ, mã giao dịch lệch, hoàn quá số tiền giao dịch
+// gốc, một giao dịch có nhiều khoản hoàn cùng sống…) rồi đối chiếu sao kê cổng KHI có nguồn sao kê.
+// Task "Đối soát hoàn tiền hằng ngày + cảnh báo khi lệch số liệu" (dòng 32 Sprint 4) — Nguyễn Duy
+// Kiên. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cảnh báo ghi vào bảng Notifications + đẩy SignalR cho mọi Admin/Manager đang hoạt động, dùng loại
+// NotificationType.RefundReconciliationAlert (loại thứ chín — là thay đổi hợp đồng frontend, đã ghi ở
+// docs/api-contract.md và nhờ Băng cập nhật notificationApi.ts/NotificationBell).
+// 🔴 IRefundStatementSource mặc định là UnavailableRefundStatementSource: bản chạy hiện tại CHƯA có
+// cổng nào cung cấp sao kê hoàn tiền (MoMo/ZaloPay chỉ có API tra giao dịch THU tiền). Nó trả null
+// ("không biết"), không trả sao kê rỗng — đổi sang nguồn thật chỉ cần đổi đúng dòng đăng ký này.
+// Đăng ký AddScoped thay vì Singleton để nguồn thật sau này được dùng AppDbContext/HttpClient scoped.
+// AddHostedService (không phải AddScoped): job phải sống suốt vòng đời app; ruột job là service scoped
+// nên vòng lặp mở scope riêng cho mỗi lượt chạy.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh Sprint 4 khác đang thêm dòng.
+builder.Services.AddScoped<IRefundStatementSource, UnavailableRefundStatementSource>();
+builder.Services.AddScoped<IRefundReconciliationService, RefundReconciliationService>();
+builder.Services.AddScoped<IRefundReconciliationNotifier, RefundReconciliationNotifier>();
+builder.Services.AddHostedService<RefundReconciliationBackgroundService>();
+
 // Hoàn tiền (US 8, Sprint 4), phần đọc của hành khách: GET /api/refunds và
 // GET /api/refunds/{refundCode}.
 // Task "API tra cứu trạng thái hoàn tiền của giao dịch" (dòng 42 Sprint 4) — Vàng Thị Dăm.

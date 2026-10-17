@@ -347,10 +347,10 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Đổi năm job nền của app sang bản chạy RỖNG trong host test
+    /// Đổi sáu job nền của app sang bản chạy RỖNG trong host test
     /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>,
     /// <see cref="NoopSeatHoldExpiryJob"/>, <see cref="NoopSeatHoldAbuseJob"/>,
-    /// <see cref="NoopRefundRetryJob"/>).
+    /// <see cref="NoopRefundRetryJob"/>, <see cref="NoopRefundReconciliationJob"/>).
     ///
     /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
     /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
@@ -387,7 +387,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền thứ năm
+    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền tiếp theo
     /// thì thêm đúng một dòng ở đây, không phải sửa một biểu thức điều kiện đã dài ra theo mỗi job —
     /// và quên job mới sẽ lộ ra ngay ở <see cref="TestHostKhongChayJobNenTests"/>.
     /// </summary>
@@ -398,6 +398,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         [typeof(SeatHoldExpiryBackgroundService)] = typeof(NoopSeatHoldExpiryJob),
         [typeof(SeatHoldAbuseBackgroundService)] = typeof(NoopSeatHoldAbuseJob),
         [typeof(RefundRetryBackgroundService)] = typeof(NoopRefundRetryJob),
+        [typeof(RefundReconciliationBackgroundService)] = typeof(NoopRefundReconciliationJob),
     };
 
     /// <summary>
@@ -485,6 +486,26 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopRefundRetryJob(
             IServiceScopeFactory scopeFactory,
             ILogger<RefundRetryBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="RefundReconciliationBackgroundService"/> cho host test — cùng lý
+    /// do với <see cref="NoopTripGenerationJob"/>. Job đối soát chỉ ĐỌC và chạy mỗi ngày một lần, nên
+    /// trong một lượt test ngắn nó gần như không thức dậy; nhưng để nguyên bản thật là một job mỗi
+    /// ngày một lần vẫn có thể chạm đúng lúc 00:05 UTC giữa bộ test và ghi thêm dòng
+    /// <c>Notifications</c> cảnh báo, làm đỏ các phép đếm-đúng. Gỡ hẳn cũng không được vì test wiring
+    /// của job cần thấy hình dạng đăng ký — nên dùng đúng lối noop đang có.
+    /// </summary>
+    private sealed class NoopRefundReconciliationJob : RefundReconciliationBackgroundService
+    {
+        public NoopRefundReconciliationJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<RefundReconciliationBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }

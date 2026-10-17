@@ -155,7 +155,7 @@ Token vẫn chuyển tiếp nguyên vẹn qua **sáu phương thức** của `IR
 - ánh xạ biểu tượng riêng cho nhóm `Trip…` (gợi ý: đồng hồ/cảnh báo cho `TripDelayed`, đồng hồ/thông tin cho `TripScheduleChanged` — không phải dấu X đỏ);
 - điều hướng `RelatedEntityType = Trip` về màn chi tiết chuyến hoặc vé tương ứng.
 
-`api-contract.md` (mục "Tám loại thông báo" và bảng trường `Notification`) là bản hợp đồng đã cập nhật — đọc ở đó khi nối UI. Backend ghi sẵn cả `Title` lẫn `Body`; frontend chỉ hiển thị.
+`api-contract.md` (mục "Chín loại thông báo" và bảng trường `Notification`) là bản hợp đồng đã cập nhật — đọc ở đó khi nối UI. Backend ghi sẵn cả `Title` lẫn `Body`; frontend chỉ hiển thị.
 
 ### 5.3 Trạng thái "đã đọc" — không đổi
 

@@ -1893,7 +1893,7 @@ của chúng.
 > thông báo cho đúng yêu cầu đó thì lượt gọi sau bị bỏ qua hoàn toàn (không ghi, không đẩy). Nhờ vậy
 > client retry cũng không làm khách thấy hai thông báo giống nhau.
 
-### Tám loại thông báo
+### Chín loại thông báo
 
 | `type` | `title` |
 |---|---|
@@ -1905,6 +1905,7 @@ của chúng.
 | `RefundFailed` | Hoàn tiền thất bại |
 | `TripDelayed` | Chuyến xe bị trễ |
 | `TripScheduleChanged` | Lịch trình chuyến xe thay đổi |
+| `RefundReconciliationAlert` | Đối soát hoàn tiền phát hiện lệch số liệu |
 
 Hai loại `…Rejected` có lý do từ chối của quản lý **chép nguyên văn** vào cuối `body`; quản lý không
 nêu lý do thì body ghi rõ *"Người duyệt không nêu lý do."* chứ không để cụt.
@@ -1922,6 +1923,17 @@ và **giờ cũ → giờ mới** của các mốc đã đổi, định dạng `
 Cả hai loại nêu **mốc cũ và mốc mới** để khách đối chiếu — không suy ra "trễ bao lâu" hay "sớm bao
 lâu" thành câu riêng, vì chuyến có thể đổi cả hai mốc. Không có số tiền nào trong body — cùng luật
 với các loại trên.
+
+`RefundReconciliationAlert` là loại **duy nhất nhắm vào quản trị, không nhắm vào hành khách**: người
+nhận là mọi tài khoản `Admin`/`Manager` **đang hoạt động** (xét cả vai trò chính `User.RoleId` lẫn
+bảng nối `UserRoles`). Nó do job đối soát hoàn tiền hằng ngày phát (00:05 UTC = 07:05 giờ Việt Nam)
+khi tìm thấy lệch số liệu giữa sổ nội bộ và (khi có) sao kê cổng — ví dụ nhật ký có lượt gọi cổng
+thành công nhưng khoản hoàn chưa `Succeeded`, khoản `Pending` quá 24 giờ, hoặc mã giao dịch trên
+khoản hoàn không khớp nhật ký. Cảnh báo nói về **nhiều khoản hoàn cùng lúc**, nên `relatedEntityType`
+và `relatedEntityId` đều `null`; mã các khoản hoàn liên quan nằm trong `body` để quản trị mở đúng
+dòng ở màn quản lý. Body nêu **số điểm lệch, số điểm nghiêm trọng và tối đa 10 mã khoản hoàn** —
+**không có số tiền**, cùng luật với mọi loại khác (số tiền tra ở chính dòng `Refunds`). Tối đa một
+cảnh báo mỗi người nhận mỗi ngày; hôm nào không lệch thì không có thông báo nào.
 
 > 🔴 **Nội dung thông báo KHÔNG chứa số tiền** — không có khoản hoàn nào, không phí huỷ; hai loại
 > `Refund…` cũng vậy. Với thông báo huỷ/đổi: việc hoàn tiền do bảng `Refunds` (US 8) thực hiện và có
@@ -2001,7 +2013,7 @@ API đăng ký/huỷ theo dõi trạm (dòng 17, Trần Trung Hiếu), màn qu�
 | Trường | Kiểu | Mô tả |
 |---|---|---|
 | `id` | `string` (GUID) | Khoá chính |
-| `type` | `string` | Một trong **tám** loại — bảng "Tám loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
+| `type` | `string` | Một trong **chín** loại — bảng "Chín loại thông báo" ở mục trên. Quyết định nhãn và biểu tượng |
 | `title` | `string` | Dòng tiêu đề ngắn — dòng đầu của mỗi mục trong danh sách |
 | `body` | `string` | Nội dung đầy đủ, **có thể xuống dòng**. Lý do từ chối của quản lý được chép nguyên văn vào đây |
 | `relatedEntityType` | `string \| null` | Bảng mà `relatedEntityId` trỏ tới: `CancellationRequest`, `TicketChange`, `Refund` hoặc `Trip`. `null` với thông báo không gắn bản ghi nào |
@@ -2091,13 +2103,17 @@ Authorization: Bearer <JWT>
 > `GET /notifications/me` — `USE_MOCK_DATA` cùng nhánh dữ liệu giả đã bỏ. `NotificationBell` xếp
 > `RefundSucceeded` vào nhóm "thành công" để thông báo hoàn tiền thành công không hiện dấu đỏ.
 >
-> ⚠️ **Còn thiếu hai loại của dòng 44 — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
-> Backend phát đủ **tám** loại và **bốn** target: hai loại `TripDelayed`/`TripScheduleChanged` do
-> `TripScheduleChangeNotifier` phát (mục trên), target `Trip`. `notificationApi.ts` mới khai sáu loại
-> / ba target nên union TypeScript chưa phủ hai loại này. `NotificationBell.isPositiveOutcome` xếp mọi
-> loại ngoài ba loại "tốt" vào nhóm đỏ — `TripDelayed` sẽ hiện dấu X đỏ "bị từ chối", sai nghĩa; cần
-> ánh xạ biểu tượng riêng cho nhóm `Trip…` và điều hướng `relatedEntityType = Trip` (Băng/Hạnh, dòng
-> 47–48).
+> ⚠️ **Còn thiếu ba loại phía frontend — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
+> Backend phát đủ **chín** loại và **bốn** target: hai loại `TripDelayed`/`TripScheduleChanged` do
+> `TripScheduleChangeNotifier` phát (mục trên), target `Trip`; loại thứ chín
+> `RefundReconciliationAlert` do job đối soát hoàn tiền phát, `relatedEntityType = null`.
+> `notificationApi.ts` mới khai sáu loại / ba target nên union TypeScript chưa phủ ba loại này.
+> `NotificationBell.isPositiveOutcome` xếp mọi loại ngoài ba loại "tốt" vào nhóm đỏ —
+> `TripDelayed` sẽ hiện dấu X đỏ "bị từ chối", sai nghĩa; cần ánh xạ biểu tượng riêng cho nhóm
+> `Trip…` và điều hướng `relatedEntityType = Trip`. Riêng `RefundReconciliationAlert` xếp vào nhóm
+> đỏ là **đúng hướng** (đây là cảnh báo vận hành), nhưng cần nhãn/biểu tượng riêng để không bị đọc
+> thành "yêu cầu bị từ chối"; bấm vào không điều hướng theo `relatedEntityType` (null) mà mở màn
+> quản lý hoàn tiền (Băng/Hạnh, dòng 46–48). Chi tiết: `docs/48-doi-soat-hoan-tien-hang-ngay.md`.
 
 ## Xe buýt — `/buses`
 
