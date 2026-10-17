@@ -18,6 +18,9 @@ import { fetchRoutes } from './routeApi';
 /** Mã đối tượng hành khách — khớp enum PassengerType của backend, đúng thứ tự khai báo. */
 export type PassengerType = 'Standard' | 'Student' | 'Senior' | 'Child' | 'Disabled';
 
+/** Bốn đối tượng ƯU ĐÃI (không gồm người lớn Standard) — nhận ưu đãi trong bảng giá mẫu theo km. */
+export type DiscountedPassengerType = Exclude<PassengerType, 'Standard'>;
+
 export interface Fare {
   id: string;
   routeId: string;
@@ -46,6 +49,8 @@ export interface RouteOption {
   code: string;
   /** Tên tuyến, ví dụ "Bến Thành — Chợ Lớn". */
   name: string;
+  /** Tổng chiều dài tuyến (km) — dùng để tính giá khi áp bảng giá mẫu theo km. */
+  distanceKm: number;
 }
 
 export interface PassengerTypeMeta {
@@ -90,9 +95,9 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // -------- DỮ LIỆU GIẢ (MOCK) --------
 
 const MOCK_ROUTES: RouteOption[] = [
-  { id: 'route-01', code: '01', name: 'Bến Thành — Chợ Lớn' },
-  { id: 'route-08', code: '08', name: 'Bến xe Miền Đông — Bến xe Miền Tây' },
-  { id: 'route-14', code: '14', name: 'Bến xe buýt Sài Gòn — Đại học Quốc gia' },
+  { id: 'route-01', code: '01', name: 'Bến Thành — Chợ Lớn', distanceKm: 12.5 },
+  { id: 'route-08', code: '08', name: 'Bến xe Miền Đông — Bến xe Miền Tây', distanceKm: 20.3 },
+  { id: 'route-14', code: '14', name: 'Bến xe buýt Sài Gòn — Đại học Quốc gia', distanceKm: 18.0 },
 ];
 
 /** Giá theo từng tuyến. route-01 có đủ 5 đối tượng, route-08 chỉ 2, route-14 trống. */
@@ -141,7 +146,7 @@ const api: FareApi = {
     for (let page = 1; ; page += 1) {
       const { items, total } = await fetchRoutes({ page, pageSize: ROUTE_PICKER_PAGE_SIZE });
 
-      routes.push(...items.map(({ id, code, name }) => ({ id, code, name })));
+      routes.push(...items.map(({ id, code, name, distanceKm }) => ({ id, code, name, distanceKm })));
 
       // `items.length === 0` là chốt chặn để không lặp vô hạn nếu `total` sai.
       if (routes.length >= total || items.length === 0) break;

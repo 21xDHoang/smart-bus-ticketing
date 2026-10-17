@@ -6,7 +6,7 @@ import type { MonthlyPass } from '../api/monthlyPassApi';
  * Trạng thái HIỂN THỊ của một vé tháng — task "Component hiển thị trạng thái vé tháng
  * (còn hạn / sắp hết hạn / hết hạn)" (story 16, Nguyễn Đình Băng).
  *
- * Khác với `MonthlyPassStatus` ('Active' | 'Expired') lưu trong cột Status của bảng
+ * Khác với `MonthlyPassStatus` ('Active' | 'Expired' | 'Cancelled') lưu trong cột Status của bảng
  * MonthlyPasses: "Sắp hết hạn" KHÔNG phải một giá trị lưu — nó được suy ra từ `validTo`
  * so với hôm nay. Ba trạng thái này chỉ để vẽ giao diện, không đổi dữ liệu.
  */

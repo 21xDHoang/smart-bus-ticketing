@@ -3,7 +3,7 @@ using SmartBus.Api.Dtos.AuditLogs;
 namespace SmartBus.Api.Services;
 
 /// <summary>
-/// Xuất nhật ký kiểm toán ra file Excel — task story 23, Phùng Duy Hoàng.
+/// Xuất nhật ký kiểm toán ra file Excel/PDF — task story 23, Phùng Duy Hoàng.
 ///
 /// Cố ý TÁCH khỏi <see cref="IAuditLogService"/> (của Vàng Thị Dăm, hiện chỉ có
 /// <see cref="IAuditLogService.RecordAsync"/>): đường truy vấn danh sách
@@ -13,10 +13,11 @@ namespace SmartBus.Api.Services;
 public interface IAuditLogExportService
 {
     /// <summary>
-    /// Dựng file .xlsx chứa các bản ghi khớp bộ lọc, mới nhất trước.
+    /// Dựng file .xlsx (mặc định) hoặc .pdf chứa các bản ghi khớp bộ lọc, mới nhất trước.
     ///
-    /// Trả <see cref="ServiceErrorKind.Invalid"/> khi khoảng ngày ngược nhau hoặc khi vượt trần
-    /// dòng — <b>không bao giờ</b> trả về file thiếu dòng.
+    /// Trả <see cref="ServiceErrorKind.Invalid"/> khi khoảng ngày ngược nhau, định dạng file lạ,
+    /// hoặc khi vượt trần dòng (10.000 với Excel / 2.000 với PDF) — <b>không bao giờ</b> trả về
+    /// file thiếu dòng.
     /// </summary>
     /// <param name="request">Bộ lọc bind từ query string.</param>
     /// <param name="exportedBy">

@@ -54,6 +54,12 @@ public class AuditLogCoverageTests
         ("PATCH",  "/api/admin/users/{id:guid}/status",          CachGhi.Middleware),
         ("PUT",    "/api/admin/users/{id:guid}/roles",           CachGhi.Middleware),
 
+        // Đặt lại mật khẩu tài khoản — Admin. Middleware tự ghi (PUT → Update); tên bảng suy từ
+        // đoạn tĩnh ngay trước {id} là "Users", Target "Users:{id}". Service băm BCrypt + thu hồi
+        // toàn bộ refresh token đang hoạt động, nhưng KHÔNG tự gọi IAuditLogService — verb đã nói
+        // đủ hành động, và mật khẩu/bản băm không bao giờ được ghi vào nhật ký.
+        ("PUT",    "/api/admin/users/{id:guid}/password",        CachGhi.Middleware),
+
         ("POST",   "/api/auth/login",                            CachGhi.TuGhi),
         ("POST",   "/api/auth/logout",                           CachGhi.TuGhi),
         ("POST",   "/api/auth/refresh-token",                    CachGhi.KhongGhi),
@@ -78,6 +84,21 @@ public class AuditLogCoverageTests
         ("DELETE", "/api/routes/{routeId:guid}/trips/{id:guid}", CachGhi.Middleware),
         ("POST",   "/api/routes/{routeId:guid}/trips/generate",  CachGhi.Middleware),
 
+        // Sinh chuyến cho CẢ ĐỘI XE — nợ của đợt mở rộng đội xe 17/10/2026, Phùng Duy Hoàng. Cũng
+        // do AuditLogMiddleware tự ghi (POST → Create). Route có tham số {routeId} nhưng không có
+        // {id}, nên tên bảng suy từ đoạn tĩnh đầu tiên sau tham số cuối là "Trips". Response
+        // (GenerateFleetTripsResponse) không có trường "id" ở nóc — id từng chuyến nằm trong
+        // "items" — nên Target chỉ còn tên bảng, cùng giới hạn đã ghi ở
+        // PATCH .../trips/driver-assignment; test Phần 2 ghim sự thật đó.
+        ("POST",   "/api/routes/{routeId:guid}/trips/generate-fleet", CachGhi.Middleware),
+
+        // Giờ đến từng trạm — story 13, Phùng Duy Hoàng. Middleware tự ghi (PUT → Update); tên
+        // bảng suy từ đoạn ngay trước {id} là "Trips", Target "Trips:{id}". Đánh đổi đã biết:
+        // dòng bị ghi thật là TripStopTimeOverrides, nhưng id chuyến trong Target tra ngược được
+        // cả cụm giờ trạm của chuyến — endpoint là thao tác con của chuyến, cùng lối
+        // PATCH /api/admin/feedbacks/{id}/replies ghi về "Feedbacks".
+        ("PUT",    "/api/routes/{routeId:guid}/trips/{id:guid}/stop-times", CachGhi.Middleware),
+
         // Đổi xe/đổi tài xế khi có sự cố — story 14, Phùng Duy Hoàng. Middleware tự ghi
         // (PATCH → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
         ("PATCH",  "/api/trips/{id:guid}/assignment",            CachGhi.Middleware),
@@ -85,6 +106,10 @@ public class AuditLogCoverageTests
         // Cập nhật vị trí chuyến — story 10, Trần Trung Hiếu. Middleware tự ghi
         // (PUT → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
         ("PUT",    "/api/trips/{id:guid}/location",              CachGhi.Middleware),
+
+        // Giờ đến từng trạm — story 13. Middleware tự ghi (PUT → Update); {id} đặt tên đúng để
+        // tên bảng suy ra là "Trips", Target "Trips:{id}".
+        ("PUT",    "/api/routes/{routeId:guid}/trips/{id:guid}/stop-times", CachGhi.Middleware),
 
         // Gán tài xế vào chuyến theo lô — story 14, Nguyễn Duy Kiên. Cũng do AuditLogMiddleware tự
         // ghi (PATCH → Update). Tên bảng suy ra là "Trips": route có tham số {routeId} nên tài
@@ -122,6 +147,19 @@ public class AuditLogCoverageTests
         // bảng suy từ đoạn trước {id} là "MonthlyPasses"). Target là id vé MỚI đọc từ body trả
         // về, không phải vé cũ trên đường dẫn — ca này cố ý để lộ điều đó ra test Phần 2.
         ("POST",   "/api/monthly-passes/{id:guid}/renew",        CachGhi.Middleware),
+
+        // Quản trị vé tháng — bổ sung ngoài story 16, Nguyễn Duy Kiên (kiêm chủ API). Middleware
+        // tự ghi (PATCH → Update); {id} đặt tên đúng để tên bảng suy từ đoạn trước nó là
+        // "MonthlyPasses", Target "MonthlyPasses:{id}".
+        ("PATCH",  "/api/monthly-passes/{id:guid}/status",        CachGhi.Middleware),
+
+        // CRUD loại vé tháng — bổ sung ngoài story 16, Nguyễn Duy Kiên. Cả ba endpoint đều do
+        // AuditLogMiddleware tự ghi (POST → Create, PUT → Update, DELETE → Delete); tên bảng suy
+        // từ đoạn tĩnh "pass-types" thành "PassTypes", POST lấy đoạn cuối, PUT/DELETE lấy đoạn
+        // trước {id}. Target của POST là id loại vé mới đọc từ body trả về.
+        ("POST",   "/api/pass-types",                             CachGhi.Middleware),
+        ("PUT",    "/api/pass-types/{id:guid}",                   CachGhi.Middleware),
+        ("DELETE", "/api/pass-types/{id:guid}",                   CachGhi.Middleware),
 
         // Gia hạn giữ chỗ — story 3, Trần Trung Hiếu. Middleware tự ghi (POST → Create) nhưng
         // Target chỉ là "Extend" chứ KHÔNG phải "SeatHolds:<mã phiên>": route dùng tham số
@@ -225,6 +263,34 @@ public class AuditLogCoverageTests
         ("POST",   "/api/payments",                               CachGhi.Middleware),
         ("POST",   "/api/payments/momo/callback",                 CachGhi.Middleware),
         ("POST",   "/api/payments/zalopay/callback",              CachGhi.Middleware),
+
+        // Đăng ký / huỷ theo dõi thông báo — story 10, Trần Trung Hiếu (Sprint 5 dòng 17). Hai
+        // endpoint đều do AuditLogMiddleware tự ghi (POST → Create, DELETE → Delete); tên bảng suy
+        // ra là "Subscriptions" — POST không có tham số nào nên lấy đoạn tĩnh cuối, DELETE lấy đoạn
+        // trước {id}. Target của POST là id dòng theo dõi mới đọc từ body trả về (response có trường
+        // "id") — cùng lối POST /api/monthly-passes. Huỷ theo dõi là XOÁ dòng chứ không lật cờ
+        // (docs/37 §3.2) nên DELETE ghi Delete, không có PATCH nào.
+        ("POST",   "/api/subscriptions",                          CachGhi.Middleware),
+        ("DELETE", "/api/subscriptions/{id:guid}",                CachGhi.Middleware),
+
+        // Màn quản lý mẫu thông báo — story 10, Dương Thị Hạnh (Sprint 5 dòng 24). PUT tự ghi qua
+        // AuditLogMiddleware (Update). Khoá trên đường dẫn là {type} chứ không phải {id} nên tên bảng
+        // suy ra là "NotificationTemplates" nhưng Target KHÔNG kèm id — đủ biết "có người sửa mẫu
+        // lúc nào", chấp nhận được (đã ghi chú ở controller và docs/api-contract.md).
+        ("PUT",    "/api/notification-templates/{type}",          CachGhi.Middleware),
+
+        // Gửi yêu cầu đổi chuyến (US 5, dòng 4 Sprint 4 — Nguyễn Duy Kiên). POST thường: middleware
+        // suy hành động từ verb (Create), Target "TicketChanges:{id}" — id yêu cầu do service sinh và
+        // trả về trong response; middleware đệm response với POST nên đọc được.
+        ("POST",   "/api/ticket-changes",                        CachGhi.Middleware),
+
+        // Đặt job xuất báo cáo lớn ở nền — story 24, Vàng Thị Dăm (Sprint 5 dòng 64). Middleware tự
+        // ghi (POST → Create); route không có tham số nào nên tên bảng suy từ đoạn tĩnh cuối là
+        // "Exports", Target là id job mới đọc từ body trả về — cùng lối POST /api/monthly-passes.
+        // ⚠️ GHI NHẬN — tên bảng thật là "ExportJobs", không phải "Exports": cùng nhóm giới hạn với
+        // "Drivers" (bảng thật là Users) ở trên. Id trong Target vẫn tra được đúng dòng ExportJobs;
+        // chỉ tên bảng là tên tài nguyên trên đường dẫn chứ không phải tên bảng CSDL.
+        ("POST",   "/api/exports",                                CachGhi.Middleware),
     ];
 
     /// <summary>Cách một endpoint thay đổi dữ liệu đi vào nhật ký.</summary>
@@ -745,6 +811,34 @@ public class AuditLogCoverageTests
         Assert.Equal("Trips", log.Target);
     }
 
+    // Sinh chuyến cho cả đội xe (nợ của đợt mở rộng đội xe 17/10/2026 — Phùng Duy Hoàng).
+    // Endpoint mới nhưng vẫn đi qua middleware như mọi POST khác; ca này chứng minh điều đó và
+    // ghim luôn giới hạn Target: route không có {id}, còn response không có trường "id" ở nóc
+    // (id từng chuyến nằm trong "items"), nên nhật ký chỉ ghi được tên bảng "Trips".
+    [Fact]
+    public async Task Post_route_trips_generate_fleet_ghi_Create_voi_ten_bang_Trips()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var route = await SeedRouteAsync(factory, "01");
+        var bus = await SeedBusAsync(factory, "29B-123.45");
+
+        var response = await client.PostAsJsonAsync(
+            $"{RouteTripsUrl(route.Id)}/generate-fleet",
+            new
+            {
+                busIds = new[] { bus.Id },
+                startTime = "2026-10-17T06:00:00Z",
+                endTime = "2026-10-17T06:15:00Z",
+                frequencyMinutes = 15,
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var log = await AssertMotBanGhiAsync(factory, AuditAction.Create, target: null, admin);
+        Assert.Equal("Trips", log.Target);
+    }
+
     // -------------------------------------------------------- Vé tháng — gia hạn (story 16)
 
     // Story 16, Phùng Duy Hoàng: gia hạn vé tháng. Người gọi phải là CHÍNH CHỦ VÉ — service lọc
@@ -774,6 +868,83 @@ public class AuditLogCoverageTests
         Assert.NotEqual(veCu.Id, veMoi);
 
         await AssertMotBanGhiAsync(factory, AuditAction.Create, $"MonthlyPasses:{veMoi}", chuVe);
+    }
+
+    // ------------------------------------- Quản trị vé tháng — huỷ/mở lại (ngoài story 16)
+
+    // Nguyễn Duy Kiên: PATCH đổi trạng thái vé. Middleware tự ghi (PATCH → Update); {id} đặt tên
+    // đúng để tên bảng suy từ đoạn trước nó là "MonthlyPasses".
+    [Fact]
+    public async Task Patch_monthly_passes_status_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        var chuVe = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var route = await SeedRouteAsync(factory, "01");
+        var passType = await SeedPassTypeAsync(factory, "OneMonth", durationMonths: 1, price: 200_000m);
+        var ve = await SeedMonthlyPassAsync(factory, chuVe.Id, route.Id, passType.Id);
+
+        var response = await client.PatchAsJsonAsync(
+            $"{MonthlyPassesUrl}/{ve.Id}/status", new { status = "Cancelled" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"MonthlyPasses:{ve.Id}", quanLy);
+    }
+
+    // ------------------------------------------------- CRUD loại vé tháng (ngoài story 16)
+
+    // Nguyễn Duy Kiên: danh mục loại vé tháng. Ba endpoint đều đi qua AuditLogMiddleware;
+    // policy ManagerOrAbove nên đăng nhập bằng tài khoản quản lý.
+
+    [Fact]
+    public async Task Post_pass_types_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+
+        var response = await client.PostAsJsonAsync("/api/pass-types", new
+        {
+            code = "ThreeMonths",
+            name = "Vé tháng 3 tháng",
+            durationMonths = 3,
+            price = 550_000m,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"PassTypes:{await IdOfAsync(response)}", quanLy);
+    }
+
+    [Fact]
+    public async Task Put_pass_types_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        var passType = await SeedPassTypeAsync(factory, "OneMonth", durationMonths: 1, price: 200_000m);
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/pass-types/{passType.Id}",
+            new { name = "Vé tháng 1 tháng (mới)", durationMonths = 1, price = 220_000m });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"PassTypes:{passType.Id}", quanLy);
+    }
+
+    [Fact]
+    public async Task Delete_pass_types_ghi_Delete_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        // Loại vé chưa có vé tháng nào tham chiếu — xoá được (loại đang dùng trả 409).
+        var passType = await SeedPassTypeAsync(factory, "SixMonths", durationMonths: 6, price: 1_000_000m);
+
+        var response = await client.DeleteAsync($"/api/pass-types/{passType.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"PassTypes:{passType.Id}", quanLy);
     }
 
     // ------------------------------------------------------- Giữ chỗ — gia hạn (story 3)
@@ -921,6 +1092,51 @@ public class AuditLogCoverageTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"SeatLayouts:{layout.Id}", admin);
+    }
+
+    // ------------------------------------------------- Mẫu thông báo (story 10, dòng 24)
+
+    // Story 10, Dương Thị Hạnh: quản trị viên soạn/sửa mẫu thông báo. PUT đi qua AuditLogMiddleware
+    // (Update); policy ManagerOrAbove nên đăng nhập bằng tài khoản quản lý, không phải hành khách.
+    [Fact]
+    public async Task Put_notification_templates_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/notification-templates/CancellationApproved",
+            new { title = "Đã duyệt yêu cầu huỷ vé", body = "Yêu cầu huỷ vé của bạn đã được duyệt.", isActive = true });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target là "NotificationTemplates" KHÔNG kèm id: khoá trên đường dẫn là {type}
+        // chứ không phải {id}, nên AuditLogMiddleware suy được tên bảng nhưng không đọc được id (đã
+        // ghi chú ở NotificationTemplatesController và docs/api-contract.md). Vẫn đủ để biết "có người
+        // sửa mẫu lúc nào".
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, "NotificationTemplates", quanLy);
+    }
+
+    // --------------------------------------- Xuất báo cáo bất đồng bộ (story 24, dòng 64)
+
+    // Story 24, Vàng Thị Dăm: đặt job xuất báo cáo lớn ở nền. Việc đặt job CÓ đổi dữ liệu (sinh
+    // một dòng ExportJobs) nên đi qua AuditLogMiddleware như mọi POST khác. Policy ManagerOrAbove
+    // nên đăng nhập bằng tài khoản quản lý, không phải hành khách.
+    [Fact]
+    public async Task Post_exports_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/exports", new { reportType = "revenue", format = "xlsx" });
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        // ⚠️ GHI NHẬN — Target ghi "Exports:<id>", KHÔNG phải "ExportJobs:<id>": middleware suy tên
+        // bảng từ đoạn tĩnh cuối trên đường dẫn (api/exports) chứ không đọc entity. Cùng nhóm giới
+        // hạn với "Drivers" (bảng thật là Users). Id vẫn tra đúng dòng ExportJobs.
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"Exports:{await IdOfAsync(response)}", quanLy);
     }
 
     // ------------------------------------------------------------------------------------ Auth

@@ -22,6 +22,7 @@ import TripFrequencyPage from './pages/TripFrequencyPage';
 import MyFeedbackPage from './pages/MyFeedbackPage';
 import FeedbackSubmitPage from './pages/FeedbackSubmitPage';
 import MonthlyPassRegistrationPage from './pages/MonthlyPassRegistrationPage';
+import MonthlyPassManagePage from './pages/MonthlyPassManagePage';
 import MyMonthlyPassPage from './pages/MyMonthlyPassPage';
 import MyRefundsPage from './pages/MyRefundsPage';
 import MyTicketRequestsPage from './pages/MyTicketRequestsPage';
@@ -29,6 +30,7 @@ import MyTicketsPage from './pages/MyTicketsPage';
 import TicketQrPage from './pages/TicketQrPage';
 import TicketChangeRequestPage from './pages/TicketChangeRequestPage';
 import TicketScanPage from './pages/TicketScanPage';
+import TripPassengerListPage from './pages/TripPassengerListPage';
 import FareConfigPage from './pages/FareConfigPage';
 import SeatLayoutConfigPage from './pages/SeatLayoutConfigPage';
 import VoucherManagePage from './pages/VoucherManagePage';
@@ -38,9 +40,15 @@ import AuditLogPage from './pages/AuditLogPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
 import AdminRefundPage from './pages/AdminRefundPage';
 import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
+import NotificationTemplateManagePage from './pages/NotificationTemplateManagePage';
 import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OverloadAlertPage from './pages/OverloadAlertPage';
+import TicketValidationStatsPage from './pages/TicketValidationStatsPage';
+import RevenueByRoutePage from './pages/RevenueByRoutePage';
+import NotificationsPage from './pages/NotificationsPage';
+import NotificationDetailPage from './pages/NotificationDetailPage';
+import ReportTemplateConfigPage from './pages/ReportTemplateConfigPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -190,9 +198,24 @@ function App() {
                 }
               />
               {/* /monthly-passes là màn hình đăng ký vé tháng (US 10) — mọi người đã đăng
-                  nhập đều dùng được. Backend đăng ký vé tháng chưa có nên màn hình đang
-                  chạy dữ liệu giả (xem monthlyPassApi.ts). */}
+                  nhập đều dùng được. Backend đăng ký vé tháng + danh mục loại vé đã có;
+                  màn hình đọc tuyến, loại vé và giá thẳng từ CSDL (xem monthlyPassApi.ts). */}
               <Route path="/monthly-passes" element={<MonthlyPassRegistrationPage />} />
+              {/* /admin-monthly-passes là màn hình quản trị vé tháng — danh sách toàn bộ vé,
+                  chi tiết, huỷ/mở lại vé, CRUD loại vé và thống kê doanh thu (bổ sung ngoài
+                  story 16; hợp đồng ở mục "Vé tháng — /monthly-passes" và "Loại vé tháng —
+                  /pass-types" của docs/api-contract.md). Nhóm endpoint yêu cầu vai trò Manager
+                  hoặc Admin. Dòng route này do Nguyễn Duy Kiên thêm hộ: màn hình cần đường vào,
+                  mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR
+                  để Băng xem. */}
+              <Route
+                path="/admin-monthly-passes"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <MonthlyPassManagePage />
+                  </RouteGuard>
+                }
+              />
               {/* /my-monthly-passes là màn hình quản lý vé tháng của tôi + nút gia hạn
                   (US 16, task Sprint 2 dòng 45 của Hoàng Văn Thịnh) — mọi người đã đăng nhập
                   đều dùng được, mỗi người chỉ thấy vé của chính mình (backend lọc theo token).
@@ -239,6 +262,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Driver']}>
                     <TicketScanPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /trip-passengers là màn hình danh sách hành khách đã lên xe theo chuyến
+                  (US 15, Sprint 4, dòng 22, task của Dương Thị Hạnh): tài xế chọn chuyến đang
+                  chạy rồi xem ai đã được soát vé hợp lệ và lên xe — màn đi cùng "Soát vé".
+                  Backend endpoint này chưa có nên màn hình đang chạy dữ liệu giả
+                  (tripPassengerListApi.ts). Dòng route này do Dương Thị Hạnh thêm hộ: màn hình
+                  cần đường vào, mà App.tsx là file dùng chung §E1 (của Nguyễn Đình Băng) — đã
+                  ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/trip-passengers"
+                element={
+                  <RouteGuard allowedRoles={['Driver']}>
+                    <TripPassengerListPage />
                   </RouteGuard>
                 }
               />
@@ -401,6 +439,71 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <OverloadAlertPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /ticket-validation-stats là màn hình thống kê lượt soát theo chuyến (US 15,
+                  Sprint 4, dòng 24, task của Dương Thị Hạnh): chọn một chuyến rồi xem lượt soát
+                  vé phân bố thế nào — tổng / hợp lệ / từng lý do từ chối. Báo cáo vận hành nên
+                  chỉ Admin và Manager vào được. Backend endpoint này chưa có nên màn hình đang
+                  chạy dữ liệu giả (ticketValidationStatsApi.ts). Dòng route này do Dương Thị
+                  Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung §E1 (của
+                  Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/ticket-validation-stats"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <TicketValidationStatsPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /revenue-by-route là màn hình bảng chi tiết doanh thu theo tuyến (US 19
+                  "Doanh thu", Sprint 4, task của Nguyễn Đình Băng): doanh thu bán vé gom theo
+                  từng tuyến, sắp xếp và phân trang. Báo cáo tài chính nên chỉ Admin và Manager
+                  vào được. Backend "theo tuyến" chưa có nên màn hình đang chạy dữ liệu giả
+                  (revenueByRouteApi.ts). */}
+              <Route
+                path="/revenue-by-route"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <RevenueByRoutePage />
+                  </RouteGuard>
+                }
+              />
+              {/* /notifications là màn hình danh sách thông báo (US 10 "Thông báo trạm", Sprint 5,
+                  task của Dương Thị Hạnh): lịch sử thông báo của chính người dùng, bấm dòng mở
+                  màn chi tiết. Mọi người đã đăng nhập đều dùng được, không giới hạn vai trò.
+                  Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là
+                  file dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route path="/notifications" element={<NotificationsPage />} />
+              {/* /notifications/:id là màn hình chi tiết thông báo — đọc thẳng từ dòng đã tải về,
+                  không có endpoint GET /notifications/{id} (api-contract.md mục /notifications). */}
+              <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+              {/* /notification-templates là màn hình Admin quản lý mẫu thông báo (US 10, Sprint 5,
+                  dòng 24, task của Dương Thị Hạnh) — soạn câu chữ cho từng loại thông báo; mẫu là
+                  phần GHI ĐÈ câu mặc định (docs/37 §2.1), loại chưa soạn hoặc đang tắt vẫn gửi bằng
+                  câu mặc định. Chỉ Admin và Manager vào được (cùng nhóm các màn cấu hình dữ liệu).
+                  Dòng route này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file
+                  dùng chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/notification-templates"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <NotificationTemplateManagePage />
+                  </RouteGuard>
+                }
+              />
+              {/* /report-templates là màn hình cấu hình mẫu báo cáo (US 21 "Xuất báo cáo Excel/PDF",
+                  Sprint 5, task của Dương Thị Hạnh) — soạn sẵn mẫu báo cáo: chọn loại, cột hiển thị
+                  và khoảng thời gian để dùng lại khi xuất file. Cấu hình lưu trong trình duyệt vì
+                  chưa có bảng CSDL (reportTemplateApi.ts). Chỉ Admin và Manager vào được. Dòng route
+                  này do Dương Thị Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung
+                  §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/report-templates"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <ReportTemplateConfigPage />
                   </RouteGuard>
                 }
               />

@@ -10,9 +10,10 @@
 > 🟢 **Trạng thái 12/10/2026:** entity `CancellationRequest` + `TicketChange`, cấu hình
 > `AppDbContext.CancellationRequest.cs` / `AppDbContext.TicketChange.cs`, và migration
 > `20261012023745_Sprint4_CancellationRequests_TicketChanges` (Vàng Thị Dăm, task Sprint 4 dòng 2)
-> **đã xong và đã soát** — xem §8. **Chưa merge, chưa áp lên CSDL chung**: hai bảng chỉ có thật sau
-> khi PR được merge rồi chạy `database update`. Trong lúc chờ, test tích hợp vẫn chạy được trên EF
-> InMemory — nhưng InMemory **không** cưỡng chế chỉ mục/FK, xem §4.
+> **đã xong và đã soát** — xem §8. **Đã merge** vào `main` và **đã áp lên CSDL chung** — kiểm lại
+> 17/10/2026: `dotnet ef migrations list` liệt kê **18/18** migration, **0** dòng `(Pending)`. Cảnh báo
+> ở cuối câu cũ **vẫn giữ nguyên giá trị**: test tích hợp chạy trên EF InMemory, mà InMemory
+> **không** cưỡng chế chỉ mục/FK — xem §4.
 
 ## 1. Hai bảng này KHÔNG nằm trong A9 — phải báo nhóm
 
@@ -67,6 +68,49 @@ cầu huỷ luôn gắn với một chuyến đã có `DepartureTime`.
 **Ba giá trị trạng thái, không hơn** — `CancellationRequestStatus`. Cố ý **không** có "đã hoàn tiền"
 (tiền chỉ rời hệ thống ở bảng `Refunds`, US 8, có vòng đời riêng kèm retry) và **không** có "khách tự
 rút yêu cầu" (chưa task nào của Sprint 4 làm nút đó). Lý do đầy đủ ở doc-comment enum.
+
+### 2.1 Phí huỷ — quy định 24h / 12h / 2h + cửa sổ 10 phút tự huỷ
+
+Service `ICancellationFeeService.GetCancellationFee(ticketPrice, departureAt, now, ticketBookedAt)`
+(dòng 6 — Nguyễn Duy Kiên) là nguồn duy nhất của quy định này. Hàm thuần: không đọc CSDL, không
+đọc đồng hồ; người gọi truyền `Ticket.Price`, giờ chạy, `now` và `Ticket.CreatedAt` (UTC).
+
+**Ngoại lệ 10 phút — chốt 17/10/2026:** vé được tạo **chưa quá 10 phút** thì khách được huỷ **tự
+động, miễn phí, không cần quản lý duyệt**. Cửa sổ này **thắng mốc 2 giờ**: đặt vé sát giờ chạy rồi
+đổi ý ngay vẫn huỷ được. Nó **không thắng** trạng thái "chuyến đã khởi hành" — xe đã chạy thì không
+có gì để huỷ, kể cả vé vừa tạo. `CancellationFeeQuote.AutoApprove = true` là tín hiệu để endpoint
+ghi thẳng `Status = Approved` (`ReviewedByUserId = null`, `ReviewedAt = now`, phí `0`) thay vì xếp
+hàng chờ duyệt.
+
+| Khoảng cách tới giờ chạy lúc khách bấm gửi | Được huỷ? | Phí |
+|---|---|---|
+| `>= 24 giờ` | ✅ | `0` — miễn phí |
+| `>= 12 giờ` và `< 24 giờ` | ✅ | 30% giá vé |
+| `>= 2 giờ` và `< 12 giờ` | ✅ | 50% giá vé |
+| `< 2 giờ` (trừ vé còn trong cửa sổ 10 phút) | ❌ | không có phí — từ chối |
+| đã qua giờ chạy (kể cả vé vừa tạo) | ❌ | không có phí — từ chối |
+
+- **Các mốc tính CẢ biên:** đúng 24h = miễn phí, đúng 12h = 30%, đúng 2h = 50%; **đúng 10 phút kể
+  từ lúc tạo vé vẫn được tự huỷ**, quá 10 phút mới quay về bảng phí. So bằng `TimeSpan`, không đổi
+  sang "số giờ/số phút nguyên" — 11h59m59s vẫn là dưới 12h, 10m00s vẫn trong cửa sổ.
+- **Mốc 2h là điều kiện được huỷ, không phải mức phí thứ ba.** Quá 2h thì không có yêu cầu nào để
+  tính phí.
+- **Làm tròn tới đồng nguyên**, `MidpointRounding.AwayFromZero` (cùng lối `VoucherValidationService`).
+  Cột vẫn `numeric(12,2)` theo A3 nên lưu với `.00`.
+- **Hiếu** (dòng 3), khi làm `POST /api/cancellation-requests`, dùng `CanCancel` làm điều kiện thời
+  gian, ghi `Fee` vào `CancellationFee` (không null, `0` = miễn phí), và đọc `AutoApprove` để quyết
+  định `Pending` hay `Approved`. Endpoint **không** chép lại ngưỡng.
+- Phí **chụp lại** vào dòng yêu cầu (§2): sửa quy định hoặc dời chuyến sau đó không được tính lại
+  các yêu cầu đã gửi.
+- **AutoApprove không có nghĩa là "bỏ qua kiểm tra":** endpoint vẫn phải xác nhận vé `Paid`, không
+  có yêu cầu huỷ/đổi nào đang `Pending`, rồi mới ghi dòng `Approved`. Cửa sổ 10 phút chỉ miễn bước
+  quản lý duyệt, không miễn các kiểm tra trạng thái.
+
+> ⚠️ **Nguồn của 30% / 50%:** mock `mockCancellationFee` của frontend
+> (`frontend/src/api/ticketChangeRequestApi.ts`) là nơi duy nhất trong repo có con số, và mốc 2h chỉ
+> xuất hiện ở dòng dữ liệu giả *"Chuyến khởi hành dưới 2 giờ nên không đủ điều kiện hủy."* Nếu nhóm
+> chốt mức khác, sửa **bảng này + các hằng số trong `CancellationFeeService` + test của nó** — không
+> sửa rải rác.
 
 ## 3. Bảng `TicketChanges` — một yêu cầu ĐỔI CHUYẾN
 
@@ -191,7 +235,8 @@ ra = **0** (§8).
    thống nhất một chỗ kiểm chung, đừng mỗi endpoint tự kiểm một nửa).
 2. **Kiểm tra điều kiện thời gian** (*"API gửi yêu cầu huỷ vé + kiểm tra điều kiện thời gian"* — Hiếu,
    dòng 3): cột `DepartureAt` đã có sẵn để so, nhưng luật "còn đủ X giờ mới được huỷ" là luật nghiệp
-   vụ sửa được, không phải ràng buộc CSDL.
+   vụ sửa được, không phải ràng buộc CSDL. Luật này **đã cài** trong `ICancellationFeeService` (§2.1);
+   endpoint của Hiếu gọi service và đọc `CanCancel` thay vì tự so ngưỡng.
 
 ⚠️ **Bộ test chạy trên provider InMemory, mà InMemory KHÔNG cưỡng chế unique index lẫn FK.** Nên bộ
 test xanh **không** nói gì về việc các chỉ mục ở §4.1 có tồn tại hay không. Chốt chống trùng chỉ tồn
@@ -214,10 +259,11 @@ duyệt gộp đọc được cả ba bảng bằng một câu truy vấn.
 
 ## 6. Việc còn lại của người khác
 
-- **Hiếu** (dòng 3) — `POST /cancellation-requests`: kiểm điều kiện thời gian **trước**, rồi mới tính
-  `CancellationFee` và **chụp `DepartureAt`**. Bọc lỗi unique của §4.1 để lượt gọi lại trả về yêu cầu
-  cũ thay vì ném 500. Yêu cầu của **chính** người gọi; người khác thì 404 (đừng 403 — đừng tiết lộ vé
-  có tồn tại, cùng lối `docs/28` §6).
+- **Hiếu** (dòng 3) — `POST /cancellation-requests`: gọi `ICancellationFeeService.GetCancellationFee` (§2.1) để
+  lấy **cả** điều kiện thời gian lẫn phí trong một lần, rồi ghi `CancellationFee` và **chụp
+  `DepartureAt`**. Không chép lại ngưỡng 24h/12h/2h ở endpoint. Bọc lỗi unique của §4.1 để lượt gọi
+  lại trả về yêu cầu cũ thay vì ném 500. Yêu cầu của **chính** người gọi; người khác thì 404 (đừng
+  403 — đừng tiết lộ vé có tồn tại, cùng lối `docs/28` §6).
 - **Kiên** (dòng 4 + dòng 6) — service tính phí huỷ theo quy định 24h/12h/2h: ghi thẳng con số vào
   `CancellationFee` (không để null, `0` = miễn phí). API đổi chuyến: `NewPrice` chụp lại từ `Fares`.
   **Chênh lệch KHÔNG ghi vào CSDL** — nó là `NewPrice - Ticket.Price`, xem §3. Quy ước **dấu**:
@@ -321,7 +367,10 @@ file này. Xoá dòng đó đi thì mất concurrency token của §4.3.
 
 **Việc còn lại, theo đúng thứ tự `docs/25-huong-dan-csdl-chung.md` §4:**
 
-1. PR nhánh này → có người khác approve → **Squash and merge** vào `main`.
-2. **Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.
-   Trước bước đó, CSDL chung **chưa có** hai bảng — endpoint nào chạm chúng sẽ lỗi
-   `relation "…" does not exist`.
+✅ **Cả hai bước đã xong** (kiểm lại 17/10/2026) — giữ nguyên hai dòng dưới làm mốc lịch sử:
+
+1. ~~PR nhánh này → có người khác approve → **Squash and merge** vào `main`.~~
+   ✅ Đã merge.
+2. ~~**Sau khi merge** mới áp lên CSDL chung: `dotnet ef database update --project backend/SmartBus.Api`.~~
+   ✅ Đã chạy. CSDL chung nay **đã có** `CancellationRequests` và `TicketChanges` — **18/18** migration
+   đã áp, **0** dòng `(Pending)`.

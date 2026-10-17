@@ -1,11 +1,24 @@
 import axiosClient from './axiosClient';
+import { DRIVER_TRIP_PAGE_SIZE, fetchDriverTrips } from './driverApi';
+import type { TripStatus } from './tripApi';
 
 // -----------------------------------------------------------------------------
 // API quản trị người dùng — nối với AdminUserController (story 22).
 //
 // Hợp đồng endpoint — xem docs/api-contract.md mục "Quản trị người dùng":
-//   GET /api/admin/users?search=&role=&isActive=&page=&pageSize=
+//   GET    /api/admin/users?search=&role=&isActive=&page=&pageSize=
 //     → { items: AdminUser[], total, page, pageSize }
+//   GET    /api/admin/users/{id}             → AdminUser
+//   POST   /api/admin/users                  → AdminUser (201)
+//   PUT    /api/admin/users/{id}             → AdminUser
+//   DELETE /api/admin/users/{id}             → AdminUser  (xoá mềm = khóa)
+//   PATCH  /api/admin/users/{id}/status      → AdminUser
+//   PUT    /api/admin/users/{id}/roles       → AdminUser
+//   PUT    /api/admin/users/{id}/password    → AdminUser
+//
+// Phân công của tài xế KHÔNG nằm trong AdminUser: backend trả nó qua
+// GET /api/drivers/{id}/trips (mục "Hồ sơ tài xế"). Hàm fetchDriverAssignment
+// bên dưới rút gọn dữ liệu đó thành "chuyến đang chạy / chuyến kế tiếp".
 // -----------------------------------------------------------------------------
 
 /** Mã vai trò — khớp với Role.Code và claim role trong JWT (TokenService.cs). */
@@ -20,6 +33,8 @@ export interface AdminUser {
   isActive: boolean;
   /** Vai trò chính của tài khoản. */
   role: RoleCode;
+  /** Toàn bộ vai trò tài khoản đang giữ (vai trò chính + bảng nối UserRoles). */
+  roles: RoleCode[];
   createdAt: string;
 }
 
@@ -37,6 +52,40 @@ export interface AdminUserListResult {
   total: number;
   page: number;
   pageSize: number;
+}
+
+/** Body của POST /admin/users. */
+export interface CreateAdminUserPayload {
+  fullName: string;
+  phoneNumber: string;
+  email?: string | null;
+  password: string;
+  /** Vai trò chính — backend chỉ nhận MỘT mã khi tạo. */
+  roleCode: RoleCode;
+}
+
+/** Body của PUT /admin/users/{id} — hồ sơ thuần, không kèm mật khẩu/vai trò/trạng thái. */
+export interface UpdateAdminUserPayload {
+  fullName: string;
+  phoneNumber: string;
+  email?: string | null;
+}
+
+/**
+ * Phân công hiện tại của một tài xế — rút từ chuyến đang chạy, nếu không có thì từ
+ * chuyến kế tiếp đã lên lịch. Backend không có endpoint riêng: dữ liệu lấy từ
+ * GET /drivers/{id}/trips (mục "Hồ sơ tài xế" của api-contract.md).
+ */
+export interface DriverAssignment {
+  tripId: string;
+  routeId: string;
+  routeCode: string;
+  routeName: string;
+  busId: string;
+  busLicensePlate: string;
+  departureTime: string;
+  /** Running = đang chạy; Scheduled = chuyến kế tiếp. */
+  status: TripStatus;
 }
 
 export interface RoleMeta {
@@ -123,6 +172,7 @@ const MOCK_USERS: AdminUser[] = MOCK_NAMES.map((fullName, index) => ({
   email: index % 6 === 2 ? null : `${slugify(fullName)}${index}@gmail.com`,
   isActive: !LOCKED_INDEXES.has(index),
   role: roleFor(index),
+  roles: [roleFor(index)],
   createdAt: new Date(Date.UTC(2026, 8, 24) - index * 86_400_000).toISOString(),
 }));
 
@@ -164,4 +214,97 @@ export async function fetchAdminUsers(params: AdminUserListParams): Promise<Admi
   }
 
   return axiosClient.get<AdminUserListResult, AdminUserListResult>('/admin/users', { params });
+}
+
+/** GET /api/admin/users/{id} — chi tiết một tài khoản. */
+export function fetchAdminUser(id: string): Promise<AdminUser> {
+  return axiosClient.get<AdminUser, AdminUser>(`/admin/users/${id}`);
+}
+
+/** POST /api/admin/users — tạo tài khoản với MỘT vai trò chính. */
+export function createAdminUser(payload: CreateAdminUserPayload): Promise<AdminUser> {
+  return axiosClient.post<AdminUser, AdminUser>('/admin/users', payload);
+}
+
+/** PUT /api/admin/users/{id} — sửa hồ sơ (họ tên, SĐT, email). */
+export function updateAdminUser(
+  id: string,
+  payload: UpdateAdminUserPayload,
+): Promise<AdminUser> {
+  return axiosClient.put<AdminUser, AdminUser>(`/admin/users/${id}`, payload);
+}
+
+/** DELETE /api/admin/users/{id} — xoá mềm: khóa tài khoản, dữ liệu vẫn giữ nguyên. */
+export function deleteAdminUser(id: string): Promise<AdminUser> {
+  return axiosClient.delete<AdminUser, AdminUser>(`/admin/users/${id}`);
+}
+
+/** PATCH /api/admin/users/{id}/status — khóa / mở khóa tài khoản. */
+export function setAdminUserStatus(id: string, isActive: boolean): Promise<AdminUser> {
+  return axiosClient.patch<AdminUser, AdminUser>(`/admin/users/${id}/status`, { isActive });
+}
+
+/** PUT /api/admin/users/{id}/roles — gửi DANH SÁCH ĐẦY ĐỦ vai trò muốn giữ. */
+export function setAdminUserRoles(id: string, roleCodes: RoleCode[]): Promise<AdminUser> {
+  return axiosClient.put<AdminUser, AdminUser>(`/admin/users/${id}/roles`, { roleCodes });
+}
+
+/** PUT /api/admin/users/{id}/password — Admin đặt lại mật khẩu, buộc phiên cũ đăng nhập lại. */
+export function resetAdminUserPassword(id: string, newPassword: string): Promise<AdminUser> {
+  return axiosClient.put<AdminUser, AdminUser>(`/admin/users/${id}/password`, { newPassword });
+}
+
+/**
+ * Thứ tự quyền hạn giảm dần — dùng để chọn vai trò chính khi tạo tài khoản có nhiều vai trò.
+ * Backend tự chọn vai trò chính khi đổi danh sách (PUT /roles), nhưng POST chỉ nhận một mã.
+ */
+const ROLE_PRIORITY: RoleCode[] = ['Admin', 'Manager', 'Driver', 'Passenger'];
+
+/** Vai trò có quyền cao nhất trong danh sách; rỗng thì trả undefined. */
+export function primaryRoleOf(roles: RoleCode[]): RoleCode | undefined {
+  return ROLE_PRIORITY.find((role) => roles.includes(role)) ?? roles[0];
+}
+
+/** Tài khoản có mang vai trò Tài xế không (ở vai trò chính hoặc bất kỳ vai trò nào). */
+export function isDriver(user: Pick<AdminUser, 'role' | 'roles'>): boolean {
+  // `roles` có thể vắng ở phản hồi cũ đang được cache — vẫn phải đọc ra vai trò chính.
+  return user.role === 'Driver' || (user.roles ?? []).includes('Driver');
+}
+
+/**
+ * Phân công hiện tại của tài xế: chuyến đang chạy, nếu không có thì chuyến kế tiếp.
+ *
+ * Lấy lùi 24 giờ để không bỏ sót chuyến đã khởi hành từ sáng mà vẫn đang Running.
+ * Trả null khi tài xế chưa được gán chuyến nào sắp tới.
+ */
+export async function fetchDriverAssignment(driverId: string): Promise<DriverAssignment | null> {
+  const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const result = await fetchDriverTrips(driverId, {
+    page: 1,
+    pageSize: DRIVER_TRIP_PAGE_SIZE,
+    from,
+  });
+
+  // Backend xếp theo giờ khởi hành tăng dần. Ưu tiên chuyến đang chạy vì đó là thứ người
+  // quản trị muốn thấy trước; nếu không có mới lấy chuyến Đã lên lịch gần nhất trong tương lai.
+  const running = result.items.find((trip) => trip.status === 'Running');
+  const now = Date.now();
+  const upcoming = result.items.find(
+    (trip) => trip.status === 'Scheduled' && new Date(trip.departureTime).getTime() >= now,
+  );
+
+  const trip = running ?? upcoming;
+  if (!trip) return null;
+
+  return {
+    tripId: trip.id,
+    routeId: trip.routeId,
+    routeCode: trip.routeCode,
+    routeName: trip.routeName,
+    busId: trip.busId,
+    busLicensePlate: trip.busLicensePlate,
+    departureTime: trip.departureTime,
+    status: trip.status,
+  };
 }

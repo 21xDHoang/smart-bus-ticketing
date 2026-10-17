@@ -55,15 +55,16 @@ public class MonthlyPassRegistrationService : IMonthlyPassRegistrationService
         var routeId = request.RouteId!.Value;
 
         // routeId là tham chiếu cứng: GUID trỏ tới tuyến không tồn tại là lỗi gọi, không phải
-        // "không có gì để đăng ký" — cùng câu trả lời của GET /trips/search. Đọc cả mã tuyến ngay
-        // trong lượt này: cần nó để sinh mã vé khuôn MP-{mã tuyến}-{6 ký tự}.
-        var routeCode = await _db.Routes
+        // "không có gì để đăng ký" — cùng câu trả lời của GET /trips/search. Đọc cả mã lẫn tên
+        // tuyến ngay trong lượt này: mã để sinh mã vé khuôn MP-{mã tuyến}-{6 ký tự}, tên để trả
+        // kèm cho màn hành khách hiển thị (không phải gọi GET /routes — hành khách nhận 403).
+        var route = await _db.Routes
             .AsNoTracking()
             .Where(r => r.Id == routeId)
-            .Select(r => r.Code)
+            .Select(r => new { r.Code, r.Name })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (routeCode is null)
+        if (route is null)
         {
             return ServiceResult<MonthlyPassResponse>.NotFound(RouteNotFoundMessage);
         }
@@ -97,7 +98,7 @@ public class MonthlyPassRegistrationService : IMonthlyPassRegistrationService
             return ServiceResult<MonthlyPassResponse>.Conflict(OverlapMessage);
         }
 
-        var code = await GenerateCodeAsync(routeCode, cancellationToken);
+        var code = await GenerateCodeAsync(route.Code, cancellationToken);
 
         if (code is null)
         {
@@ -132,7 +133,8 @@ public class MonthlyPassRegistrationService : IMonthlyPassRegistrationService
             return ServiceResult<MonthlyPassResponse>.Conflict(CodeCollisionMessage);
         }
 
-        return ServiceResult<MonthlyPassResponse>.Ok(ToResponse(pass, passType.Code));
+        return ServiceResult<MonthlyPassResponse>.Ok(
+            ToResponse(pass, route.Code, route.Name, passType.Code, passType.Name));
     }
 
     /// <summary>
@@ -195,12 +197,20 @@ public class MonthlyPassRegistrationService : IMonthlyPassRegistrationService
         return new string(suffix);
     }
 
-    private static MonthlyPassResponse ToResponse(MonthlyPass pass, string passTypeCode) => new()
+    private static MonthlyPassResponse ToResponse(
+        MonthlyPass pass,
+        string routeCode,
+        string routeName,
+        string passTypeCode,
+        string passTypeName) => new()
     {
         Id = pass.Id,
         Code = pass.Code,
         RouteId = pass.RouteId,
+        RouteCode = routeCode,
+        RouteName = routeName,
         PassTypeCode = passTypeCode,
+        PassTypeName = passTypeName,
         Price = pass.Price,
         ValidFrom = pass.ValidFrom,
         ValidTo = pass.ValidTo,

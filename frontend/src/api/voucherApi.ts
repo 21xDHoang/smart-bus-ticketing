@@ -1,4 +1,5 @@
 import axiosClient from './axiosClient';
+import dayjs from 'dayjs';
 
 // -----------------------------------------------------------------------------
 // API voucher — nối với nhóm endpoint của User Story 18 "Quản lý Voucher" (Sprint 3).
@@ -14,9 +15,10 @@ import axiosClient from './axiosClient';
 // Backend đã có đủ nên cả 5 hàm gọi thẳng API thật, KHÔNG còn nhánh dữ liệu giả.
 //
 // `listAvailable` (màn "Khuyến mãi" của khách) là ngoại lệ duy nhất: hợp đồng KHÔNG có endpoint
-// công khai nào cho nó (mọi endpoint voucher đều là quản trị ManagerOrAbove hoặc kiểm-tra-mã), nên
-// hàm trả mảng rỗng ĐÚNG SỰ THẬT thay vì bịa mã minh hoạ. Nợ hợp đồng: cần một endpoint công khai
-// "voucher đang khả dụng" trước khi màn Khuyến mãi có dữ liệu thật.
+// công khai nào cho nó (mọi endpoint voucher đều là quản trị ManagerOrAbove hoặc kiểm-tra-mã).
+// Vì vậy hàm chạy dữ liệu giả (USE_MOCK_AVAILABLE = true) để màn Khuyến mãi có mã để hiển thị —
+// cùng lối revenueByRouteApi.ts / revenueDashboardApi.ts. Nợ hợp đồng: khi có endpoint công khai
+// "voucher đang khả dụng", viết thật nhánh `api` rồi lật cờ.
 // -----------------------------------------------------------------------------
 
 /** Trạng thái voucher — lưu chuỗi theo quy ước A3, khớp enum backend sau này. */
@@ -217,6 +219,184 @@ export interface VoucherApi {
   validate: (request: VoucherValidateRequest) => Promise<VoucherValidationResponse>;
 }
 
+// ---------------------------------------------------------------------------
+// Dữ liệu giả cho màn "Khuyến mãi" của khách. Hợp đồng chưa có endpoint công khai "voucher
+// đang khả dụng" nên `listAvailable` dùng danh sách giả TẤT ĐỊNH (không Math.random) để mỗi lần
+// mở màn hình, thứ tự và số liệu voucher vẫn ổn định. Ngày hiệu lực tính tương đối theo hôm nay
+// để mã luôn "đang khả dụng" khi demo. Khi backend bổ sung endpoint thì lật USE_MOCK_AVAILABLE.
+const USE_MOCK_AVAILABLE = true;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** ISO 8601 UTC của ngày cách hôm nay `days` ngày — âm = quá khứ, dương = tương lai. */
+function isoInDays(days: number): string {
+  return dayjs().add(days, 'day').toISOString();
+}
+
+/** Danh sách voucher khả dụng giả — gồm mã áp dụng mọi tuyến lẫn mã gắn riêng từng tuyến. Tuyến
+ *  gắn là các tuyến xe buýt nội tỉnh Thái Nguyên (Quyết định 2809/QĐ-UBND ngày 9/11/2023). */
+function buildMockAvailableVouchers(): Voucher[] {
+  return [
+    {
+      id: 'voucher-001',
+      code: 'SUMMER10',
+      name: 'Chào hè — giảm 10% mọi tuyến',
+      discountType: 'Percent',
+      discountValue: 10,
+      minOrderValue: 50_000,
+      maxDiscount: 20_000,
+      routeId: null,
+      routeCode: null,
+      routeName: null,
+      quantity: 500,
+      usedCount: 132,
+      validFrom: isoInDays(-10),
+      validUntil: isoInDays(50),
+      status: 'Active',
+      createdAt: isoInDays(-15),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-002',
+      code: 'TANLONG15',
+      name: 'Tuyến Tân Long – Phổ Yên giảm 15.000đ',
+      discountType: 'FixedAmount',
+      discountValue: 15_000,
+      minOrderValue: 30_000,
+      maxDiscount: null,
+      routeId: 'route-01',
+      routeCode: '01',
+      routeName: 'Tân Long — Phổ Yên',
+      quantity: 200,
+      usedCount: 54,
+      validFrom: isoInDays(-5),
+      validUntil: isoInDays(40),
+      status: 'Active',
+      createdAt: isoInDays(-8),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-003',
+      code: 'YENLANG25',
+      name: 'Tuyến Yên Lãng – Gang Thép giảm 25%',
+      discountType: 'Percent',
+      discountValue: 25,
+      minOrderValue: 0,
+      maxDiscount: 40_000,
+      routeId: 'route-02',
+      routeCode: '02',
+      routeName: 'Yên Lãng — Gang Thép (TP Thái Nguyên)',
+      quantity: 150,
+      usedCount: 41,
+      validFrom: isoInDays(-20),
+      validUntil: isoInDays(25),
+      status: 'Active',
+      createdAt: isoInDays(-25),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-004',
+      code: 'STUDENT20',
+      name: 'Sinh viên — giảm 20%',
+      discountType: 'Percent',
+      discountValue: 20,
+      minOrderValue: 20_000,
+      maxDiscount: 15_000,
+      routeId: null,
+      routeCode: null,
+      routeName: null,
+      quantity: 1000,
+      usedCount: 388,
+      validFrom: isoInDays(-30),
+      validUntil: isoInDays(60),
+      status: 'Active',
+      createdAt: isoInDays(-35),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-005',
+      code: 'QUANCHU15',
+      name: 'Tuyến Thái Nguyên – Quân Chu giảm 15%',
+      discountType: 'Percent',
+      discountValue: 15,
+      minOrderValue: 30_000,
+      maxDiscount: 25_000,
+      routeId: 'route-03',
+      routeCode: '03',
+      routeName: 'TP Thái Nguyên — Quân Chu (Đại Từ)',
+      quantity: 300,
+      usedCount: 97,
+      validFrom: isoInDays(-12),
+      validUntil: isoInDays(35),
+      status: 'Active',
+      createdAt: isoInDays(-14),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-006',
+      code: 'DINHHOA10',
+      name: 'Tuyến Thái Nguyên – Định Hóa giảm 10.000đ',
+      discountType: 'FixedAmount',
+      discountValue: 10_000,
+      minOrderValue: 25_000,
+      maxDiscount: null,
+      routeId: 'route-06',
+      routeCode: '06',
+      routeName: 'TP Thái Nguyên — Định Hóa',
+      quantity: 250,
+      usedCount: 60,
+      validFrom: isoInDays(-8),
+      validUntil: isoInDays(30),
+      status: 'Active',
+      createdAt: isoInDays(-10),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-007',
+      code: 'LOYAL5',
+      name: 'Khách quen — giảm 5.000đ mọi tuyến',
+      discountType: 'FixedAmount',
+      discountValue: 5_000,
+      minOrderValue: 25_000,
+      maxDiscount: null,
+      routeId: null,
+      routeCode: null,
+      routeName: null,
+      quantity: 800,
+      usedCount: 210,
+      validFrom: isoInDays(-25),
+      validUntil: isoInDays(45),
+      status: 'Active',
+      createdAt: isoInDays(-28),
+      updatedAt: null,
+    },
+    {
+      id: 'voucher-008',
+      code: 'DINHCA12',
+      name: 'Tuyến Quyết Thắng – Đình Cả giảm 12%',
+      discountType: 'Percent',
+      discountValue: 12,
+      minOrderValue: 0,
+      maxDiscount: 18_000,
+      routeId: 'route-07',
+      routeCode: '07',
+      routeName: 'Quyết Thắng — Đình Cả (Võ Nhai)',
+      quantity: 180,
+      usedCount: 33,
+      validFrom: isoInDays(-6),
+      validUntil: isoInDays(55),
+      status: 'Active',
+      createdAt: isoInDays(-7),
+      updatedAt: null,
+    },
+  ];
+}
+
+async function mockListAvailable(): Promise<Voucher[]> {
+  await delay(300);
+  return buildMockAvailableVouchers();
+}
+
 // Gọi thẳng API thật — `search`/`status` bỏ trống thì axios tự lược khỏi query string,
 // backend nhận null = không lọc (ListVouchersRequest mọi trường đều nullable).
 const voucherApi: VoucherApi = {
@@ -224,10 +404,8 @@ const voucherApi: VoucherApi = {
   list: (params) =>
     axiosClient.get<VoucherListResult, VoucherListResult>('/vouchers', { params }),
 
-  // Chưa có endpoint công khai trong hợp đồng (mọi endpoint voucher đều quản trị hoặc
-  // kiểm-tra-mã) → trả rỗng đúng sự thật; hai màn gọi hàm này đã tự xử lý mảng rỗng
-  // (HomePage ẩn mục khuyến mãi, VoucherAvailablePage hiện trạng thái "chưa có mã").
-  listAvailable: async () => [],
+  // Chưa có endpoint công khai trong hợp đồng → dùng dữ liệu giả (xem USE_MOCK_AVAILABLE ở trên).
+  listAvailable: USE_MOCK_AVAILABLE ? mockListAvailable : async () => [],
 
   // POST /api/vouchers — trùng mã là 409 (message từ backend hiện qua AppError).
   create: (payload) => axiosClient.post<Voucher, Voucher>('/vouchers', payload),

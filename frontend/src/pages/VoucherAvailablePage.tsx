@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, List, Space, Typography, theme } from 'antd';
+import { Button, Input, List, Space, Typography, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import voucherApi from '../api/voucherApi';
 import type { Voucher } from '../api/voucherApi';
@@ -39,6 +39,13 @@ function remainingOf(voucher: Voucher): number {
   return voucher.quantity - voucher.usedCount;
 }
 
+/** Nhãn điều kiện tuyến — "Mọi tuyến" hoặc "Tuyến 01 · Bến xe Mỹ Đình — Gia Lâm". */
+function routeText(voucher: Voucher): string {
+  if (voucher.routeId === null) return 'Mọi tuyến';
+  const code = voucher.routeCode ? `Tuyến ${voucher.routeCode}` : 'Tuyến riêng';
+  return voucher.routeName ? `${code} · ${voucher.routeName}` : code;
+}
+
 /** Kết quả một lượt tải danh sách voucher khả dụng — ba trạng thái, không gộp. */
 type LoadState =
   | { status: 'loading' }
@@ -66,22 +73,39 @@ function viewOf(state: LoadState): VoucherView {
     : { kind: 'vouchers', vouchers: state.vouchers };
 }
 
+/**
+ * Lọc voucher theo tuyến cho ô tìm kiếm. Truy vấn rỗng = giữ nguyên toàn bộ. Có truy vấn thì
+ * khớp theo mã hoặc tên tuyến; voucher áp dụng MỌI tuyến (`routeId` null) luôn được giữ vì nó
+ * dùng được trên mọi tuyến.
+ */
+function filterByRoute(vouchers: Voucher[], query: string): Voucher[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return vouchers;
+  return vouchers.filter((voucher) => {
+    if (voucher.routeId === null) return true;
+    const routeCode = voucher.routeCode?.toLowerCase() ?? '';
+    const routeName = voucher.routeName?.toLowerCase() ?? '';
+    return routeCode.includes(q) || routeName.includes(q);
+  });
+}
+
 // Màn hình danh sách voucher đang khả dụng cho hành khách (US 18 "Quản lý Voucher", Sprint 3 —
 // task của Nguyễn Đình Băng): liệt kê các mã giảm giá mà khách CÓ THỂ dùng ngay lúc này (đang
 // bật + trong khoảng hiệu lực + còn lượt), kèm giá trị giảm và điều kiện áp dụng để khách chủ
 // động chọn mã trước khi vào bước thanh toán.
 //
 // Hợp đồng chưa có endpoint công khai "voucher đang khả dụng" (mọi endpoint voucher đều là quản
-// trị ManagerOrAbove hoặc kiểm-tra-mã), nên voucherApi.listAvailable() trả mảng rỗng ĐÚNG SỰ THẬT
-// và màn hình hiện trạng thái "chưa có mã khả dụng" — nợ hợp đồng: bổ sung endpoint trước.
+// trị ManagerOrAbove hoặc kiểm-tra-mã), nên voucherApi.listAvailable() chạy dữ liệu giả
+// (USE_MOCK_AVAILABLE) để màn hình có mã để hiển thị — nợ hợp đồng: bổ sung endpoint trước.
 // Khách không tự dùng mã ở đây: nhập mã là việc của ô nhập mã ở màn thanh toán (component của
-// Hoàng Văn Thịnh); màn này chỉ GIỚI THIỆU mã đang có.
+// Hoàng Văn Thịnh); màn này chỉ GIỚI THIỆU mã đang có. Ô tìm kiếm lọc mã theo mã/tên tuyến.
 export default function VoucherAvailablePage() {
   const navigate = useNavigate();
   const { token } = theme.useToken();
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [reloadToken, setReloadToken] = useState(0);
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +136,9 @@ export default function VoucherAvailablePage() {
   }, [reloadToken]);
 
   const view = viewOf(state);
+  const filteredVouchers = view.kind === 'vouchers' ? filterByRoute(view.vouchers, searchText) : [];
+  const hasSearch = searchText.trim() !== '';
+  const noSearchResult = view.kind === 'vouchers' && filteredVouchers.length === 0 && hasSearch;
 
   return (
     <div>
@@ -129,10 +156,20 @@ export default function VoucherAvailablePage() {
               </Button>
             }
           >
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="Tìm khuyến mãi theo tuyến đường…"
+              style={{ width: 300 }}
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+            />
             <Text type="secondary">
               {view.kind === 'vouchers' && (
                 <>
-                  Đang có <Text strong>{view.vouchers.length}</Text> voucher khả dụng
+                  {hasSearch ? 'Tìm thấy ' : 'Đang có '}
+                  <Text strong>{filteredVouchers.length}</Text>
+                  {hasSearch ? ' voucher khớp tuyến' : ' voucher khả dụng'}
                 </>
               )}
             </Text>
@@ -163,9 +200,17 @@ export default function VoucherAvailablePage() {
           />
         )}
 
-        {view.kind === 'vouchers' && (
+        {/* Có voucher nhưng ô tìm kiếm theo tuyến không khớp mã nào — phân biệt với "chưa có mã". */}
+        {view.kind === 'vouchers' && noSearchResult && (
+          <EmptyState
+            description="Không tìm thấy voucher nào cho tuyến đường này. Thử từ khoá khác hoặc xem toàn bộ voucher."
+            action={<Button onClick={() => setSearchText('')}>Xem toàn bộ voucher</Button>}
+          />
+        )}
+
+        {view.kind === 'vouchers' && !noSearchResult && (
           <List<Voucher>
-            dataSource={view.vouchers}
+            dataSource={filteredVouchers}
             renderItem={(voucher) => (
               <List.Item style={{ padding: '16px 0', borderBlockEnd: `1px solid ${token.colorSplit}` }}>
                 <div
@@ -186,7 +231,7 @@ export default function VoucherAvailablePage() {
 
                     <div style={{ marginTop: 4 }}>
                       <Text type="secondary" style={{ fontSize: 13 }}>
-                        {conditionsText(voucher)}
+                        {routeText(voucher)} · {conditionsText(voucher)}
                       </Text>
                     </div>
 

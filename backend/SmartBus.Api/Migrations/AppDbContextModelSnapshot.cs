@@ -212,6 +212,89 @@ namespace SmartBus.Api.Migrations
                     b.ToTable("DiscountRequests");
                 });
 
+            modelBuilder.Entity("SmartBus.Api.Entities.ExportJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("Content")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long?>("FileSizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("ParametersJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int?>("RowCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("ExportJobs");
+                });
+
             modelBuilder.Entity("SmartBus.Api.Entities.Fare", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1206,6 +1289,8 @@ namespace SmartBus.Api.Migrations
                         .HasDatabaseName("IX_Tickets_TripId_SeatId_Active")
                         .HasFilter("\"Status\" IN ('Held', 'Paid')");
 
+                    b.HasIndex("TripId", "Status");
+
                     b.ToTable("Tickets");
                 });
 
@@ -1389,11 +1474,48 @@ namespace SmartBus.Api.Migrations
 
                     b.HasIndex("CurrentStopId");
 
+                    b.HasIndex("DepartureTime");
+
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("DepartureTime"), new[] { "Id", "RouteId", "BusId", "Status" });
+
                     b.HasIndex("DriverId", "DepartureTime");
 
                     b.HasIndex("RouteId", "DepartureTime");
 
+                    NpgsqlIndexBuilderExtensions.IncludeProperties(b.HasIndex("RouteId", "DepartureTime"), new[] { "Id", "BusId", "Status" });
+
                     b.ToTable("Trips");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.TripStopTimeOverride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ArrivalTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StopId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StopId");
+
+                    b.HasIndex("TripId", "StopId")
+                        .IsUnique();
+
+                    b.ToTable("TripStopTimeOverrides");
                 });
 
             modelBuilder.Entity("SmartBus.Api.Entities.User", b =>
@@ -1628,6 +1750,17 @@ namespace SmartBus.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("ReviewedBy");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.ExportJob", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("User");
                 });
@@ -2081,6 +2214,25 @@ namespace SmartBus.Api.Migrations
                     b.Navigation("Driver");
 
                     b.Navigation("Route");
+                });
+
+            modelBuilder.Entity("SmartBus.Api.Entities.TripStopTimeOverride", b =>
+                {
+                    b.HasOne("SmartBus.Api.Entities.Stop", "Stop")
+                        .WithMany()
+                        .HasForeignKey("StopId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SmartBus.Api.Entities.Trip", "Trip")
+                        .WithMany()
+                        .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Stop");
+
+                    b.Navigation("Trip");
                 });
 
             modelBuilder.Entity("SmartBus.Api.Entities.User", b =>

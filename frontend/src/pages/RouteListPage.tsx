@@ -66,7 +66,9 @@ const BASE_COLUMNS: TableProps<Route>['columns'] = [
 
 const RouteListPage = () => {
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<RouteStatus>();
+  // Mặc định chỉ hiện tuyến ĐANG khai thác: "xoá" (ngừng khai thác) xong tuyến biến mất khỏi
+  // danh sách, khớp kỳ vọng "xoá = không còn thấy". Muốn xem tuyến đã ngừng thì chọn bộ lọc.
+  const [status, setStatus] = useState<RouteStatus>('Active');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -135,7 +137,7 @@ const RouteListPage = () => {
     {
       title: 'Hành động',
       key: 'actions',
-      width: 140,
+      width: 180,
       render: (_, route) => (
         <Space>
           <Button type="link" size="small" onClick={() => openEdit(route)}>
@@ -150,7 +152,7 @@ const RouteListPage = () => {
             onConfirm={() => handleDelete(route.id)}
           >
             <Button type="link" size="small" danger>
-              Xoá
+              Ngừng khai thác
             </Button>
           </Popconfirm>
         </Space>

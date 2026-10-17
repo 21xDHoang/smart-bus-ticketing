@@ -40,6 +40,22 @@ public partial class AppDbContext
             // A6 chốt index này cho Payments — đường tra ngược "giao dịch này đã sinh vé nào".
             e.HasIndex(p => p.TicketId);
 
+            // ── Chỉ mục cho báo cáo doanh thu (US 19 — Sprint 5 dòng 38) ──
+            //
+            // RevenueReportService lọc Status = 'Success' và khoảng thời gian theo biểu thức
+            // COALESCE("PaidAt", "CreatedAt") (giao dịch cũ thiếu PaidAt thì lấy CreatedAt).
+            // HasIndex chỉ nhận danh sách property, KHÔNG nhận biểu thức, nên hai chỉ mục
+            // phủ biểu thức đó nằm trong migration Sprint5_Payments_RevenueIndexes bằng
+            // migrationBuilder.Sql — xem docs/47 §2–§3:
+            //
+            //   IX_Payments_Success_RevenueAt          ((COALESCE(PaidAt, CreatedAt))) INCLUDE (…)
+            //   IX_Payments_Success_TripId_RevenueAt   (TripId, COALESCE(PaidAt, CreatedAt)) INCLUDE (…)
+            //
+            // Cả hai đều điều kiện WHERE Status = 'Success' và KHÔNG unique. Không khai báo
+            // lại ở đây để model snapshot không lệch: EF không quản lý hai chỉ mục này.
+            // Giữ nguyên IX_Payments_TripId do EF sinh theo FK — chỉ mục điều kiện mới không
+            // phục vụ kiểm tra khoá ngoại khi xoá chuyến.
+
             e.HasOne(p => p.User).WithMany()
                 .HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Restrict);
 

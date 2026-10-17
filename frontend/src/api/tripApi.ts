@@ -94,6 +94,15 @@ export interface TripRouteOption {
   code: string;
   /** Tên tuyến, ví dụ "Bến Thành — Chợ Lớn". */
   name: string;
+  /** Điểm đầu — backend trả sẵn trong RouteResponse, không phải gọi thêm API. */
+  origin: string;
+  /**
+   * Điểm cuối. Vé bán theo CẢ CHUYẾN (quy ước A8.1) nên đây chính là điểm đến của vé —
+   * màn hình lập lịch hiển thị thẳng, không suy từ tên tuyến.
+   */
+  destination: string;
+  /** Chiều dài tuyến (km) — dùng ước lượng giờ đến, khớp công thức 25 km/h của backend. */
+  distanceKm: number;
 }
 
 /**
@@ -114,7 +123,16 @@ export async function fetchRouteOptions(): Promise<TripRouteOption[]> {
   for (let page = 1; ; page += 1) {
     const { items, total } = await fetchRoutes({ page, pageSize: ROUTE_PICKER_PAGE_SIZE });
 
-    routes.push(...items.map(({ id, code, name }) => ({ id, code, name })));
+    routes.push(
+      ...items.map(({ id, code, name, origin, destination, distanceKm }) => ({
+        id,
+        code,
+        name,
+        origin,
+        destination,
+        distanceKm,
+      })),
+    );
 
     // `items.length === 0` là chốt chặn để không lặp vô hạn nếu `total` sai.
     if (routes.length >= total || items.length === 0) break;

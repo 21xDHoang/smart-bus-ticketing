@@ -23,6 +23,7 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
     private const string PassTypeNotFoundMessage = "Không tìm thấy loại vé";
     private const string RouteNotFoundMessage = "Không tìm thấy tuyến đường";
     private const string OverlapMessage = "Đã có vé tháng khác trên cùng tuyến trong khoảng thời gian này";
+    private const string CancelledMessage = "Vé tháng đã bị huỷ, không thể gia hạn";
     private const string CodeCollisionMessage = "Không sinh được mã vé tháng, vui lòng thử lại";
 
     /// <summary>Bộ ký tự sinh 6 ký tự cuối mã vé — trùng bộ ký tự frontend đang dùng (monthlyPassApi.ts).</summary>
@@ -58,6 +59,13 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
             return ServiceResult<MonthlyPassResponse>.NotFound(PassNotFoundMessage);
         }
 
+        // Vé đã bị quản trị viên huỷ là chặn cứng (xem MonthlyPassStatus) — gia hạn nó sẽ hồi
+        // sinh một vé mà nhà xe cố ý thu hồi. Muốn gia hạn thì mở lại vé trước.
+        if (pass.Status == MonthlyPassStatus.Cancelled)
+        {
+            return ServiceResult<MonthlyPassResponse>.Conflict(CancelledMessage);
+        }
+
         // Loại vé: bỏ trống mã = giữ nguyên loại của vé cũ. Tra lại từ bảng chứ không dùng
         // navigation: cần đúng GIÁ HIỆN HÀNH để chụp (giá gói sửa được sau khi bán) và mã chuỗi
         // để trả về. Dòng mồ côi là chuyện chỉ có ở dữ liệu hỏng (FK Restrict chặn xoá thật) —
@@ -75,15 +83,16 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
             return ServiceResult<MonthlyPassResponse>.NotFound(PassTypeNotFoundMessage);
         }
 
-        // Mã tuyến để sinh mã vé (khuôn MP-{mã tuyến}-{6 ký tự}). Cùng lối trên: tuyến mồ côi
-        // trả 404 thay vì để nổ.
-        var routeCode = await _db.Routes
+        // Mã tuyến để sinh mã vé (khuôn MP-{mã tuyến}-{6 ký tự}), tên tuyến để trả kèm cho màn
+        // hành khách hiển thị (không phải gọi GET /routes — hành khách nhận 403). Cùng lối trên:
+        // tuyến mồ côi trả 404 thay vì để nổ.
+        var route = await _db.Routes
             .AsNoTracking()
             .Where(r => r.Id == pass.RouteId)
-            .Select(r => r.Code)
+            .Select(r => new { r.Code, r.Name })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (routeCode is null)
+        if (route is null)
         {
             return ServiceResult<MonthlyPassResponse>.NotFound(RouteNotFoundMessage);
         }
@@ -101,7 +110,7 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
             return ServiceResult<MonthlyPassResponse>.Conflict(OverlapMessage);
         }
 
-        var code = await GenerateCodeAsync(routeCode, cancellationToken);
+        var code = await GenerateCodeAsync(route.Code, cancellationToken);
 
         if (code is null)
         {
@@ -136,7 +145,8 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
             return ServiceResult<MonthlyPassResponse>.Conflict(CodeCollisionMessage);
         }
 
-        return ServiceResult<MonthlyPassResponse>.Ok(ToResponse(newPass, passType.Code));
+        return ServiceResult<MonthlyPassResponse>.Ok(
+            ToResponse(newPass, route.Code, route.Name, passType.Code, passType.Name));
     }
 
     /// <summary>
@@ -197,12 +207,20 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
         return new string(suffix);
     }
 
-    private static MonthlyPassResponse ToResponse(MonthlyPass pass, string passTypeCode) => new()
+    private static MonthlyPassResponse ToResponse(
+        MonthlyPass pass,
+        string routeCode,
+        string routeName,
+        string passTypeCode,
+        string passTypeName) => new()
     {
         Id = pass.Id,
         Code = pass.Code,
         RouteId = pass.RouteId,
+        RouteCode = routeCode,
+        RouteName = routeName,
         PassTypeCode = passTypeCode,
+        PassTypeName = passTypeName,
         Price = pass.Price,
         ValidFrom = pass.ValidFrom,
         ValidTo = pass.ValidTo,

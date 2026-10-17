@@ -13,8 +13,13 @@ import {
 } from 'antd';
 import { CheckCircleFilled, IdcardOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import monthlyPassApi, { PASS_TYPE_OPTIONS, findPassType } from '../api/monthlyPassApi';
-import type { MonthlyPass, MonthlyPassRoute, PassTypeCode } from '../api/monthlyPassApi';
+import monthlyPassApi from '../api/monthlyPassApi';
+import type {
+  MonthlyPass,
+  MonthlyPassRoute,
+  PassType,
+  PassTypeCode,
+} from '../api/monthlyPassApi';
 import stopSearchApi from '../api/stopSearchApi';
 import type { AppError } from '../api/axiosClient';
 import MonthlyPassStatusTag from '../components/MonthlyPassStatusTag';
@@ -100,6 +105,10 @@ export default function MonthlyPassRegistrationPage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
 
   const [passTypeCode, setPassTypeCode] = useState<PassTypeCode | undefined>(undefined);
+  // Danh mục loại vé đọc từ CSDL (GET /pass-types) — không giữ bảng hằng ở client.
+  const [passTypes, setPassTypes] = useState<PassType[]>([]);
+  const [passTypesLoading, setPassTypesLoading] = useState(true);
+  const [passTypesError, setPassTypesError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Vé tháng vừa đăng ký thành công — null khi chưa đăng ký hoặc đang đăng ký vé mới.
   const [registered, setRegistered] = useState<MonthlyPass | null>(null);
@@ -107,8 +116,32 @@ export default function MonthlyPassRegistrationPage() {
   const originOptions = useStopSuggestions(origin);
   const destinationOptions = useStopSuggestions(destination);
 
+  // Tải danh mục loại vé một lần khi mở màn. Hỏng thì để trạng thái riêng — ô chọn rỗng mà
+  // không nói lý do sẽ khiến hành khách tưởng hệ thống không có loại vé nào.
+  useEffect(() => {
+    let cancelled = false;
+
+    monthlyPassApi
+      .listPassTypes()
+      .then((types) => {
+        if (cancelled) return;
+        setPassTypes(types);
+        setPassTypesError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setPassTypesError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setPassTypesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const selectedRoute = foundRoutes.find((route) => route.id === selectedRouteId);
-  const selectedPassType = findPassType(passTypeCode);
+  const selectedPassType = passTypes.find((passType) => passType.code === passTypeCode);
 
   // Ngày hiệu lực dự kiến: bắt đầu hôm nay, kết thúc sau đúng `durationMonths` tháng.
   const validity =
@@ -176,7 +209,6 @@ export default function MonthlyPassRegistrationPage() {
   };
 
   const registeredRoute = foundRoutes.find((route) => route.id === registered?.routeId);
-  const registeredType = findPassType(registered?.passTypeCode);
 
   const { token } = theme.useToken();
 
@@ -266,11 +298,23 @@ export default function MonthlyPassRegistrationPage() {
             <Select
               value={passTypeCode}
               onChange={(value: PassTypeCode) => setPassTypeCode(value)}
-              placeholder="Chọn loại vé tháng"
-              options={PASS_TYPE_OPTIONS}
+              placeholder={passTypesLoading ? 'Đang tải loại vé…' : 'Chọn loại vé tháng'}
+              options={passTypes.map(({ code, name }) => ({ value: code, label: name }))}
+              loading={passTypesLoading}
+              disabled={passTypesError}
               suffixIcon={<IdcardOutlined />}
               style={{ width: '100%' }}
             />
+            {passTypesError && (
+              <Text type="danger" style={{ display: 'block', marginTop: 4, fontSize: 13 }}>
+                Không tải được danh mục loại vé. Tải lại trang để thử lại.
+              </Text>
+            )}
+            {!passTypesLoading && !passTypesError && passTypes.length === 0 && (
+              <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 13 }}>
+                Hệ thống chưa có loại vé tháng nào. Vui lòng quay lại sau.
+              </Text>
+            )}
           </div>
 
           {/* Ô "xem giá" — chỉ hiện khi đã chọn đủ cả tuyến lẫn loại vé. */}
@@ -323,7 +367,7 @@ export default function MonthlyPassRegistrationPage() {
       </PageCard>
 
       {/* Kết quả đăng ký thành công. */}
-      {registered && registeredRoute && registeredType && (
+      {registered && registeredRoute && (
         <div style={{ marginTop: 20 }}>
           <PageCard
             title={
@@ -356,7 +400,8 @@ export default function MonthlyPassRegistrationPage() {
                 {
                   key: 'passType',
                   label: 'Loại vé',
-                  children: registeredType.name,
+                  // Tên do backend trả kèm (passTypeName) — đọc từ CSDL, không tra bảng hằng.
+                  children: registered.passTypeName || registered.passTypeCode,
                 },
                 {
                   key: 'validity',

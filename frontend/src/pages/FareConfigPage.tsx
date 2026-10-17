@@ -1,18 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import fareApi from '../api/fareApi';
 import { PASSENGER_TYPE_META, PASSENGER_TYPE_OPTIONS } from '../api/fareApi';
 import type { Fare, FarePayload, PassengerType, RouteOption } from '../api/fareApi';
 import FareFormModal from '../components/FareFormModal';
+import FareTemplateEditor from '../components/FareTemplateEditor';
+import ApplyFareTemplateModal from '../components/ApplyFareTemplateModal';
+import { loadFareTemplate } from '../api/fareTemplateApi';
+import { applyDiscount, routeFare } from '../utils/fareTemplateCalc';
 import { EmptyState, PageCard, PageHeader, StatusTag } from '../components/ui';
 import { formatDateTime, formatVnd } from '../components/ui/format';
 
+// Khoá giả cho lựa chọn "Bảng giá mẫu" trong ô chọn tuyến — không phải id tuyến thật, chỉ đánh
+// dấu để màn hình hiển thị bảng giá mẫu theo km thay vì bảng giá của một tuyến cụ thể.
+const FARE_TEMPLATE_ROUTE_ID = '__fare-template__';
+
 export default function FareConfigPage() {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
-  const [selectedRouteId, setSelectedRouteId] = useState<string>();
-  // Bắt đầu ở trạng thái "đang tải" cho danh sách tuyến — lần load đầu chạy ngay khi mount.
+  // Mặc định mở ở "Bảng giá mẫu" — lựa chọn đầu tiên trong ô chọn tuyến.
+  const [selectedRouteId, setSelectedRouteId] = useState<string>(FARE_TEMPLATE_ROUTE_ID);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
 
   const [fares, setFares] = useState<Fare[]>([]);
@@ -22,12 +30,16 @@ export default function FareConfigPage() {
   const [editing, setEditing] = useState<Fare | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Tải danh sách tuyến cho ô chọn, tự chọn tuyến đầu tiên khi mở trang.
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  const isTemplateSelected = selectedRouteId === FARE_TEMPLATE_ROUTE_ID;
+  const selectedRoute = routes.find((route) => route.id === selectedRouteId);
+  const selectedRouteLabel = selectedRoute ? `${selectedRoute.code} — ${selectedRoute.name}` : null;
+
   const loadRoutes = useCallback(async () => {
     try {
-      const list = await fareApi.listRoutes();
-      setRoutes(list);
-      setSelectedRouteId((current) => current ?? list[0]?.id);
+      setRoutes(await fareApi.listRoutes());
     } catch (error) {
       message.error((error as Error).message || 'Không tải được danh sách tuyến.');
     } finally {
@@ -40,9 +52,10 @@ export default function FareConfigPage() {
     void loadRoutes();
   }, [loadRoutes]);
 
-  // Tải bảng giá mỗi khi đổi tuyến.
+  // Tải bảng giá mỗi khi đổi tuyến. Đang chọn "Bảng giá mẫu" thì không gọi API — màn đó là form
+  // cấu hình quy ước, không phải bảng giá của một tuyến.
   const loadFares = useCallback(async () => {
-    if (!selectedRouteId) return;
+    if (!selectedRouteId || isTemplateSelected) return;
     setLoadingFares(true);
     try {
       setFares(await fareApi.list(selectedRouteId));
@@ -52,14 +65,13 @@ export default function FareConfigPage() {
     } finally {
       setLoadingFares(false);
     }
-  }, [selectedRouteId]);
+  }, [selectedRouteId, isTemplateSelected]);
 
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect
     void loadFares();
   }, [loadFares]);
 
-  // Nút "Làm mới" do người dùng bấm.
   const handleRefresh = () => void loadFares();
 
   // Các đối tượng tuyến đang chọn đã có giá — dùng để chặn chọn trùng khi thêm mới.
@@ -77,7 +89,7 @@ export default function FareConfigPage() {
   };
 
   const handleSubmit = async (payload: FarePayload, id?: string) => {
-    if (!selectedRouteId) return;
+    if (!selectedRouteId || isTemplateSelected) return;
     setSubmitting(true);
     try {
       if (id) {
@@ -97,13 +109,44 @@ export default function FareConfigPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!selectedRouteId) return;
+    if (!selectedRouteId || isTemplateSelected) return;
     try {
       await fareApi.remove(selectedRouteId, id);
       message.success('Đã xoá giá vé.');
       await loadFares();
     } catch (error) {
       message.error((error as Error).message || 'Xoá thất bại.');
+    }
+  };
+
+  // Áp bảng giá mẫu theo km vào tuyến đang chọn: giá từng đối tượng = giá/km sau ưu đãi × số km
+  // tuyến (làm tròn về đồng). Đối tượng đã có giá thì sửa, chưa có thì thêm.
+  const applyFareTemplate = async () => {
+    if (!selectedRoute || isTemplateSelected) return;
+    const template = loadFareTemplate();
+    setApplying(true);
+    try {
+      for (const option of PASSENGER_TYPE_OPTIONS) {
+        const type = option.value;
+        const pricePerKm =
+          type === 'Standard'
+            ? template.adultPricePerKm
+            : applyDiscount(template.adultPricePerKm, template.discounts[type]);
+        const price = routeFare(pricePerKm, selectedRoute.distanceKm);
+        const existing = fares.find((fare) => fare.passengerType === type);
+        if (existing) {
+          await fareApi.update(selectedRoute.id, existing.id, { price });
+        } else {
+          await fareApi.create(selectedRoute.id, { passengerType: type, price });
+        }
+      }
+      message.success('Đã áp bảng giá mẫu cho tuyến.');
+      setApplyModalOpen(false);
+      await loadFares();
+    } catch (error) {
+      message.error((error as Error).message || 'Áp bảng giá mẫu thất bại.');
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -169,7 +212,7 @@ export default function FareConfigPage() {
     <div>
       <PageHeader
         title="Cấu hình bảng giá vé"
-        subtitle="Đặt giá vé cho từng đối tượng hành khách trên mỗi tuyến."
+        subtitle="Đặt giá vé cho từng đối tượng hành khách trên mỗi tuyến, hoặc cấu hình bảng giá mẫu theo km."
         extra={
           <Space wrap>
             <Select
@@ -178,28 +221,44 @@ export default function FareConfigPage() {
               value={selectedRouteId}
               loading={loadingRoutes}
               onChange={(value) => setSelectedRouteId(value)}
-              options={routes.map((route) => ({
-                value: route.id,
-                label: `${route.code} — ${route.name}`,
-              }))}
+              options={[
+                { value: FARE_TEMPLATE_ROUTE_ID, label: 'Bảng giá mẫu' },
+                ...routes.map((route) => ({
+                  value: route.id,
+                  label: `${route.code} — ${route.name}`,
+                })),
+              ]}
             />
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
-              Làm mới
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreate}
-              disabled={!selectedRouteId || allConfigured}
-            >
-              Thêm giá
-            </Button>
+            {!isTemplateSelected && (
+              <>
+                <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+                  Làm mới
+                </Button>
+                <Button
+                  icon={<ThunderboltOutlined />}
+                  onClick={() => setApplyModalOpen(true)}
+                  disabled={!selectedRoute}
+                >
+                  Áp dụng bảng giá mẫu
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={openCreate}
+                  disabled={allConfigured}
+                >
+                  Thêm giá
+                </Button>
+              </>
+            )}
           </Space>
         }
       />
 
       <PageCard>
-        {!selectedRouteId && !loadingRoutes ? (
+        {isTemplateSelected ? (
+          <FareTemplateEditor />
+        ) : !selectedRoute && !loadingRoutes ? (
           <EmptyState description="Chưa có tuyến nào để cấu hình giá vé." />
         ) : (
           <Table<Fare>
@@ -220,6 +279,16 @@ export default function FareConfigPage() {
         submitting={submitting}
         onCancel={() => setModalOpen(false)}
         onSubmit={handleSubmit}
+      />
+
+      <ApplyFareTemplateModal
+        open={applyModalOpen}
+        routeLabel={selectedRouteLabel ?? ''}
+        distanceKm={selectedRoute?.distanceKm ?? 0}
+        existingCount={fares.length}
+        applying={applying}
+        onCancel={() => setApplyModalOpen(false)}
+        onApply={() => void applyFareTemplate()}
       />
     </div>
   );

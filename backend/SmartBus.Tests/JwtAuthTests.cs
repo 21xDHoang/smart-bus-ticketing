@@ -347,10 +347,11 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Đổi năm job nền của app sang bản chạy RỖNG trong host test
+    /// Đổi bảy job nền của app sang bản chạy RỖNG trong host test
     /// (<see cref="NoopTripGenerationJob"/>, <see cref="NoopMonthlyPassExpiryJob"/>,
     /// <see cref="NoopSeatHoldExpiryJob"/>, <see cref="NoopSeatHoldAbuseJob"/>,
-    /// <see cref="NoopRefundRetryJob"/>).
+    /// <see cref="NoopRefundRetryJob"/>, <see cref="NoopRefundReconciliationJob"/>,
+    /// <see cref="NoopExportJobJob"/>).
     ///
     /// Vì sao: CI ngày 03/10/2026 đỏ trên PR #81 — nhánh chỉ sửa frontend, phần backend y hệt main —
     /// vì 3 test đếm-đúng của <c>TripSearchCacheApiTests</c> bị job sinh chuyến THẬT chạy ngay trong
@@ -387,7 +388,7 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
     }
 
     /// <summary>
-    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền thứ năm
+    /// Job thật → bản noop tương ứng. Bảng tra chứ không phải chuỗi <c>if</c>: thêm job nền tiếp theo
     /// thì thêm đúng một dòng ở đây, không phải sửa một biểu thức điều kiện đã dài ra theo mỗi job —
     /// và quên job mới sẽ lộ ra ngay ở <see cref="TestHostKhongChayJobNenTests"/>.
     /// </summary>
@@ -401,6 +402,8 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         // Job đối soát thanh toán (story 6, Trần Trung Hiếu — nợ Sprint 3): cùng lý do các dòng
         // trên — job thật chạy trong host test sẽ quét và sửa Payments giữa lúc test đang seed.
         [typeof(PaymentReconciliationBackgroundService)] = typeof(NoopPaymentReconciliationJob),
+        [typeof(RefundReconciliationBackgroundService)] = typeof(NoopRefundReconciliationJob),
+        [typeof(ExportJobBackgroundService)] = typeof(NoopExportJobJob),
     };
 
     /// <summary>
@@ -500,6 +503,45 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopPaymentReconciliationJob(
             IServiceScopeFactory scopeFactory,
             ILogger<PaymentReconciliationBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="RefundReconciliationBackgroundService"/> cho host test — cùng lý
+    /// do với <see cref="NoopTripGenerationJob"/>. Job đối soát chỉ ĐỌC và chạy mỗi ngày một lần, nên
+    /// trong một lượt test ngắn nó gần như không thức dậy; nhưng để nguyên bản thật là một job mỗi
+    /// ngày một lần vẫn có thể chạm đúng lúc 00:05 UTC giữa bộ test và ghi thêm dòng
+    /// <c>Notifications</c> cảnh báo, làm đỏ các phép đếm-đúng. Gỡ hẳn cũng không được vì test wiring
+    /// của job cần thấy hình dạng đăng ký — nên dùng đúng lối noop đang có.
+    /// </summary>
+    private sealed class NoopRefundReconciliationJob : RefundReconciliationBackgroundService
+    {
+        public NoopRefundReconciliationJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<RefundReconciliationBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Bản "chạy rỗng" của <see cref="ExportJobBackgroundService"/> cho host test — job mới nhất của
+    /// app (Sprint 5 dòng 64, Vàng Thị Dăm) và cũng là job quét NHANH nhất: 2 giây một lượt. Để bản
+    /// thật chạy, mọi test seed sẵn một dòng <c>ExportJobs</c> sẽ bị nó xử lý chen giữa lúc assert,
+    /// còn mọi test khác thì chịu thêm một truy vấn mỗi 2 giây trong suốt lượt chạy. Gỡ hẳn không
+    /// được vì <c>ExportJobsWiringTests</c> cần thấy hình dạng đăng ký — dùng đúng lối noop đang có.
+    /// </summary>
+    private sealed class NoopExportJobJob : ExportJobBackgroundService
+    {
+        public NoopExportJobJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<ExportJobBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }

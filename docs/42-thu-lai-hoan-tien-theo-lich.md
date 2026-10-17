@@ -20,6 +20,25 @@
 > CSDL sau khi merge"* ở §7 nay **đã thoả**, chỉ còn chờ chạy `dotnet ef database update`. Con số
 > **1331/1331** là lượt chạy của riêng nhánh này lúc đó; sau khi gộp `main`, toàn bộ backend là
 > **1460/1460**.
+>
+> 🔢 **Cập nhật 17/10/2026 — bốn chỗ nữa đã cũ.** Lượt soát ngày 17/10/2026 trên `main` @ `3dc2b0e`
+> tìm thêm **bốn câu** đã hết đúng. Vẫn theo lối của khối trên: **giữ nguyên phần thân làm mốc lịch
+> sử**, chỗ nào cần thì thêm một dòng trỏ về đây.
+>
+> - 🔴 **Hai bảng `Refunds`/`RefundLogs` NAY ĐÃ có trên CSDL chung** — `dotnet ef migrations list`
+>   liệt kê **18/18** migration, **0** dòng `(Pending)`; lượt kiểm nối tới `13.237.241.81:5432`, tức
+>   **CSDL chung** chứ không phải bản Docker ở máy. Câu *"chưa có trên CSDL chung"* ở khối *"Trạng
+>   thái"*, ở §5 và ở §6 nay **sai**.
+> - 🔴 **Cổng hoàn tiền KHÔNG còn là placeholder** — **PR #214** (Trần Trung Hiếu, task dòng 29) đã
+>   thay `PlaceholderRefundGatewayCaller` bằng `RefundGatewayCaller` thật (`docs/43`). Hệ quả: lượt
+>   gọi **không còn** mặc định ra `Unresolved`, nên câu *"hôm nay mọi lượt gọi ra `Unresolved`"* ở
+>   §3.2 và gạch đầu dòng *"Placeholder làm mọi lượt ra `Unresolved → Pending`"* ở §5 hết đúng.
+>   ⚠️ **Nhưng đừng đọc ngược lại thành "thang thử lại nay đã sống"**: sandbox **chưa được chạy
+>   thật** — nhóm chưa có khoá đối tác MoMo/ZaloPay và sandbox VNPay hạn chế hoàn tiền (`docs/43`
+>   §đầu). Đường thử lại theo thang chỉ sống khi cổng thật trả `Failed`, và điều đó **chưa quan sát
+>   được**.
+> - **Nhánh CSDL của Dăm đã vào `main`** — **PR #203** (đã ghi ở khối trên). Điều kiện *"merge nhánh
+>   Dăm trước rồi mới áp lên CSDL chung"* ở §5 và §6 nay **đã thoả và đã chạy xong**.
 
 ---
 
@@ -156,7 +175,11 @@ Lớp cắm tạm log `Warning` mỗi lượt rồi trả `{ Result = Unresolved
 
 **Hệ quả đang sống**: hôm nay mọi lượt gọi ra `Unresolved` → khoản về `Pending`, `NextRetryAt = null` → hàng đợi tự động đứng yên (không xếp lịch cho lượt `Unresolved` — luật của `docs/40` §3.2). Đường thử lại theo thang chỉ sống dậy khi Hiếu cắm cổng thật trả về `Failed`. Đừng đọc việc "job chạy mà không thấy retry" là job hỏng.
 
+⚠️ **Đã cũ 17/10/2026** — cổng thật **đã được cắm** (PR #214) nên câu *"hôm nay mọi lượt gọi ra `Unresolved`"* hết đúng. Nhưng lời khuyên cuối câu **vẫn giữ nguyên giá trị**: sandbox chưa chạy thật (`docs/43`) nên vẫn có thể chưa lượt nào trả `Failed`. Xem khối *Cập nhật* ở đầu tài liệu.
+
 ### 3.3 Hiếu cắm cổng thật — ba việc
+
+> ✅ **Đã xong 17/10/2026** — cả ba việc đã làm ở **PR #214** (`docs/43`). Giữ nguyên ba dòng dưới làm mốc lịch sử.
 
 1. **Thay một dòng** trong `Program.cs`: `AddScoped<IRefundGatewayCaller, PlaceholderRefundGatewayCaller>()` → lớp thật. **Không đổi chữ ký seam, không đổi DTO** — mọi thứ quanh nó đã có test (`RefundRetryWiringTests` cố ý không ghim tên lớp cắm tạm).
 2. **Ánh xạ kết quả đúng bảng §3.1.** Ném ngoại lệ ra ngoài cũng được — service bọc thành `Unresolved` (`Cong_nem_ngoai_le_cung_thanh_Unresolved_chu_khong_sap_luot_quet`) — nhưng **nếu phân biệt được "cổng từ chối" thì ĐỪNG ném, hãy trả `Failed`**: ném là bỏ mất đường thử lại theo thang, khoản nằm `Pending` chờ đối soát.
@@ -204,6 +227,7 @@ Nút gọi endpoint `ManualRetry` (§3.3). Hai điều để hiển thị đúng
 - **Nhịp 1 phút không ghim bằng test** — cố ý; test gọi thẳng `SweepAsync(now)`, nhịp là quyết định vận hành.
 - **Thua cuộc đua không ghi gì cả** — không `RefundLogs`, không `UpdatedAt`; chỉ một dòng `Information` phía job. Nhật ký "số dòng = số lượt tiền ra ngoài" vì vậy luôn đúng.
 - **Placeholder làm mọi lượt ra `Unresolved → Pending`** — không xếp lịch, đúng luật (`docs/40` §3.2: đừng thử lại khoản có thể đã hoàn). Thang thử lại chỉ sống khi cổng thật trả `Failed`.
+  ⚠️ **Đã cũ 17/10/2026** — cổng thật đã được cắm (PR #214), nên lượt gọi **không còn** mặc định ra `Unresolved`; xem khối *Cập nhật* ở đầu tài liệu.
 - **Khoản `Pending` do `Unresolved` chỉ hiện ra qua đối soát (dòng 32)** — hàng đợi quét chỉ nhặt `Failed`; Kiên phải đọc `RefundLogs` (lượt cuối `Unresolved`) để nhặt chúng lên bàn.
 - **Hết thang (`k ≥ 5`) → `NextRetryAt = null` vĩnh viễn trên đường tự động** — quản trị vẫn bấm tay được, nhưng lượt tay hỏng cũng ra `null` tiếp; muốn chạy lại thang phải tạo khoản mới (chỉ mục lọc duy nhất cho phép: chỉ tính `Pending`/`Succeeded`).
 - **Sập giữa giành dòng và lượt ghi kết quả** → `LogError` "TIỀN CÓ THỂ ĐÃ ĐI…" + gỡ entity + ghi lại; ghi lại cũng đứt thì khoản nằm `Pending`, `GatewayTransactionId` null — **đối soát (dòng 32) phải nhặt được cả trường hợp này**.
@@ -211,6 +235,7 @@ Nút gọi endpoint `ManualRetry` (§3.3). Hai điều để hiển thị đúng
 - **Lượt quét không phân trang** — mọi khoản tới hạn trong một lượt; đủ cho quy mô hiện tại, ghi lại để biết trước khi bảng lớn.
 - **PR này không mở endpoint nào** — `api-contract.md` không đụng; endpoint "Thử lại" + API tra cứu (dòng 31) là việc của các dòng khác.
 - **`Refund`/`RefundLog`/`xmin`/migration thuộc nhánh Dăm** (`feature/8-migrate-refunds-refundlogs`, chưa vào main) — nhánh này xếp **trên** nhánh đó; merge theo thứ tự nhánh Dăm trước (hoặc cùng lúc), và chỉ **sau khi merge** mới áp lên CSDL chung (`docs/40` §8.4).
+  ⚠️ **Đã cũ 17/10/2026** — nhánh Dăm đã vào `main` (PR #203) và CSDL chung đã áp xong (**18/18**, 0 `(Pending)`); xem khối *Cập nhật* ở đầu tài liệu.
 
 ---
 
@@ -229,3 +254,5 @@ Nút gọi endpoint `ManualRetry` (§3.3). Hai điều để hiển thị đúng
 **Bộ backend đầy đủ: 1331/1331 xanh** (trước nhánh: 1288 — nhánh này đứng trên nhánh Dăm, chưa gồm các dòng 5/18/23 vừa vào main).
 
 **Bảng CSDL:** `Refunds`/`RefundLogs` thuộc migration `20261014153025_Sprint4_Refunds_RefundLogs` của **Dăm** — **chưa có trên CSDL chung**. Theo `docs/40` §8.4: merge nhánh Dăm rồi mới `dotnet ef database update --project backend/SmartBus.Api`. Trước mốc đó, mọi endpoint chạm hai bảng sẽ lỗi `relation "Refunds" does not exist`; riêng job thì thử lại mỗi phút và log `Error` — chấp nhận được, không phải sự cố.
+
+⚠️ **Đã cũ 17/10/2026** — câu trên hết đúng: nhánh Dăm đã vào `main` (PR #203), `database update` **đã chạy**, hai bảng **đã có** trên CSDL chung (**18/18** migration, **0** `(Pending)`). Câu *"1331/1331"* ngay trên cũng là số của riêng nhánh này lúc đó — sau khi gộp `main` là **1460/1460**. Xem khối *Cập nhật* ở đầu tài liệu.

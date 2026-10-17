@@ -45,7 +45,22 @@ public partial class AppDbContext
 
             // Tìm chuyến theo tuyến + giờ — chỉ mục A6 cho US 1 và US 13.
             // RouteId đứng đầu chỉ mục nên EF không sinh thêm chỉ mục riêng cho khoá ngoại này.
-            e.HasIndex(t => new { t.RouteId, t.DepartureTime });
+            //
+            // INCLUDE (Id, BusId, Status) phục vụ báo cáo tỷ lệ lấp đầy theo chuyến (US 20 — Vàng Thị
+            // Dăm): truy vấn lọc một tuyến trong kỳ rồi cần Id để trả về/đối chiếu vé, BusId để tra
+            // sức chứa và Status để loại chuyến đã huỷ. Các cột đó nằm ngay trong chỉ mục nên
+            // Postgres đọc được bằng index-only scan, không phải quay lại bảng Trips cho từng chuyến.
+            e.HasIndex(t => new { t.RouteId, t.DepartureTime })
+             .IncludeProperties(t => new { t.Id, t.BusId, t.Status });
+
+            // Quét chuyến theo KHOẢNG THỜI GIAN, không lọc tuyến — nhánh "toàn công ty" của báo cáo
+            // tỷ lệ lấp đầy (US 20). Chỉ mục (RouteId, DepartureTime) ở trên không dùng được cho
+            // truy vấn này vì RouteId đứng đầu: Postgres không nhảy cóc qua cột tiền tố để lấy một
+            // khoảng DepartureTime. INCLUDE đủ các cột báo cáo cần (Id để trả về/đối chiếu vé, RouteId
+            // để gộp theo tuyến, BusId để tra sức chứa, Status để loại chuyến đã huỷ) — index-only
+            // scan, không đọc bảng.
+            e.HasIndex(t => t.DepartureTime)
+             .IncludeProperties(t => new { t.Id, t.RouteId, t.BusId, t.Status });
 
             // Các chuyến của một tài xế trong một ngày — đúng truy vấn của service kiểm tra
             // trùng lịch tài xế (US 14): "tài xế X có chuyến nào trong ngày Y".
