@@ -5692,14 +5692,157 @@ Query — **mọi tham số bỏ trống được**:
 - Khoảng `from` → `to` tối đa **366 ngày** · `to` trước `from` → **400** — lỗi gắn ở cả
   `errors.from` lẫn `errors.to` · `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
 
-> **Cho task "API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ" (Kiên):** mục này đã gộp
-> khách theo giờ KHỞI HÀNH; tỷ lệ lấp đầy cần thêm mẫu số **sức chứa** (ghế của xe) — đơn vị
-> khác hẳn (phần trăm), đừng đổi ngữ nghĩa của `passengers` ở đây, mở endpoint riêng trên bề mặt
-> `/reports` (ví dụ `GET /reports/fill-rate`).
+> **Tỷ lệ lấp đầy:** đã có endpoint riêng — xem mục **"Tỷ lệ lấp đầy — /reports/fill-rate"** ngay
+> dưới. Mục này đếm khách theo giờ KHỞI HÀNH (mật độ khách/chuyến); tỷ lệ lấp đầy cần thêm mẫu
+> số **sức chứa** nên là đơn vị phần trăm, không đổi ngữ nghĩa `passengers` ở đây.
 >
 > **Đề xuất tần suất:** đã có endpoint riêng — xem mục
-> **"Đề xuất tần suất chạy xe — /reports/frequency-proposals"** ngay dưới. Endpoint đó đọc thẳng
+> **"Đề xuất tần suất chạy xe — /reports/frequency-proposals"**. Endpoint đó đọc thẳng
 > `peakHours` của mục này, không dựng lại nền tính.
+
+## Tỷ lệ lấp đầy — `/reports/fill-rate`
+
+> Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có (`FillRateReportController` — Nguyễn Duy Kiên,
+> task *"API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ"*, Sprint 4). Một lượt gọi trả
+> **ba cách nhìn trên cùng tập chuyến**: từng chuyến, gộp theo tuyến, gộp theo khung giờ khởi
+> hành — cộng dải số liệu tóm tắt cho màn hình "Thống kê tỷ lệ lấp đầy theo chuyến" (Dương Thị
+> Hạnh). Màn hình đó đang chạy dữ liệu giả trong `frontend/src/api/fillRateReportApi.ts`; endpoint
+> này là nguồn thật để nối vào.
+>
+> Khác **"Khung giờ cao điểm — /reports/peak-hours"** ở chỗ: báo cáo kia hỏi *"giờ nào đông khách
+> nhất"* với đơn vị khách/chuyến; báo cáo này hỏi *"chuyến/tuyến/khung giờ nào đầy bao nhiêu phần
+> trăm sức chứa"* — mẫu số là **ghế của xe**, đơn vị phần trăm.
+
+**Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (story 20 là nghiệp vụ của quản lý). Người đã
+đăng nhập nhưng không đủ quyền nhận **403** kèm body
+`{ "message": "Bạn không có quyền truy cập tính năng này." }`.
+
+#### `GET /reports/fill-rate` — tỷ lệ lấp đầy theo chuyến / tuyến / khung giờ
+
+Query — **mọi tham số bỏ trống được**:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch **Việt Nam**, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính chuyến thuộc tuyến này; bỏ trống = toàn công ty. Không tồn tại → **404** |
+| `timeSlot` | — | Chỉ tính chuyến khởi hành trong khung: `early` / `morning` / `afternoon` / `evening` / `night` (không phân biệt hoa/thường). Giá trị lạ → **400** `errors.timeSlot` |
+
+Năm khung giờ **theo giờ Việt Nam**, cận trên KHÔNG tính:
+
+| `timeSlot` | `fromHour` | `toHour` | Nhãn |
+|---|---|---|---|
+| `early` | 5 | 9 | Sáng sớm (5–9h) |
+| `morning` | 9 | 13 | Buổi sáng (9–13h) |
+| `afternoon` | 13 | 17 | Buổi chiều (13–17h) |
+| `evening` | 17 | 22 | Buổi tối (17–22h) |
+| `night` | 22 | 5 | Ban đêm (22–5h, **qua nửa đêm**) |
+
+`night` là khung duy nhất vắt qua nửa đêm — nó phủ 22:00–23:59 và 00:00–04:59 để **năm khung
+phủ trọn 24 giờ**. Nhờ vậy tổng của `timeSlots[]` luôn bằng `summary` (không có chuyến nào rơi
+ra ngoài báo cáo). Màn hình hiện tại chỉ có bốn lựa chọn đầu; `night` vẫn nhận làm tham số lọc và
+vẫn xuất hiện trong dải `timeSlots[]`.
+
+```json
+// GET /reports/fill-rate?from=2026-10-14&to=2026-10-14
+{
+  "from": "2026-10-14",
+  "to": "2026-10-14",
+  "summary": {
+    "totalTrips": 20,
+    "totalPassengers": 612,
+    "totalSeats": 900,
+    "averageFillRatePct": 68.0,
+    "fullTrips": 3,
+    "emptyTrips": 4
+  },
+  "trips": [
+    {
+      "tripId": "…",
+      "tripCode": "C01-0530",
+      "routeId": "…",
+      "routeCode": "01",
+      "routeName": "Bến Thành — Chợ Lớn",
+      "busId": "…",
+      "busPlate": "29B-123.45",
+      "capacity": 45,
+      "passengers": 32,
+      "departureTime": "2026-10-14T05:30:00+07:00",
+      "fillRatePct": 71.1
+    }
+  ],
+  "routes": [
+    {
+      "routeId": "…",
+      "routeCode": "01",
+      "routeName": "Bến Thành — Chợ Lớn",
+      "totalTrips": 8,
+      "totalPassengers": 290,
+      "totalSeats": 360,
+      "averageFillRatePct": 80.6,
+      "fullTrips": 2,
+      "emptyTrips": 0
+    }
+  ],
+  "timeSlots": [
+    {
+      "timeSlot": "early",
+      "fromHour": 5,
+      "toHour": 9,
+      "totalTrips": 4,
+      "totalPassengers": 150,
+      "totalSeats": 180,
+      "averageFillRatePct": 83.3,
+      "fullTrips": 2,
+      "emptyTrips": 0
+    }
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `from` / `to` | Khoảng ngày sau khi áp dụng mặc định (lịch Việt Nam) |
+| `summary.totalTrips` | Số chuyến khởi hành trong kỳ **sau khi lọc** — kể cả chuyến 0 khách |
+| `summary.totalPassengers` | Tổng vé `Paid` + `Used` của các chuyến đó (vé `Cancelled` bỏ) |
+| `summary.totalSeats` | Tổng sức chứa (`Buses.Capacity`) của các chuyến đó — mẫu số của tỷ lệ |
+| `summary.averageFillRatePct` | `totalPassengers / totalSeats × 100`, làm tròn **1 chữ số thập phân**; 0 khi `totalSeats` = 0 |
+| `summary.fullTrips` | Số chuyến có `fillRatePct` ≥ **80** ("đầy") |
+| `summary.emptyTrips` | Số chuyến có `fillRatePct` < **50** ("trống") |
+| `trips[]` | **Mọi** chuyến trong kỳ sau lọc, sắp theo `departureTime` tăng dần (hoà thì `tripId`) |
+| `trips[].tripId` | Khoá chuyến — dùng làm `rowKey` |
+| `trips[].tripCode` | Mã hiển thị `C{mã tuyến}-{HHmm}` — **chỉ để hiển thị**, không duy nhất giữa các ngày (`Trip` không có cột mã) |
+| `trips[].departureTime` | Giờ khởi hành dạng ISO 8601 **kèm offset `+07:00`** |
+| `trips[].capacity` / `passengers` | Sức chứa ghế của xe / số vé `Paid`+`Used` của chuyến |
+| `trips[].fillRatePct` | `passengers / capacity × 100`, làm tròn 1 chữ số; **0 khi `capacity` ≤ 0** (chia cho 0) |
+| `routes[]` | Gộp theo tuyến, sắp `routeCode` tăng dần (Ordinal); mỗi tuyến có ít nhất một chuyến trong kỳ sau lọc |
+| `routes[].averageFillRatePct` | Trung bình **có trọng số** của tuyến = `totalPassengers / totalSeats × 100`, làm tròn 1 chữ số |
+| `timeSlots[]` | **Đủ năm khung** theo thứ tự `early`, `morning`, `afternoon`, `evening`, `night`; khung rỗng vẫn hiện với số 0 |
+| `timeSlots[].timeSlot` / `fromHour` / `toHour` | Mã khung + biên giờ (xem bảng trên) |
+
+- **Nền số liệu là bảng `Trips` (khởi hành trong kỳ) + bảng `Tickets` (chỉ `Paid`/`Used`).**
+  Mỗi chuyến đều có dòng trong `trips[]` — kể cả chuyến bán được **0 vé**: đó chính là "chuyến
+  trống" mà quản lý cần thấy. Vé `Cancelled` không chiếm ghế, bỏ khỏi tử số.
+- **Tỷ lệ lấp đầy = số ghế đã bán / sức chứa của xe, đơn vị phần trăm.** Không chặn ở 100: dữ
+  liệu bán vượt sức chứa (nếu có) phải lộ ra, không bị báo cáo che mất. Tỷ lệ của một chuyến
+  làm tròn 1 chữ số thập phân, `MidpointRounding.AwayFromZero`.
+- **`fullTrips`/`emptyTrips` so trên `fillRatePct` ĐÃ LÀM TRÒN** — đúng con số hiển thị, người
+  đọc tự kiểm lại được. Ngưỡng: đầy ≥ 80, trống < 50; khoảng 50–79 là bình thường.
+- **Trung bình là có trọng số theo sức chứa**, không phải trung bình cộng tỷ lệ từng chuyến:
+  một chuyến 45 ghế và một chuyến 50 ghế không cùng trọng lượng. Nhờ vậy
+  `summary.averageFillRatePct` đúng bằng "tổng khách / tổng ghế".
+- **Đẳng thức kiểm chéo**: cộng `totalTrips`/`totalPassengers`/`totalSeats` của mọi dòng
+  `routes[]` phải bằng `summary`; tương tự với `timeSlots[]` (năm khung phủ trọn 24 giờ).
+- Khung giờ = **giờ khởi hành theo giờ Việt Nam (UTC+7)**, không phải giờ bán vé. Chuyến 00:30
+  giờ VN thuộc khung `night` của NGÀY HÔM ĐÓ (lọc theo ngày khởi hành, không theo ngày mua).
+- **Chuyến đã huỷ (`Trips.Status = Cancelled`) vẫn tính** nếu có trong kỳ — cùng chốt đang dùng
+  của báo cáo khung giờ cao điểm (docs/38 §5), chờ nhóm chốt khi luồng huỷ chuyến có dữ liệu thật.
+  Vé của chuyến huỷ thường đã thành `Cancelled` nên không vào tử số.
+- Khoảng `from` → `to` tối đa **366 ngày** · `to` trước `from` → **400**, lỗi gắn ở cả
+  `errors.from` lẫn `errors.to` · `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`
+  · `timeSlot` lạ → **400** `errors.timeSlot`.
+- **Không đệm** — mỗi lượt gọi đọc CSDL tươi (báo cáo vận hành, số liệu vừa bán vé phải thấy
+  ngay).
 
 ## Đề xuất tần suất chạy xe — `/reports/frequency-proposals`
 

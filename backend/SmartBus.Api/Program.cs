@@ -487,6 +487,14 @@ builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>(
 // phải bucket thời gian, nên không dùng chung khoá đệm của RevenueReportCache.
 builder.Services.AddScoped<IRevenueBreakdownService, RevenueBreakdownService>();
 
+// Tỷ lệ lấp đầy theo chuyến / tuyến / khung giờ: GET /api/reports/fill-rate (US 20 "Tỷ lệ lấp
+// đầy", Sprint 4). Task "API thống kê tỷ lệ lấp đầy theo chuyến, tuyến, khung giờ" — Nguyễn Duy
+// Kiên. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cùng nền Trips + vé Paid/Used + trục giờ Việt Nam với báo cáo khung giờ cao điểm, nhưng mẫu số
+// là sức chứa của xe (Buses.Capacity) chứ không phải số chuyến; một endpoint trả cả ba cách nhìn
+// nên không tái dùng IPeakHoursReportService. Không đệm, không migration.
+builder.Services.AddScoped<IFillRateReportService, FillRateReportService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
