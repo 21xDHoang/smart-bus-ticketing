@@ -399,6 +399,9 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         [typeof(SeatHoldExpiryBackgroundService)] = typeof(NoopSeatHoldExpiryJob),
         [typeof(SeatHoldAbuseBackgroundService)] = typeof(NoopSeatHoldAbuseJob),
         [typeof(RefundRetryBackgroundService)] = typeof(NoopRefundRetryJob),
+        // Job đối soát thanh toán (story 6, Trần Trung Hiếu — nợ Sprint 3): cùng lý do các dòng
+        // trên — job thật chạy trong host test sẽ quét và sửa Payments giữa lúc test đang seed.
+        [typeof(PaymentReconciliationBackgroundService)] = typeof(NoopPaymentReconciliationJob),
         [typeof(RefundReconciliationBackgroundService)] = typeof(NoopRefundReconciliationJob),
         [typeof(ExportJobBackgroundService)] = typeof(NoopExportJobJob),
     };
@@ -488,6 +491,18 @@ internal sealed class TestAppFactory : WebApplicationFactory<Program>
         public NoopRefundRetryJob(
             IServiceScopeFactory scopeFactory,
             ILogger<RefundRetryBackgroundService> logger)
+            : base(scopeFactory, logger)
+        {
+        }
+
+        protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.CompletedTask;
+    }
+
+    private sealed class NoopPaymentReconciliationJob : PaymentReconciliationBackgroundService
+    {
+        public NoopPaymentReconciliationJob(
+            IServiceScopeFactory scopeFactory,
+            ILogger<PaymentReconciliationBackgroundService> logger)
             : base(scopeFactory, logger)
         {
         }

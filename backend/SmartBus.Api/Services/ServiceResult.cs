@@ -65,4 +65,13 @@ public class ServiceResult<T>
 
     public static ServiceResult<T> Conflict(string error)
         => new(false, default, error, ServiceErrorKind.Conflict, null);
+
+    /// <summary>
+    /// Xung đột kèm lỗi theo trường — dùng cho các 409 mà frontend cần gắn lỗi vào ô input, ví dụ
+    /// voucher không dùng được ở POST /payments (409 theo trường voucherCode — mục "Thanh toán" của
+    /// docs/api-contract.md). Cùng hình dạng <see cref="Invalid(string, IReadOnlyDictionary{string, string[]})"/>.
+    /// (Thêm ở task "Tạo giao dịch + gọi cổng" — Hiếu; file của Hoàng nên nhờ Hoàng xem qua trong PR.)
+    /// </summary>
+    public static ServiceResult<T> Conflict(string error, IReadOnlyDictionary<string, string[]> errors)
+        => new(false, default, error, ServiceErrorKind.Conflict, errors);
 }

@@ -252,6 +252,18 @@ public class AuditLogCoverageTests
         ("PATCH",  "/api/cancellation-requests/{id:guid}",       CachGhi.Middleware),
         ("PATCH",  "/api/ticket-changes/{id:guid}",              CachGhi.Middleware),
 
+        // Thanh toán — story 6, Trần Trung Hiếu (nợ Sprint 3). Ba endpoint đều do AuditLogMiddleware
+        // tự ghi (POST → Create). POST /payments: tên bảng suy từ đoạn tĩnh cuối là "Payments"; response
+        // không có trường "id" ở nóc (khoá là paymentCode) nên Target chỉ là "Payments" — giới hạn đã
+        // biết của CreatedIdFromResponse. Hai callback: route không có tham số {id} nên tên bảng suy
+        // ra là "Callback" (không ứng bảng nào) — đánh đổi đã biết, cùng nhóm giới hạn với các
+        // endpoint hành động con của /seat-holds; dòng nhật ký chỉ chứng minh "cổng đã gọi callback
+        // lúc nào" và UserId null vì cổng không mang token. Callback VNPay (GET) là task của Kiên,
+        // không có ở nhánh này.
+        ("POST",   "/api/payments",                               CachGhi.Middleware),
+        ("POST",   "/api/payments/momo/callback",                 CachGhi.Middleware),
+        ("POST",   "/api/payments/zalopay/callback",              CachGhi.Middleware),
+
         // Đăng ký / huỷ theo dõi thông báo — story 10, Trần Trung Hiếu (Sprint 5 dòng 17). Hai
         // endpoint đều do AuditLogMiddleware tự ghi (POST → Create, DELETE → Delete); tên bảng suy
         // ra là "Subscriptions" — POST không có tham số nào nên lấy đoạn tĩnh cuối, DELETE lấy đoạn
