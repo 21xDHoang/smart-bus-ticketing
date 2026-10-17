@@ -48,6 +48,7 @@ import TicketValidationStatsPage from './pages/TicketValidationStatsPage';
 import RevenueByRoutePage from './pages/RevenueByRoutePage';
 import NotificationsPage from './pages/NotificationsPage';
 import NotificationDetailPage from './pages/NotificationDetailPage';
+import NotificationSettingsPage from './pages/NotificationSettingsPage';
 import ReportTemplateConfigPage from './pages/ReportTemplateConfigPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
@@ -479,6 +480,12 @@ function App() {
               {/* /notifications/:id là màn hình chi tiết thông báo — đọc thẳng từ dòng đã tải về,
                   không có endpoint GET /notifications/{id} (api-contract.md mục /notifications). */}
               <Route path="/notifications/:id" element={<NotificationDetailPage />} />
+              {/* /notification-settings là màn Cài đặt thông báo Web Push (US 10, Sprint 4 dòng 42,
+                  task của Trần Trung Hiếu): bật/tắt nhận thông báo trên trình duyệt, xem các thiết
+                  bị đã đăng ký và gửi tin thử. Mọi người đã đăng nhập đều dùng được. Dòng route
+                  này do Trần Trung Hiếu thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng
+                  chung §E1 (của Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route path="/notification-settings" element={<NotificationSettingsPage />} />
               {/* /notification-templates là màn hình Admin quản lý mẫu thông báo (US 10, Sprint 5,
                   dòng 24, task của Dương Thị Hạnh) — soạn câu chữ cho từng loại thông báo; mẫu là
                   phần GHI ĐÈ câu mặc định (docs/37 §2.1), loại chưa soạn hoặc đang tắt vẫn gửi bằng

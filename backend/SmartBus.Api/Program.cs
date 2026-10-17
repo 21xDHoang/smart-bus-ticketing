@@ -27,6 +27,10 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     ChuoiKetNoiCsdl.KiemTra(builder.Configuration.GetConnectionString("Default"));
+
+    // Thiếu khoá VAPID thì bề mặt Web Push hỏng tận lúc khách bấm "Bật thông báo" — báo ngay ở
+    // đây thay vì để lỗi nổ xa chỗ khai báo (docs/54 §2). Cùng lối kiểm tra chuỗi kết nối ở trên.
+    WebPushOptions.KiemTra(builder.Configuration.GetSection(WebPushOptions.SectionName));
 }
 
 // Cấu hình JWT — xem appsettings.Development.json.example
@@ -874,6 +878,27 @@ builder.Services.AddHostedService<ExportJobBackgroundService>();
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh khác đang thêm dòng.
 builder.Services.AddScoped<IDiscountRequestStatisticsService, DiscountRequestStatisticsService>();
+
+// Web Push (PWA) — thông báo trình duyệt khi tab đã đóng: kho thiết bị + client gửi tin + service
+// đăng ký thiết bị. Task "Tích hợp Web Push (PWA) để nhận thông báo trên trình duyệt" (US 10
+// "Thông báo trạm", Sprint 4 dòng 42) — Trần Trung Hiếu. File này của Hoàng nên nhờ Hoàng xem qua
+// trong PR.
+// Khoá VAPID KHÔNG có giá trị mặc định trong code (luật 2 — repo PUBLIC): đặt qua dotnet
+// user-secrets hoặc biến môi trường WebPush__PublicKey/WebPush__PrivateKey; mục "WebPush" trong
+// appsettings.Development.json.example chỉ là khuôn để điền, cách sinh khoá ở docs/54 §2.
+// Store thiết bị đăng ký là bản TRONG BỘ NHỚ vì chưa có bảng thiết bị push (migration của Dăm) —
+// khi có bảng, đổi đúng dòng AddSingleton<IWebPushSubscriptionStore> này sang bản EF, cùng lối
+// IRefundStatementSource đổi nguồn thật (docs/54 §6).
+// WebPushClient đăng ký qua AddHttpClient (transient) như các client cổng thanh toán; AddScoped
+// cho interface để controller/service nghiệp vụ chỉ cần biết IWebPushDeviceService/IWebPushSender.
+// AddSingleton cho store vì nó là chỗ dùng chung duy nhất giữa mọi request gửi tin.
+// Đặt ở CUỐI danh sách đăng ký (trước phần hạ tầng JWT/RBAC/CORS) để không chèn vào đúng khe mà
+// các nhánh khác đang thêm dòng.
+builder.Services.Configure<WebPushOptions>(builder.Configuration.GetSection(WebPushOptions.SectionName));
+builder.Services.AddSingleton<IWebPushSubscriptionStore, InMemoryWebPushSubscriptionStore>();
+builder.Services.AddHttpClient<WebPushClient>();
+builder.Services.AddScoped<IWebPushSender, WebPushSender>();
+builder.Services.AddScoped<IWebPushDeviceService, WebPushDeviceService>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);

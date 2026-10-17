@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "Smart Bus Ticket — Đặt vé xe buýt",
+  "short_name": "Smart Bus",
+  "description": "Đặt vé xe buýt, tra cứu tuyến và nhận thông báo khi xe sắp đến trạm.",
+  "lang": "vi",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F6F8FB",
+  "theme_color": "#0B5FFF",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

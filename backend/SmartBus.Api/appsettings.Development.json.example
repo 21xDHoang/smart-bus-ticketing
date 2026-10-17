@@ -53,6 +53,13 @@
     "UseStartTls": true
   },
 
+  "WebPush": {
+    "//": "Web Push (PWA) — thông báo trình duyệt (US 10, Sprint 4 dòng 42). Cặp khoá VAPID định danh MÁY CHỦ gửi push; nhóm nên chọn MỘT cặp khoá dùng chung (sinh một lần, chia sẻ qua chat nhóm như chuỗi kết nối CSDL) — đổi khoá là mọi thiết bị đã đăng ký phải subscribe lại. KHÔNG commit giá trị thật lên repo public (luật 2) — nên đặt qua dotnet user-secrets hoặc biến môi trường (WebPush__PublicKey, WebPush__PrivateKey) thay vì để trong file này; để đây chỉ khi máy local riêng. Cách sinh khoá: docs/54-tich-hop-web-push-pwa.md §2. Định dạng: PublicKey = điểm P-256 uncompressed 65 byte base64url; PrivateKey = PKCS#8 DER base64url (đúng khuôn 'web-push' generateVAPIDKeys của Node).",
+    "Subject": "mailto:smartbus-ticketing@example.com",
+    "PublicKey": "DIEM_CONG_KHAI_VAPID_DAT_VAO_DAY",
+    "PrivateKey": "KHOA_RIENG_PKCS8_VAPID_DAT_VAO_DAY"
+  },
+
   "Logging": {
     "LogLevel": {
       "Default": "Information",

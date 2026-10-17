@@ -362,6 +362,7 @@ const SCREEN_TITLES: Record<string, string> = {
   '/payment': 'Thanh toán',
   '/payment-waiting': 'Chờ kết quả thanh toán',
   '/profile': 'Hồ sơ cá nhân',
+  '/notification-settings': 'Cài đặt thông báo',
 };
 
 /** nhãn + icon của một mục menu AntD. */

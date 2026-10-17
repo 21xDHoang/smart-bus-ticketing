@@ -44,8 +44,9 @@ function readDismissed(state: NotificationPermissionState): boolean {
  * cài đặt trang web, không gọi requestPermission lần nữa.
  *
  * Component KHÔNG tự đặt vào layout: `App.tsx`/`main.tsx` là file của Băng, phải nhờ chủ
- * file nhúng (docs/46 §4). Cũng KHÔNG gửi thông báo — việc đẩy tin vẫn là SignalR + bảng
- * Notifications (A8.5).
+ * file nhúng (docs/46 §4). Cũng KHÔNG gửi thông báo — việc đẩy tin trong ứng dụng vẫn là
+ * SignalR + bảng Notifications; Web Push (Sprint 4 dòng 42) là kênh phụ trợ riêng ở màn
+ * Cài đặt thông báo (docs/54).
  */
 export default function NotificationPermissionPrompt({
   onPermissionChange,
