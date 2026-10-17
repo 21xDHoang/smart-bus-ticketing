@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, TableOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import fareApi from '../api/fareApi';
 import { PASSENGER_TYPE_META, PASSENGER_TYPE_OPTIONS } from '../api/fareApi';
 import type { Fare, FarePayload, PassengerType, RouteOption } from '../api/fareApi';
 import FareFormModal from '../components/FareFormModal';
+import FareTableModal from '../components/FareTableModal';
+import type { FareTable } from '../api/fareTableApi';
 import { EmptyState, PageCard, PageHeader, StatusTag } from '../components/ui';
 import { formatDateTime, formatVnd } from '../components/ui/format';
 
@@ -21,6 +23,9 @@ export default function FareConfigPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Fare | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [tableModalOpen, setTableModalOpen] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   // Tải danh sách tuyến cho ô chọn, tự chọn tuyến đầu tiên khi mở trang.
   const loadRoutes = useCallback(async () => {
@@ -66,6 +71,10 @@ export default function FareConfigPage() {
   const existingTypes = fares.map((fare) => fare.passengerType);
   const allConfigured = existingTypes.length === PASSENGER_TYPE_OPTIONS.length;
 
+  // Nhãn tuyến đang chọn để hiển thị trong modal bảng giá mẫu.
+  const selectedRoute = routes.find((route) => route.id === selectedRouteId);
+  const selectedRouteLabel = selectedRoute ? `${selectedRoute.code} — ${selectedRoute.name}` : null;
+
   const openCreate = () => {
     setEditing(null);
     setModalOpen(true);
@@ -104,6 +113,32 @@ export default function FareConfigPage() {
       await loadFares();
     } catch (error) {
       message.error((error as Error).message || 'Xoá thất bại.');
+    }
+  };
+
+  // Áp bảng giá mẫu vào tuyến đang chọn — gọi từng endpoint sẵn có của FaresController:
+  // đối tượng đã có giá thì sửa, chưa có thì thêm. Làm xong nạp lại bảng giá của tuyến.
+  const applyFareTable = async (table: FareTable) => {
+    if (!selectedRouteId) return;
+    setApplying(true);
+    try {
+      for (const option of PASSENGER_TYPE_OPTIONS) {
+        const type = option.value;
+        const price = table.prices[type];
+        const existing = fares.find((fare) => fare.passengerType === type);
+        if (existing) {
+          await fareApi.update(selectedRouteId, existing.id, { price });
+        } else {
+          await fareApi.create(selectedRouteId, { passengerType: type, price });
+        }
+      }
+      message.success(`Đã áp bảng giá “${table.name}” cho tuyến.`);
+      setTableModalOpen(false);
+      await loadFares();
+    } catch (error) {
+      message.error((error as Error).message || 'Áp bảng giá thất bại.');
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -186,6 +221,9 @@ export default function FareConfigPage() {
             <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
               Làm mới
             </Button>
+            <Button icon={<TableOutlined />} onClick={() => setTableModalOpen(true)}>
+              Bảng giá mẫu
+            </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -220,6 +258,14 @@ export default function FareConfigPage() {
         submitting={submitting}
         onCancel={() => setModalOpen(false)}
         onSubmit={handleSubmit}
+      />
+
+      <FareTableModal
+        open={tableModalOpen}
+        routeLabel={selectedRouteLabel}
+        applying={applying}
+        onCancel={() => setTableModalOpen(false)}
+        onApply={(table) => void applyFareTable(table)}
       />
     </div>
   );
