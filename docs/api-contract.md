@@ -4658,6 +4658,11 @@ Query — **mọi tham số bỏ trống được**:
 - Khoảng `from` → `to` tối đa **366 ngày** (trọn một năm) · `to` trước `from` → **400** — lỗi gắn
   ở cả `errors.from` lẫn `errors.to` · `granularity` lạ → **400** `errors.granularity` ·
   `routeId` không tồn tại → **404** `Không tìm thấy tuyến đường`.
+- **Kết quả được đệm trong bộ nhớ — cũ tối đa 60 giây** (task *"Cache kết quả báo cáo theo kỳ để
+  tăng tốc"* — Sprint 5 dòng 43). Cùng bộ tham số (`granularity` + `from` + `to` + `routeId`) trả
+  lại kết quả đã đệm, nên một giao dịch `Success` vừa ghi có thể xuất hiện chậm tới 60 giây.
+  Khoá khác (đổi bất kỳ tham số nào, kể cả ngày mặc định sang ngày mới) đọc tươi. **Lỗi `400`/`404`
+  không bao giờ vào đệm** — tuyến vừa tạo phải tra được ngay ở lượt kế tiếp.
 
 #### `GET /reports/revenue/comparison` — so sánh kỳ hiện tại với kỳ liền trước
 

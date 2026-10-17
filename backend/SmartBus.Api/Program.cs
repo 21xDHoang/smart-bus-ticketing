@@ -455,6 +455,20 @@ builder.Services.AddScoped<IVoucherAdminService, VoucherAdminService>();
 // Đặt sau khối voucher vì cùng nhóm "đọc tổng hợp từ bảng đã có" — báo cáo không ghi dữ liệu.
 builder.Services.AddScoped<IRevenueReportService, RevenueReportService>();
 
+// Đệm kết quả báo cáo theo kỳ: GET /api/reports/revenue (US 19 "Doanh thu", Sprint 5 dòng 43).
+// Task "Cache kết quả báo cáo theo kỳ để tăng tốc" — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Không sửa RevenueReportService (file của Hiếu — quy ước E1): bọc bằng
+// CachedRevenueReportService, cùng lối CachedTripSearchService bọc TripSearchService ở trên.
+// DI lấy bản đăng ký SAU CÙNG nên ba dòng dưới đây phải nằm ngay sau dòng của Hiếu — ai đăng ký
+// thêm IRevenueReportService ở dưới nữa thì bản có đệm bị thay thế im lặng. RevenueComparisonService
+// (đăng ký ngay sau) cũng gọi IRevenueReportService nên được hưởng đệm mà không phải sửa gì.
+builder.Services.AddScoped<RevenueReportService>();
+builder.Services.AddSingleton<IRevenueReportCache, RevenueReportCache>();
+builder.Services.AddScoped<IRevenueReportService>(provider => new CachedRevenueReportService(
+    provider.GetRequiredService<RevenueReportService>(),
+    provider.GetRequiredService<IRevenueReportCache>()));
+
 // So sánh doanh thu kỳ hiện tại với kỳ liền trước cùng độ dài: GET /api/reports/revenue/comparison
 // (US 19 "Doanh thu", Sprint 4). Task "API so sánh doanh thu giữa các kỳ (tăng/giảm %)" —
 // Phùng Duy Hoàng. Cùng bề mặt /reports/revenue với báo cáo của Hiếu nhưng controller riêng
