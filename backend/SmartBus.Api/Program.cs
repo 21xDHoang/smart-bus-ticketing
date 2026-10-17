@@ -455,6 +455,15 @@ builder.Services.AddScoped<IVoucherAdminService, VoucherAdminService>();
 // Đặt sau khối voucher vì cùng nhóm "đọc tổng hợp từ bảng đã có" — báo cáo không ghi dữ liệu.
 builder.Services.AddScoped<IRevenueReportService, RevenueReportService>();
 
+// So sánh doanh thu kỳ hiện tại với kỳ liền trước cùng độ dài: GET /api/reports/revenue/comparison
+// (US 19 "Doanh thu", Sprint 4). Task "API so sánh doanh thu giữa các kỳ (tăng/giảm %)" —
+// Phùng Duy Hoàng. Cùng bề mặt /reports/revenue với báo cáo của Hiếu nhưng controller riêng
+// (RevenueComparisonController) — mỗi task một controller.
+// Service KHÔNG tự truy vấn Payments: gọi IRevenueReportService hai lần (kỳ hiện tại + kỳ trước)
+// để hai endpoint dùng chung đúng một nguồn số. Đặt ngay sau báo cáo gốc vì phụ thuộc trực tiếp
+// vào nó — nhìn danh sách đăng ký là thấy quan hệ.
+builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
