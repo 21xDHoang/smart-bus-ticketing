@@ -36,6 +36,7 @@ public partial class AppDbContext : DbContext
         ConfigureInvoice(modelBuilder);
         ConfigureRefund(modelBuilder);
         ConfigureExportJob(modelBuilder);
+        ConfigureTripStopTime(modelBuilder);
     }
 
     partial void ConfigureAuth(ModelBuilder modelBuilder);
@@ -147,4 +148,8 @@ public partial class AppDbContext : DbContext
     // xuất file lớn bất đồng bộ + thông báo khi xong"* (Vàng Thị Dăm). Bảng chỉ giữ yêu cầu + file
     // đã dựng, không sở hữu dữ liệu báo cáo. Xem AppDbContext.ExportJob.cs.
     partial void ConfigureExportJob(ModelBuilder modelBuilder);
+
+    // Giờ đến từng trạm (TripStopTimeOverrides): chỉ giữ mốc ghi đè của trạm trung gian —
+    // giờ dự kiến suy ra từ RouteStops.DistanceKm khi đọc. Xem docs/api-contract.md.
+    partial void ConfigureTripStopTime(ModelBuilder modelBuilder);
 }

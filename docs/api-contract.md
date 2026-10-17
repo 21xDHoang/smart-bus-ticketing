@@ -2937,6 +2937,8 @@ mục "Chuyến xe — `/trips`" phía trên.
 | DELETE | `/routes/{routeId}/trips/{id}` | **Huỷ chuyến** — chuyển về `Cancelled` | — | `Trip` |
 | POST | `/routes/{routeId}/trips/generate` | **Sinh chuyến hàng loạt** theo tần suất (quy ước A8.3) | `GenerateTrips` | `GenerateTripsResponse` |
 | PATCH | `/routes/{routeId}/trips/driver-assignment` | **Gán một tài xế cho nhiều chuyến** cùng lúc (màn hình "Phân công điều xe") | `AssignDriverToTrips` | `DriverAssignmentResponse` |
+| GET | `/routes/{routeId}/trips/{id}/stop-times` | **Giờ đến từng trạm** của một chuyến — dự kiến từ km + giờ đã ghi đè | — | `TripStopTimesResponse` |
+| PUT | `/routes/{routeId}/trips/{id}/stop-times` | **Ghi đè giờ các trạm trung gian** — thay thế toàn phần | `UpdateTripStopTimes` | `TripStopTimesResponse` |
 
 #### `GET /routes/{routeId}/trips`
 
@@ -3071,6 +3073,14 @@ Trả **200** kèm danh sách chuyến **vừa sinh** (không gồm chuyến cũ
   hoặc tăng tần suất. Lịch trình nhiều ngày thì tách thành nhiều lần gọi, mỗi lần một ngày.
 - Thao tác là **nguyên tử**: một chuyến trong dải bị trùng khung giờ thì **không chuyến nào**
   được tạo — không bao giờ sinh lịch trình dở dang.
+- Mỗi chuyến vừa sinh được điền sẵn `arrivalTime` **ước lượng** = `departureTime` + thời gian chạy
+  tính theo `distanceKm` của tuyến: tốc độ bình quân **25 km/h**, làm tròn **lên** bội số 5 phút,
+  tối thiểu **15 phút** (cùng công thức với seeder mẫu). Đây là giờ dự kiến để lập lịch và hiển thị,
+  không phải giờ chạy thực tế — chốt lại bằng `PUT /routes/{routeId}/trips/{id}`. Chuyến sinh
+  **trước** khi có ước lượng này vẫn để `arrivalTime = null` cho tới khi sửa tay.
+- Vì khung giờ kiểm tra trùng là `[departureTime, arrivalTime]`, giờ đến nay có giá trị nên tần suất
+  **ngắn hơn thời gian chạy** có thể làm lần sinh sau trong cùng ngày bị **409** — đúng về mặt điều
+  độ (một xe không thể về bến kịp chuyến kế tiếp).
 - Lỗi thường gặp: tuyến không tồn tại → **404** · xe không tồn tại → **404** · xe không Active →
   **409** · `endTime` không sau `startTime` → **400** `errors.endTime` · `frequencyMinutes` ngoài
   khoảng 1..1440 → **400** `errors.frequencyMinutes` · trùng khung giờ với chuyến hiện có →
@@ -3207,6 +3217,143 @@ Mọi trường thời gian trong body (`departureTime`, `arrivalTime`, `startTi
 ISO 8601 **có kèm múi giờ** — ví dụ `2026-10-01T05:00:00+07:00` hoặc `...Z`. Server quy về UTC khi
 lưu (cột `timestamptz` — quy ước A3) và mọi trường thời gian trả về đều là UTC. Chuỗi không kèm
 múi giờ bị hiểu là giờ máy chủ — frontend luôn gửi kèm offset để không phụ thuộc vào máy chủ.
+
+### Giờ đến từng trạm — `/routes/{routeId}/trips/{id}/stop-times`
+
+Màn hình **Quản lý lịch trình** cần giờ đến của **mọi trạm** trên chuyến, không chỉ giờ đến bến
+cuối. Hai endpoint dưới đây dựng dòng thời gian đó từ dữ liệu đã có và cho phép quản trị viên
+**ghi đè giờ của từng trạm trung gian**.
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/routes/{routeId}/trips/{id}/stop-times` | Dòng thời gian các trạm của một chuyến (giờ dự kiến + giờ đã ghi đè) | — | `TripStopTimesResponse` |
+| PUT | `/routes/{routeId}/trips/{id}/stop-times` | Thay **toàn bộ** giờ ghi đè của các trạm trung gian | `UpdateTripStopTimes` | `TripStopTimesResponse` |
+
+#### Cách tính giờ dự kiến
+
+Giờ đến từng trạm **không lưu sẵn cho mọi chuyến** — nó suy ra mỗi lần đọc:
+
+1. **Trạm đầu** = `Trips.DepartureTime`.
+2. **Trạm cuối** = `Trips.ArrivalTime`. Nếu chuyến chưa có giờ đến (dữ liệu cũ) thì ước lượng
+   theo tổng km của tuyến bằng đúng công thức sinh chuyến — 25 km/h, làm tròn **lên** bội số
+   5 phút, tối thiểu 15 phút — và `arrivalTimeIsEstimated = true`.
+3. **Trạm trung gian** = `DepartureTime + round(km luỹ kế / tổng km × tổng số phút chạy)`, làm
+   tròn tới phút gần nhất. `km luỹ kế` cộng dồn `RouteStops.DistanceKm` (khoảng cách từ trạm liền
+   trước); trạm đầu luôn là 0.
+4. **Giờ ghi đè** (nếu có) thay cho giờ dự kiến ở trạm trung gian; `isManual = true` và
+   `derivedArrivalTime` vẫn trả giờ dự kiến để giao diện hiện được "khôi phục dự kiến".
+
+Thiếu dữ liệu khoảng cách (tuyến chưa nhập km, hoặc tổng km = 0): **không bịa giờ**. Các trạm
+trung gian trả `arrivalTime`/`derivedArrivalTime` là `null` và `hasDistanceData = false`; trạm
+đầu/cuối vẫn có mốc neo. Giờ ghi đè vẫn được lưu và hiển thị dù thiếu km.
+
+> **Vì sao không có bảng giờ cho mọi chuyến?** Một tuyến 10 trạm sinh 200 chuyến/ngày sẽ đẻ
+> 2.000 dòng mỗi ngày chỉ để lặp lại một phép chia. Bảng `TripStopTimeOverrides` chỉ giữ **ngoại
+> lệ** — đúng những trạm quản trị viên đã sửa tay — nên đọc nhanh, ghi ít, và khi tuyến đổi km
+> thì mọi chuyến chưa bị ghi đè tự cập nhật theo.
+
+#### `TripStopTimesResponse`
+
+```json
+{
+  "tripId": "6b3e8d12-0000-0000-0000-000000000000",
+  "routeId": "3f2a1b0c-0000-0000-0000-000000000000",
+  "departureTime": "2026-10-01T05:00:00Z",
+  "arrivalTime": "2026-10-01T06:20:00Z",
+  "arrivalTimeIsEstimated": false,
+  "hasDistanceData": true,
+  "totalDistanceKm": 33.00,
+  "stops": [
+    {
+      "stopId": "9a7c1e20-0000-0000-0000-000000000000",
+      "stopName": "Phường Tân Long",
+      "stopAddress": "TP. Thái Nguyên, Thái Nguyên",
+      "stopOrder": 1,
+      "distanceKm": 0,
+      "cumulativeDistanceKm": 0,
+      "arrivalTime": "2026-10-01T05:00:00Z",
+      "derivedArrivalTime": "2026-10-01T05:00:00Z",
+      "isManual": false,
+      "isFirst": true,
+      "isLast": false
+    },
+    {
+      "stopId": "8b6d0f31-0000-0000-0000-000000000000",
+      "stopName": "Dương Tự Minh",
+      "stopAddress": "TP. Thái Nguyên, Thái Nguyên",
+      "stopOrder": 2,
+      "distanceKm": 2.67,
+      "cumulativeDistanceKm": 2.67,
+      "arrivalTime": "2026-10-01T05:07:00Z",
+      "derivedArrivalTime": "2026-10-01T05:07:00Z",
+      "isManual": true,
+      "isFirst": false,
+      "isLast": false
+    }
+  ]
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `tripId`, `routeId` | GUID | Chuyến và tuyến đã kiểm tra khớp nhau |
+| `departureTime` | ISO 8601 UTC | Mốc neo trạm đầu |
+| `arrivalTime` | ISO 8601 UTC \| null | Giờ đến bến cuối **đang dùng** — giờ lưu của chuyến, hoặc ước lượng nếu chuyến chưa có. Null khi thiếu km để ước lượng |
+| `arrivalTimeIsEstimated` | boolean | `true` chỉ khi `arrivalTime` là số **ước lượng**, không phải giờ đã lưu trên chuyến |
+| `hasDistanceData` | boolean | `true` khi có ít nhất hai trạm và tổng km các đoạn > 0 — điều kiện để chia giờ trung gian |
+| `totalDistanceKm` | number | Tổng `RouteStops.DistanceKm`; 0 nếu chưa nhập |
+| `stops[]` | mảng | Xếp theo `stopOrder`, trạm đầu/cuối có `isFirst`/`isLast` |
+| `stops[].distanceKm` | number | Khoảng cách từ trạm liền trước; trạm đầu = 0 |
+| `stops[].cumulativeDistanceKm` | number | Cộng dồn từ trạm đầu |
+| `stops[].arrivalTime` | ISO 8601 UTC \| null | Giờ hiển thị: giờ ghi đè nếu có, ngược lại giờ dự kiến |
+| `stops[].derivedArrivalTime` | ISO 8601 UTC \| null | Giờ dự kiến trước khi ghi đè — dùng cho nút "khôi phục dự kiến" và tooltip |
+| `stops[].isManual` | boolean | `true` khi trạm trung gian có giờ ghi đè đang dùng |
+
+- Trạm đầu và trạm cuối **không bao giờ** `isManual` — hai mốc này sửa bằng
+  `PUT /routes/{routeId}/trips/{id}` (`departureTime` / `arrivalTime`), không sửa ở đây. Nhờ vậy
+  giờ đầu/cuối luôn khớp cột giờ của chuyến, không có hai nguồn sự thật.
+- Tuyến chưa gán trạm → `stops: []`, `hasDistanceData: false`, `totalDistanceKm: 0`. Tuyến có
+  một trạm → mảng một phần tử; chưa chia được giờ trung gian.
+- Chuyến không tồn tại **hoặc thuộc tuyến khác** → **404** (cùng lối `routeId` phải khớp).
+- Mọi vai trò đủ `Admin`/`Manager` đọc được; người khác **403**.
+
+#### `PUT /routes/{routeId}/trips/{id}/stop-times` — ghi đè giờ trạm trung gian
+
+Body là **thay thế toàn phần** danh sách ghi đè hiện có:
+
+```json
+// UpdateTripStopTimes — body
+{
+  "items": [
+    {
+      "stopId": "8b6d0f31-0000-0000-0000-000000000000",
+      "arrivalTime": "2026-10-01T12:14:00+07:00"
+    }
+  ]
+}
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `items` | ✅ | Mảng, **có thể rỗng** (= xoá mọi ghi đè). Không được trùng `stopId` |
+| `items[].stopId` | ✅ | GUID trạm **trung gian** của đúng tuyến này (không phải trạm đầu/cuối) |
+| `items[].arrivalTime` | ✅ | ISO 8601 có múi giờ. `null` = không ghi đè trạm đó (tương đương bỏ phần tử khỏi mảng) |
+
+- Chỉ trạm trung gian mới ghi đè được. Gửi trạm đầu/cuối → **400** `errors.items` kèm câu hướng
+  dẫn sửa giờ chuyến.
+- Mỗi mốc ghi đè phải **sau** giờ khởi hành và **trước** giờ đến bến cuối đang dùng (kể cả khi
+  giờ cuối là ước lượng). Các mốc phải **tăng dần** theo thứ tự trạm, so với cả mốc dự kiến lẫn
+  các mốc ghi đè khác. Vi phạm → **400** `errors.items`.
+- Thiếu km vẫn ghi đè được: khi đó chỉ kiểm tra so với mốc đầu/cuối và các mốc ghi đè khác.
+- Ghi đè **không đổi** `Trips.ArrivalTime` và **không phát thông báo** cho hành khách. Muốn đổi
+  giờ chạy thật của chuyến (và báo người đã mua vé) thì dùng `PUT /routes/{routeId}/trips/{id}`.
+- Chuyến đã `Cancelled` hoặc `Completed` → **409** — sửa giờ trạm của chuyến đã huỷ/đã chạy xong là
+  viết lại lịch sử. `GET` vẫn đọc được.
+- Trả **200** kèm `TripStopTimesResponse` **sau khi lưu**, cùng hình dạng với GET — giao diện cập
+  nhật thẳng, không phải gọi lại.
+- Ghi đè nằm ở bảng `TripStopTimeOverrides`, khoá duy nhất `(TripId, StopId)`. Xoá trạm khỏi
+  tuyến không xoá dòng ghi đè cũ (FK `Restrict` giữ trạm), nhưng GET bỏ qua mọi trạm không còn
+  trên tuyến.
 
 ## Vé tháng — `/monthly-passes`
 

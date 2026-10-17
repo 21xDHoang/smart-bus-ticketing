@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, InputNumber, Modal, Select, Spin, Typography, message } from 'antd';
-import { PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import { AimOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import RouteStopBoard from '../components/RouteStopBoard';
 import { EmptyState, FilterBar, LoadingState, PageCard, PageHeader } from '../components/ui';
 import {
@@ -17,6 +17,28 @@ import type { AppError } from '../api/axiosClient';
 
 const { Text } = Typography;
 
+const EARTH_RADIUS_KM = 6371;
+
+const roundKm = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Khoảng cách đường chim bay giữa hai trạm (km).
+ *
+ * Đây là giá trị ƯỚC LƯỢNG để gợi ý, không phải quãng đường xe chạy thật: đường bộ dài
+ * hơn đường chim bay. Vì vậy trang chuẩn hoá tổng các đoạn về đúng `Route.DistanceKm`
+ * rồi để quản lý soát lại trước khi lưu, chứ không ghi thẳng con số này xuống CSDL.
+ */
+const haversineKm = (from: RouteStop, to: RouteStop) => {
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const deltaLat = toRadians(to.latitude - from.latitude);
+  const deltaLng = toRadians(to.longitude - from.longitude);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(from.latitude)) * Math.cos(toRadians(to.latitude)) * Math.sin(deltaLng / 2) ** 2;
+
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+};
+
 /**
  * Gán trạm vào tuyến và sắp xếp thứ tự trạm (story 12).
  *
@@ -28,8 +50,13 @@ const { Text } = Typography;
  * định bằng `stopOrder` chứ không bằng khoảng cách toạ độ — xe đi và xe về trên cùng
  * tuyến trùng toạ độ. Sai thứ tự trạm là sai nghiệp vụ.
  *
- * Gỡ trạm gọi API ngay (không chờ Lưu), còn đổi THỨ TỰ thì phải bấm "Lưu thứ tự": thao
- * tác sắp xếp cần một lần gửi trọn vẹn cả danh sách, không phải từng dòng một.
+ * Gỡ trạm gọi API ngay (không chờ Lưu), còn đổi THỨ TỰ và KHOẢNG CÁCH thì phải bấm
+ * "Lưu thứ tự & khoảng cách": thao tác sắp xếp cần một lần gửi trọn vẹn cả danh sách,
+ * không phải từng dòng một.
+ *
+ * Khoảng cách từng đoạn là dữ liệu cho giờ đến dự kiến ở màn sinh chuyến: thiếu nó thì
+ * không chia được thời gian chạy cho các trạm. Trang có nút ước lượng từ toạ độ GPS,
+ * nhưng kết quả chỉ là gợi ý để soát — quản lý vẫn bấm Lưu mới ghi xuống CSDL.
  */
 const RouteStopsPage = () => {
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -50,14 +77,35 @@ const RouteStopsPage = () => {
   const [pendingDistanceKm, setPendingDistanceKm] = useState<number>();
   const [assigning, setAssigning] = useState(false);
 
-  // Thứ tự hiển thị khác thứ tự đã lưu hay chưa. So theo id từng vị trí: backend trả
-  // `stopOrder` mới sau khi lưu nên không thể so bằng chính trường đó.
+  // Danh sách hiển thị khác bản đã lưu hay chưa — so cả thứ tự (id từng vị trí) lẫn
+  // khoảng cách từng đoạn. Backend trả `stopOrder` mới sau khi lưu nên không so bằng
+  // chính trường đó.
   const isDirty = useMemo(
     () =>
       savedStops.length !== boardStops.length ||
-      savedStops.some((stop, index) => stop.id !== boardStops[index]?.id),
+      savedStops.some((stop, index) => {
+        const current = boardStops[index];
+        return (
+          !current ||
+          stop.id !== current.id ||
+          Math.abs((stop.distanceKm ?? 0) - (current.distanceKm ?? 0)) > 0.001
+        );
+      }),
     [savedStops, boardStops],
   );
+
+  const selectedRoute = useMemo(
+    () => routes.find((route) => route.id === selectedRouteId),
+    [routes, selectedRouteId],
+  );
+  const routeDistanceKm = selectedRoute?.distanceKm ?? 0;
+
+  // Tổng các đoạn đang nhập, để đối chiếu với chiều dài tuyến trước khi lưu.
+  const segmentTotalKm = useMemo(
+    () => roundKm(boardStops.reduce((sum, stop) => sum + (Number(stop.distanceKm) || 0), 0)),
+    [boardStops],
+  );
+  const totalMatchesRoute = routeDistanceKm <= 0 || Math.abs(segmentTotalKm - routeDistanceKm) <= 0.01;
 
   // Tải danh sách tuyến cho ô chọn, tự chọn tuyến đầu tiên khi mở trang.
   const loadRoutes = useCallback(async () => {
@@ -152,8 +200,9 @@ const RouteStopsPage = () => {
     }
 
     Modal.confirm({
-      title: 'Bỏ thay đổi thứ tự chưa lưu?',
-      content: 'Thứ tự trạm vừa sắp chưa được lưu. Đổi tuyến sẽ bỏ các thay đổi đó.',
+      title: 'Bỏ thay đổi chưa lưu?',
+      content:
+        'Thứ tự hoặc khoảng cách trạm vừa sửa chưa được lưu. Đổi tuyến sẽ bỏ các thay đổi đó.',
       okText: 'Bỏ thay đổi',
       cancelText: 'Ở lại',
       okButtonProps: { danger: true },
@@ -161,22 +210,126 @@ const RouteStopsPage = () => {
     });
   };
 
+  /**
+   * Đổi thứ tự trạm trên bảng.
+   *
+   * `DistanceKm` là khoảng cách của ĐOẠN ĐƯỜNG tại một vị trí, không bám theo trạm. Khi
+   * kéo trạm sang vị trí khác, giữ nguyên dãy số theo vị trí (trạm đầu = 0) thay vì di
+   * chuyển con số theo trạm — rồi nhắc quản lý kiểm tra/ước lượng lại. Tự tính lại ngay
+   * lúc kéo sẽ làm thay đổi thứ tự kéo theo thay đổi số liệu mà không ai chủ ý.
+   */
+  const handleReorder = (nextStops: RouteStop[]) => {
+    const distancesByPosition = boardStops.map((stop) => stop.distanceKm);
+
+    setBoardStops(
+      nextStops.map((stop, index) => ({
+        ...stop,
+        distanceKm: index === 0 ? 0 : (distancesByPosition[index] ?? 0),
+      })),
+    );
+
+    message.info(
+      'Đã đổi thứ tự trạm. Khoảng cách các đoạn chưa được tính lại — kiểm tra hoặc bấm "Ước lượng từ toạ độ".',
+    );
+  };
+
+  const handleDistanceChange = (stopId: string, distanceKm: number) => {
+    const normalized = roundKm(Math.max(0, distanceKm));
+
+    setBoardStops((current) =>
+      current.map((stop, index) =>
+        index > 0 && stop.id === stopId ? { ...stop, distanceKm: normalized } : stop,
+      ),
+    );
+  };
+
+  /**
+   * Ước lượng khoảng cách từng đoạn bằng toạ độ GPS của trạm.
+   *
+   * Đường chim bay ngắn hơn đường bộ, nên tổng thô được CHUẨN HOÁ về chiều dài tuyến
+   * (`Route.DistanceKm`) — giữ tương quan giữa các đoạn mà tổng vẫn khớp con số quản lý
+   * đã đặt. Kết quả chỉ đổ vào bảng để soát, KHÔNG tự lưu: quản lý vẫn là người bấm Lưu.
+   */
+  const handleEstimateDistances = () => {
+    if (boardStops.length < 2) {
+      message.info('Cần ít nhất hai trạm mới ước lượng được khoảng cách.');
+      return;
+    }
+
+    const rawSegments = boardStops.map((stop, index) =>
+      index === 0 ? 0 : haversineKm(boardStops[index - 1], stop),
+    );
+    const rawTotal = rawSegments.reduce((sum, km) => sum + km, 0);
+
+    if (!(rawTotal > 0)) {
+      message.warning('Các trạm đang trùng toạ độ — chưa ước lượng được khoảng cách.');
+      return;
+    }
+
+    const targetKm = routeDistanceKm > 0 ? routeDistanceKm : 0;
+    const factor = targetKm > 0 ? targetKm / rawTotal : 1;
+    const nextDistances = rawSegments.map((km, index) =>
+      index === 0 ? 0 : roundKm(km * factor),
+    );
+
+    // Dồn sai số làm tròn vào đoạn cuối để tổng khớp đúng chiều dài tuyến.
+    const desiredTotalKm = targetKm > 0 ? targetKm : roundKm(rawTotal);
+    const roundedTotalKm = roundKm(nextDistances.reduce((sum, km) => sum + km, 0));
+    const lastIndex = nextDistances.length - 1;
+    nextDistances[lastIndex] = roundKm(
+      Math.max(0, nextDistances[lastIndex] + (desiredTotalKm - roundedTotalKm)),
+    );
+
+    const seenDistances = boardStops.map((stop, index) => ({
+      stop,
+      distanceKm: nextDistances[index] ?? 0,
+    }));
+    const abnormalStops = seenDistances
+      .filter(
+        ({ distanceKm }, index) => index > 0 && targetKm > 0 && distanceKm > targetKm,
+      )
+      .map(({ stop }) => stop.stopName);
+
+    setBoardStops((current) =>
+      current.map((stop, index) => ({ ...stop, distanceKm: nextDistances[index] ?? 0 })),
+    );
+
+    if (targetKm <= 0) {
+      message.info(
+        `Tuyến chưa có chiều dài — đã ước lượng ${desiredTotalKm.toFixed(2)} km theo đường chim bay. Soát lại rồi bấm Lưu.`,
+      );
+    } else if (abnormalStops.length > 0) {
+      const names = abnormalStops.slice(0, 3).join(', ');
+      const more = abnormalStops.length > 3 ? '…' : '';
+      message.warning(
+        `Đã ước lượng ${targetKm.toFixed(2)} km, nhưng ${abnormalStops.length} đoạn dài hơn cả tuyến (${names}${more}) — kiểm tra lại toạ độ hoặc số km.`,
+      );
+    } else {
+      message.success(
+        `Đã ước lượng ${targetKm.toFixed(2)} km cho ${boardStops.length - 1} đoạn. Soát lại rồi bấm Lưu.`,
+      );
+    }
+  };
+
   const handleSave = async () => {
     if (!selectedRouteId) return;
 
     setSaving(true);
     try {
-      // Cố ý CHỈ gửi `stopId`, bỏ trống `distanceKm`: bỏ trống nghĩa là giữ nguyên khoảng
-      // cách đang có, còn gửi 0 là xoá sạch khoảng cách quản lý đã nhập
-      // (docs/api-contract.md, mục PUT /routes/{routeId}/stops/order).
+      // Gửi kèm `distanceKm` cho TỪNG dòng: bỏ trống nghĩa là giữ nguyên khoảng cách đang
+      // có (docs/api-contract.md, mục PUT /routes/{routeId}/stops/order), nên muốn lưu
+      // số vừa nhập/ước lượng thì phải gửi tường minh. Trạm đầu luôn 0.
       const updated = await reorderRouteStops(
         selectedRouteId,
-        boardStops.map((stop) => ({ stopId: stop.stopId })),
+        boardStops.map((stop, index) => ({
+          stopId: stop.stopId,
+          distanceKm: index === 0 ? 0 : stop.distanceKm,
+        })),
       );
 
       setSavedStops(updated);
       setBoardStops(updated);
-      message.success('Đã lưu thứ tự trạm.');
+      message.success('Đã lưu thứ tự và khoảng cách trạm.');
     } catch (error) {
       message.error((error as AppError).customMessage || 'Lưu thứ tự trạm thất bại.');
     } finally {
@@ -234,7 +387,7 @@ const RouteStopsPage = () => {
     <div>
       <PageHeader
         title="Gán trạm vào tuyến"
-        subtitle="Chọn tuyến, kéo-thả để sắp thứ tự xe chạy qua các trạm, rồi bấm Lưu thứ tự."
+        subtitle="Chọn tuyến, kéo-thả để sắp thứ tự, nhập khoảng cách từng đoạn (hoặc ước lượng từ toạ độ), rồi bấm Lưu."
       />
 
       <PageCard
@@ -264,8 +417,10 @@ const RouteStopsPage = () => {
           <FilterBar
             actions={
               <>
-                {isDirty && <Text type="warning">Lưu thứ tự trước khi gán thêm trạm.</Text>}
-                {/* Nút thường — cả màn chỉ giữ một primary là "Lưu thứ tự". */}
+                {isDirty && (
+                  <Text type="warning">Lưu thay đổi trước khi gán thêm trạm.</Text>
+                )}
+                {/* Nút thường — cả màn chỉ giữ một primary là "Lưu thứ tự & khoảng cách". */}
                 <Button
                   icon={<PlusOutlined />}
                   loading={assigning}
@@ -314,30 +469,57 @@ const RouteStopsPage = () => {
             <RouteStopBoard
               stops={boardStops}
               disabled={saving}
-              onReorder={setBoardStops}
+              onReorder={handleReorder}
               onRemove={handleRemove}
+              onDistanceChange={handleDistanceChange}
+              routeDistanceKm={routeDistanceKm > 0 ? routeDistanceKm : undefined}
             />
 
             {boardStops.length > 0 && (
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'flex-end',
+                  justifyContent: 'space-between',
                   alignItems: 'center',
                   gap: 12,
                   marginTop: 16,
+                  flexWrap: 'wrap',
                 }}
               >
-                {isDirty && <Text type="warning">Thứ tự vừa sắp chưa được lưu.</Text>}
-                <Button
-                  type="primary"
-                  icon={<SaveOutlined />}
-                  loading={saving}
-                  disabled={!isDirty}
-                  onClick={handleSave}
+                <Text type={totalMatchesRoute ? 'secondary' : 'warning'}>
+                  Tổng các đoạn: {segmentTotalKm.toFixed(2)} km
+                  {routeDistanceKm > 0
+                    ? ` / chiều dài tuyến: ${routeDistanceKm.toFixed(2)} km`
+                    : ' (tuyến chưa có chiều dài)'}
+                </Text>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                  }}
                 >
-                  Lưu thứ tự
-                </Button>
+                  {isDirty && <Text type="warning">Thay đổi chưa được lưu.</Text>}
+                  <Button
+                    icon={<AimOutlined />}
+                    disabled={saving || boardStops.length < 2}
+                    onClick={handleEstimateDistances}
+                  >
+                    Ước lượng từ toạ độ
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    loading={saving}
+                    disabled={!isDirty}
+                    onClick={handleSave}
+                  >
+                    Lưu thứ tự &amp; khoảng cách
+                  </Button>
+                </div>
               </div>
             )}
           </>
