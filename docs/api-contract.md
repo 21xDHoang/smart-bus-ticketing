@@ -6633,3 +6633,84 @@ báo của khách.
 | `CancellationRejected`, `TicketChangeRejected` | `{RejectReason}` — lý do từ chối do quản lý nhập |
 | `TripDelayed`, `TripScheduleChanged` | `{RouteName}`, `{OldDepartureTime}`, `{NewDepartureTime}`, `{OldArrivalTime}`, `{NewArrivalTime}` |
 | còn lại | *(không dùng chỗ trống nào — số tiền bị cấm trong nội dung thông báo)* |
+
+---
+
+## Hồ sơ ưu đãi — `/discount-requests`
+
+> Story 17 *"Vé tháng & Khuyến mãi — Duyệt đối tượng ưu đãi"*. Bảng `DiscountRequests` **đã có
+> migration từ Sprint 2** (`20260930095511_Sprint2_TripDriver_DiscountRequests`, Vàng Thị Dăm) —
+> bảng gộp thay cho `PriorityGroups` + `PriorityApprovals` của backlog, theo A9 #13.
+> Chi tiết CSDL: `docs/53-api-thong-ke-ho-so-uu-dai.md`.
+>
+> Mục này hiện chỉ chốt **một** endpoint đã làm: thống kê số lượng hồ sơ theo trạng thái (Sprint 4
+> dòng 55 — Vàng Thị Dăm). Hai endpoint còn lại của bề mặt **chưa dựng** và **chưa có hợp đồng**:
+> gửi hồ sơ + tải ảnh minh chứng (dòng 51 — Trần Trung Hiếu) và duyệt/từ chối hồ sơ (dòng 52 —
+> Nguyễn Duy Kiên). Người làm hai dòng đó sửa mục này trước khi code (⛔5).
+
+### `GET /discount-requests/statistics` — thống kê hồ sơ theo trạng thái
+
+| Method | Endpoint | Mô tả | Trả về |
+|---|---|---|---|
+| GET | `/discount-requests/statistics` | Số lượng hồ sơ ưu đãi theo từng trạng thái | `DiscountRequestStatistics` |
+
+Yêu cầu vai trò `Manager` hoặc `Admin` — cùng quyền với hai endpoint duyệt hồ sơ (dòng 51/52) mà
+bảng này phục vụ. Không đăng nhập → **401**; không đủ quyền → **403**. Endpoint **không có tham số
+nào**, nên không có nhánh 400/404: đúng quyền là luôn **200**, kể cả khi chưa có hồ sơ nào (mọi con
+đếm bằng 0).
+
+```json
+// DiscountRequestStatistics — ví dụ GET /discount-requests/statistics
+{
+  "total": 42,
+  "pending": 7,
+  "approved": 30,
+  "rejected": 5,
+  "approvedActive": 26,
+  "approvedExpired": 4
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `total` | number | Tổng số hồ sơ — mọi trạng thái, mọi đối tượng ưu đãi |
+| `pending` | number | Hồ sơ đang chờ HR/Quản lý duyệt |
+| `approved` | number | Hồ sơ **đã duyệt** — gồm cả hồ sơ đã hết hạn. Đây là số theo trạng thái lưu trữ |
+| `rejected` | number | Hồ sơ bị từ chối. Giữ bản ghi làm lịch sử nên vẫn đếm |
+| `approvedActive` | number | Hồ sơ đã duyệt và **còn hiệu lực**: `expiresAt` null **hoặc** `expiresAt > now` |
+| `approvedExpired` | number | Hồ sơ đã duyệt nhưng `expiresAt <= now`. **Tập con của `approved`** |
+
+Hai đẳng thức luôn đúng — màn hình được phép dựa vào, test khoá lại:
+
+```
+total    == pending + approved + rejected
+approved == approvedActive + approvedExpired
+```
+
+> 📌 **Vì sao có thêm `approvedActive` / `approvedExpired` chứ không chỉ ba trạng thái.** Bảng
+> **không lưu** trạng thái `Expired` (xem XML doc `DiscountRequestStatus`): hết hạn **suy ra** từ
+> `ExpiresAt < now`. Nhưng màn hình HR và service áp giá cần đúng câu *"bao nhiêu người **đang** được
+> hưởng ưu đãi"* — chỉ đếm `approved` thì một hồ sơ hết hạn từ năm ngoái vẫn nằm trong số "đang
+> hiệu lực". Hai trường này trả lời câu đó mà không phải thêm trạng thái lưu trữ (thêm `Expired` là
+> đẻ hai nguồn sự thật, xem ghi chú ở enum).
+
+> 📌 **`expiresAt` null = CÒN HIỆU LỰC.** Entity ghi rõ: người cao tuổi không có thẻ hết hạn, và job
+> nhắc hết hạn chỉ áp dụng cho học sinh/sinh viên. Đọc null thành "hết hạn" sẽ làm mọi ưu đãi người
+> cao tuổi biến mất khỏi số đang hiệu lực — màn hình không tự phát hiện được lỗi này.
+
+> 📌 **Chỉ hồ sơ `Approved` mới vào `approvedExpired`.** Hồ sơ `Pending`/`Rejected` cũng có thể có
+> `expiresAt` (dữ liệu cũ, hoặc nhập nhầm lúc tạo); chúng không phải "đã duyệt và hết hạn".
+
+> 📌 **Bốn con số trạng thái đến từ bốn truy vấn đếm ĐỘC LẬP.** Không con nào cộng lại từ con khác,
+> nên đẳng thức thứ nhất là phép kiểm thật: quên một trạng thái là test đỏ ngay. Cùng lối đã dùng
+> cho `GET /vouchers/statistics` và thống kê phản ánh.
+
+**Cố ý CHƯA có:** lọc theo khoảng thời gian, theo đối tượng ưu đãi (`passengerType`), hay phân
+trang. Task chỉ hỏi *"số lượng hồ sơ theo trạng thái"*; thêm tham số hay thêm trường là **đổi hình
+dạng API** — phải bàn ở nhóm rồi sửa mục này trước khi code (⛔5).
+
+**Sắp xếp:** không áp dụng — response là một object, không phải mảng.
+
+> ⚠️ **Bề mặt này đã có một đoạn literal `statistics`.** Khi dựng `GET /discount-requests/{id}` cho
+> màn hình duyệt (dòng 52), route chi tiết **PHẢI** giữ ràng buộc `{id:guid}` — nới thành `{id}`
+> trần là `statistics` bị route chi tiết nuốt mất, cùng lối `export` của `/audit-logs/export`.
