@@ -49,7 +49,6 @@ export default function FareTemplateEditor() {
   const columns: TableProps<PassengerType>['columns'] = [
     {
       title: 'Đối tượng',
-      dataIndex: 'type',
       key: 'type',
       render: (type: PassengerType) => {
         const meta = PASSENGER_TYPE_META[type];

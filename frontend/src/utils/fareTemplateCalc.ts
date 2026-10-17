@@ -19,6 +19,7 @@ export interface FareDiscount {
  * Kết quả không bao giờ âm (giá trị ưu đãi vượt quá giá gốc thì coi như 0).
  */
 export function applyDiscount(basePricePerKm: number, discount: FareDiscount): number {
+  if (!Number.isFinite(basePricePerKm) || !Number.isFinite(discount.value)) return 0;
   if (discount.kind === 'percent') {
     return Math.max(0, basePricePerKm * (1 - discount.value / 100));
   }
@@ -28,7 +29,9 @@ export function applyDiscount(basePricePerKm: number, discount: FareDiscount): n
 /**
  * Giá vé một tuyến = giá/km sau ưu đãi × số km tuyến, làm tròn về đồng nguyên.
  * Dự án chưa có quy ước làm tròn bội số 500đ nên chỉ làm tròn về đồng (Math.round).
+ * Số km thiếu/không hợp lệ (undefined → NaN) thì trả 0 thay vì lan truyền NaN ra màn hình.
  */
 export function routeFare(pricePerKm: number, distanceKm: number): number {
+  if (!Number.isFinite(pricePerKm) || !Number.isFinite(distanceKm)) return 0;
   return Math.round(pricePerKm * distanceKm);
 }

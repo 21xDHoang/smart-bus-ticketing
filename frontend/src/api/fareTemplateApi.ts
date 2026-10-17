@@ -33,11 +33,42 @@ export const DEFAULT_FARE_TEMPLATE: PerKmFareTemplate = {
   },
 };
 
-/** Đọc bảng giá mẫu đã lưu; chưa có hoặc dữ liệu hỏng thì trả về bảng mặc định. */
+/** Chuẩn hoá một ưu đãi đọc từ localStorage — sai kiểu/thiếu trường thì rơi về `fallback`. */
+function normalizeDiscount(raw: unknown, fallback: FareDiscount): FareDiscount {
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    ((raw as FareDiscount).kind === 'percent' || (raw as FareDiscount).kind === 'amount') &&
+    typeof (raw as FareDiscount).value === 'number'
+  ) {
+    return { kind: (raw as FareDiscount).kind, value: (raw as FareDiscount).value };
+  }
+  return fallback;
+}
+
+/** Đọc bảng giá mẫu đã lưu; chưa có, JSON hỏng hoặc thiếu trường thì gộp về bảng mặc định. */
 export function loadFareTemplate(): PerKmFareTemplate {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PerKmFareTemplate) : DEFAULT_FARE_TEMPLATE;
+    if (!raw) return DEFAULT_FARE_TEMPLATE;
+
+    const parsed = JSON.parse(raw) as Partial<PerKmFareTemplate>;
+    const discounts = (
+      typeof parsed.discounts === 'object' && parsed.discounts !== null ? parsed.discounts : {}
+    ) as Partial<Record<DiscountedPassengerType, FareDiscount>>;
+
+    return {
+      adultPricePerKm:
+        typeof parsed.adultPricePerKm === 'number' && Number.isFinite(parsed.adultPricePerKm)
+          ? parsed.adultPricePerKm
+          : DEFAULT_FARE_TEMPLATE.adultPricePerKm,
+      discounts: {
+        Student: normalizeDiscount(discounts.Student, DEFAULT_FARE_TEMPLATE.discounts.Student),
+        Senior: normalizeDiscount(discounts.Senior, DEFAULT_FARE_TEMPLATE.discounts.Senior),
+        Child: normalizeDiscount(discounts.Child, DEFAULT_FARE_TEMPLATE.discounts.Child),
+        Disabled: normalizeDiscount(discounts.Disabled, DEFAULT_FARE_TEMPLATE.discounts.Disabled),
+      },
+    };
   } catch {
     return DEFAULT_FARE_TEMPLATE;
   }
