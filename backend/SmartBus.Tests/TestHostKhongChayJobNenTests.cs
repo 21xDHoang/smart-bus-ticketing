@@ -13,7 +13,7 @@ namespace SmartBus.Tests;
 /// liệu — thắng đua thì nó nhân bản chuyến mẫu sang 7 ngày tới và làm vỡ các assert đếm-đúng. Log
 /// CI khớp từng con số: "Đã sinh 14 chuyến" ×2, "Đã sinh 7 chuyến" ứng đúng 16/16/8.
 ///
-/// <see cref="TestAppFactory"/> nay thay cả 5 job bằng bản noop (xem ThayJobNenBangBanNoop ở đó). File
+/// <see cref="TestAppFactory"/> nay thay cả 6 job bằng bản noop (xem ThayJobNenBangBanNoop ở đó). File
 /// này khoá lại điều đó để ai lỡ gỡ bản noop sẽ thấy đỏ NGAY TẠI ĐÂY, thay vì nhận một CI đỏ ngẫu
 /// nhiên ở nơi khác rồi phải truy lại từ log.
 ///
@@ -87,5 +87,18 @@ public class TestHostKhongChayJobNenTests
             .Single();
 
         Assert.NotEqual(typeof(RefundRetryBackgroundService), job.GetType());
+    }
+
+    [Fact]
+    public void Job_doi_soat_hoan_tien_trong_host_test_la_ban_noop()
+    {
+        using var factory = new TestAppFactory();
+
+        var job = factory.Services
+            .GetServices<IHostedService>()
+            .OfType<RefundReconciliationBackgroundService>()
+            .Single();
+
+        Assert.NotEqual(typeof(RefundReconciliationBackgroundService), job.GetType());
     }
 }
