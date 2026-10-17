@@ -514,6 +514,16 @@ builder.Services.AddScoped<IMyTicketsService, MyTicketsService>();
 // doanh thu, cũng của Hiếu) đang thêm dòng.
 builder.Services.AddScoped<IPeakHoursReportService, PeakHoursReportService>();
 
+// Đề xuất tăng/giảm tần suất chạy xe theo dữ liệu: GET /api/reports/frequency-proposals (US 20
+// "Tỷ lệ lấp đầy", Sprint 4). Task "API đề xuất tăng/giảm tần suất chạy xe theo dữ liệu" — Phùng
+// Duy Hoàng. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service KHÔNG tự truy vấn Tickets/Trips: nó gọi IPeakHoursReportService (đăng ký ngay trên) rồi
+// quy đổi mật độ từng giờ thành số chuyến nên chạy. Nhờ vậy mọi quy tắc nền của báo cáo gốc (vé
+// Paid/Used, giờ Việt Nam, mặc định 30 ngày, trần 366 ngày, kiểm tra tuyến) chỉ nằm một chỗ. Đặt
+// liền sau dòng đăng ký báo cáo gốc để thứ tự phụ thuộc đọc được ngay tại chỗ; không ghi dữ liệu,
+// không migration.
+builder.Services.AddScoped<IFrequencyProposalService, FrequencyProposalService>();
+
 // Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
 // sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).
 // Task "Đồng bộ trạng thái ghế realtime giữa các phiên (SignalR)" (dòng 11 Sprint 3) — Hoàng Văn Thịnh.

@@ -5583,8 +5583,175 @@ Query — **mọi tham số bỏ trống được**:
 > khác hẳn (phần trăm), đừng đổi ngữ nghĩa của `passengers` ở đây, mở endpoint riêng trên bề mặt
 > `/reports` (ví dụ `GET /reports/fill-rate`).
 >
-> **Cho task "API đề xuất tăng/giảm tần suất" (Hoàng):** đọc thẳng `peakHours` của mục này —
-> giờ cao điểm là giờ nên tăng chuyến, không cần dựng lại nền tính.
+> **Đề xuất tần suất:** đã có endpoint riêng — xem mục
+> **"Đề xuất tần suất chạy xe — /reports/frequency-proposals"** ngay dưới. Endpoint đó đọc thẳng
+> `peakHours` của mục này, không dựng lại nền tính.
+
+## Đề xuất tần suất chạy xe — `/reports/frequency-proposals`
+
+> Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có (`FrequencyProposalController` — Phùng Duy Hoàng,
+> task *"API đề xuất tăng/giảm tần suất chạy xe theo dữ liệu"*, Sprint 4 dòng 68). Mục này biến
+> báo cáo khung giờ cao điểm thành **đề xuất tăng/giảm số chuyến theo từng giờ**; nó **không** thay
+> đổi báo cáo gốc và **không** tự đổi lịch chạy — quản lý xem rồi tự quyết định.
+>
+> **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (như báo cáo gốc). Thiếu token → 401; vai trò
+> khác → 403.
+
+### `GET /reports/frequency-proposals` — đề xuất tần suất theo dữ liệu
+
+Query — **mọi tham số bỏ trống được**, cùng ngữ nghĩa với `/reports/peak-hours`:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch Việt Nam, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+```json
+// FrequencyProposal — ví dụ kỳ 1 ngày, toàn công ty
+{
+  "from": "2026-10-17",
+  "to": "2026-10-17",
+  "periodDays": 1,
+  "hasEnoughData": true,
+  "totalPassengers": 100,
+  "totalTrips": 20,
+  "averagePassengersPerTrip": 5,
+  "increaseHours": [17],
+  "decreaseHours": [3, 11, 22],
+  "hours": [
+    {
+      "hour": 3,
+      "passengers": 0,
+      "trips": 2,
+      "averagePassengersPerTrip": 0,
+      "isPeak": false,
+      "currentTripsPerDay": 2,
+      "currentFrequencyMinutes": 30,
+      "suggestedTripsInPeriod": 0,
+      "suggestedTripsPerDay": 0,
+      "suggestedFrequencyMinutes": null,
+      "changePercent": -100,
+      "action": "Decrease"
+    },
+    {
+      "hour": 6,
+      "passengers": 30,
+      "trips": 6,
+      "averagePassengersPerTrip": 5,
+      "isPeak": true,
+      "currentTripsPerDay": 6,
+      "currentFrequencyMinutes": 10,
+      "suggestedTripsInPeriod": 6,
+      "suggestedTripsPerDay": 6,
+      "suggestedFrequencyMinutes": 10,
+      "changePercent": 0,
+      "action": "Keep"
+    },
+    {
+      "hour": 11,
+      "passengers": 10,
+      "trips": 4,
+      "averagePassengersPerTrip": 2.5,
+      "isPeak": false,
+      "currentTripsPerDay": 4,
+      "currentFrequencyMinutes": 15,
+      "suggestedTripsInPeriod": 2,
+      "suggestedTripsPerDay": 2,
+      "suggestedFrequencyMinutes": 30,
+      "changePercent": -50,
+      "action": "Decrease"
+    },
+    {
+      "hour": 17,
+      "passengers": 60,
+      "trips": 4,
+      "averagePassengersPerTrip": 15,
+      "isPeak": true,
+      "currentTripsPerDay": 4,
+      "currentFrequencyMinutes": 15,
+      "suggestedTripsInPeriod": 12,
+      "suggestedTripsPerDay": 12,
+      "suggestedFrequencyMinutes": 5,
+      "changePercent": 200,
+      "action": "Increase"
+    },
+    {
+      "hour": 22,
+      "passengers": 0,
+      "trips": 4,
+      "averagePassengersPerTrip": 0,
+      "isPeak": false,
+      "currentTripsPerDay": 4,
+      "currentFrequencyMinutes": 15,
+      "suggestedTripsInPeriod": 0,
+      "suggestedTripsPerDay": 0,
+      "suggestedFrequencyMinutes": null,
+      "changePercent": -100,
+      "action": "Decrease"
+    }
+    // … đủ 24 giờ; giờ không có chuyến: action "NoService", các trường đề xuất null …
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `from` / `to` | Khoảng ngày **đã áp mặc định**, lặp lại từ báo cáo gốc (lịch Việt Nam) |
+| `periodDays` | Số ngày lịch trong kỳ, tính cả hai đầu |
+| `hasEnoughData` | `false` khi kỳ không có chuyến, không có khách, hoặc mật độ trung bình làm tròn bằng 0 — khi đó **không đề xuất gì** |
+| `totalPassengers` / `totalTrips` / `averagePassengersPerTrip` | Ba số gốc, **giống hệt** `/reports/peak-hours` cùng tham số |
+| `increaseHours` / `decreaseHours` | Giờ có `action` tương ứng, tăng dần — lọc nhanh cho FE |
+| `hours[]` | **Đủ 24 phần tử** (giờ 0–23, tăng dần), cùng trục với báo cáo gốc |
+| `hours[].passengers` / `trips` / `averagePassengersPerTrip` / `isPeak` | Bốn số gốc của giờ đó, không tính lại |
+| `hours[].currentTripsPerDay` | `trips / periodDays`, làm tròn 2 chữ số — tần suất hiện tại theo số chuyến/ngày |
+| `hours[].currentFrequencyMinutes` | `60 / currentTripsPerDay`, làm tròn phút; **null khi < 1 chuyến/ngày** (không có giãn cách trong giờ để nói) |
+| `hours[].suggestedTripsInPeriod` | Số chuyến đề xuất cho **cả kỳ** (số nguyên) — xem quy tắc bên dưới |
+| `hours[].suggestedTripsPerDay` | `suggestedTripsInPeriod / periodDays`, làm tròn 2 chữ số |
+| `hours[].suggestedFrequencyMinutes` | `60 / suggestedTripsPerDay`, làm tròn phút; **null khi suggestion = 0 hoặc < 1 chuyến/ngày** |
+| `hours[].changePercent` | `(suggestedTripsInPeriod - trips) / trips × 100`, làm tròn 2 chữ số; `0` khi Keep; null khi NoService/NoData |
+| `hours[].action` | `Increase` · `Decrease` · `Keep` · `NoService` · `NoData` |
+
+**Quy tắc đề xuất — mục tiêu là kéo mọi giờ về mật độ trung bình của kỳ:**
+
+- **Đọc thẳng báo cáo khung giờ cao điểm**, không truy vấn lại `Tickets`/`Trips`: cùng tham số thì
+  `passengers`, `trips`, `averagePassengersPerTrip`, `isPeak` và ba số tổng **khớp từng con số** với
+  `/reports/peak-hours`. Mọi thay đổi nền số liệu (ví dụ có tính vé huỷ hay không) chỉ sửa một chỗ ở
+  báo cáo gốc, endpoint này tự theo.
+- **Mật độ mục tiêu = `averagePassengersPerTrip` của cả kỳ.** Số chuyến đề xuất cho một giờ là
+  `round(passengers / mật độ mục tiêu)`: giờ có mật độ cao hơn trung bình cần **nhiều chuyến hơn**
+  để hạ tải mỗi xe; giờ thưa khách cần **ít chuyến hơn**. Không dùng một tỷ lệ tăng/giảm cố định
+  (ví dụ ±20%) — tỷ lệ đó không đến từ dữ liệu và sẽ sai khác nhau ở mỗi tuyến.
+- **Không mâu thuẫn với `isPeak`:** giờ cao điểm không bao giờ bị đề xuất giảm; giờ không cao điểm
+  không bao giờ được đề xuất tăng. Con số làm tròn có thể rơi đúng bằng hiện tại — khi đó là `Keep`,
+  không phải tăng/giảm 0%.
+- **Giờ có chuyến nhưng không có khách:** mật độ 0 → đề xuất **0 chuyến** (`Decrease`, `-100%`).
+  Đây là tín hiệu để quản lý cân nhắc bỏ khung giờ; API không tự bỏ.
+- **Giờ không có chuyến:** `NoService`, không đề xuất — không có chuyến thì không có dữ liệu khách
+  để nói nên tăng hay giảm. Muốn mở giờ mới phải dựa vào dữ liệu khác, ngoài phạm vi endpoint này.
+- **Kỳ không đủ dữ liệu** (`hasEnoughData = false`): giờ có chuyến nhận `NoData`, giờ rỗng nhận
+  `NoService`; mọi trường đề xuất (kể cả `changePercent`) là null. Cố ý không đề xuất giảm sạch khi
+  cả kỳ chưa có khách — dữ liệu mới hoặc seeder rỗng không phải bằng chứng để cắt chuyến.
+- **Làm tròn:** mọi phép chia làm tròn **2 chữ số**, `MidpointRounding.AwayFromZero`; số chuyến đề
+  xuất là số nguyên. `currentTripsPerDay`/`suggestedTripsPerDay` có thể lẻ vì kỳ nhiều ngày; phút
+  chỉ được quy đổi khi tần suất đạt ít nhất 1 chuyến/ngày trong giờ đó.
+- **Chỉ đọc, không ghi:** không sửa chuyến, không tạo lịch, không migration. Đề xuất là con số tham
+  khảo; quản lý áp dụng bằng màn hình quản lý chuyến hiện có.
+
+**Lỗi** — giống hệt báo cáo gốc vì endpoint gọi thẳng service của báo cáo:
+
+| Tình huống | Mã | Ghi chú |
+|---|---|---|
+| Không gửi token | 401 | middleware xác thực |
+| Không phải Admin/Quản lý | 403 | policy `ManagerOrAbove` |
+| `from` sau `to` | 400 | lỗi gắn vào **cả** `errors.from` và `errors.to` |
+| Khoảng quá 366 ngày | 400 | cùng trần với báo cáo gốc |
+| `routeId` không tồn tại | 404 | `Không tìm thấy tuyến đường.` |
+
+> **Bàn giao:** frontend đọc `hours[].action` để tô màu tăng/giảm và `suggestedFrequencyMinutes`
+> (null → hiển thị `—`) để gợi ý giãn cách. `NoService`/`NoData` cần trạng thái rỗng, đừng hiển thị
+> 0 phút. Endpoint không có task UI riêng trong sprint — màn hình nào dùng thì nối tại chỗ.
+
 ## Theo dõi thông báo — `/subscriptions`
 
 > Story 10 *"Thông báo trạm"*. 🟢 **Bảng `Subscriptions` — migration ĐÃ SINH, ĐÃ SOÁT** (nhánh
