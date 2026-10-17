@@ -217,6 +217,12 @@ const NAV: NavEntry[] = [
         icon: <DollarOutlined />,
       },
       {
+        to: '/admin-monthly-passes',
+        label: 'Vé tháng',
+        roles: ADMIN_MANAGER,
+        icon: <CreditCardOutlined />,
+      },
+      {
         to: '/seat-layouts',
         label: 'Sơ đồ ghế',
         roles: ADMIN_MANAGER,

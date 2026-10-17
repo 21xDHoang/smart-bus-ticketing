@@ -107,6 +107,10 @@ public class AuditLogCoverageTests
         // (PUT → Update); {id} đặt tên đúng để tên bảng suy ra là "Trips", Target "Trips:{id}".
         ("PUT",    "/api/trips/{id:guid}/location",              CachGhi.Middleware),
 
+        // Giờ đến từng trạm — story 13. Middleware tự ghi (PUT → Update); {id} đặt tên đúng để
+        // tên bảng suy ra là "Trips", Target "Trips:{id}".
+        ("PUT",    "/api/routes/{routeId:guid}/trips/{id:guid}/stop-times", CachGhi.Middleware),
+
         // Gán tài xế vào chuyến theo lô — story 14, Nguyễn Duy Kiên. Cũng do AuditLogMiddleware tự
         // ghi (PATCH → Update). Tên bảng suy ra là "Trips": route có tham số {routeId} nên tài
         // nguyên là đoạn tĩnh đầu tiên sau tham số cuối, đúng luật AuditLogMiddleware.ResourceSegmentIndex
@@ -143,6 +147,19 @@ public class AuditLogCoverageTests
         // bảng suy từ đoạn trước {id} là "MonthlyPasses"). Target là id vé MỚI đọc từ body trả
         // về, không phải vé cũ trên đường dẫn — ca này cố ý để lộ điều đó ra test Phần 2.
         ("POST",   "/api/monthly-passes/{id:guid}/renew",        CachGhi.Middleware),
+
+        // Quản trị vé tháng — bổ sung ngoài story 16, Nguyễn Duy Kiên (kiêm chủ API). Middleware
+        // tự ghi (PATCH → Update); {id} đặt tên đúng để tên bảng suy từ đoạn trước nó là
+        // "MonthlyPasses", Target "MonthlyPasses:{id}".
+        ("PATCH",  "/api/monthly-passes/{id:guid}/status",        CachGhi.Middleware),
+
+        // CRUD loại vé tháng — bổ sung ngoài story 16, Nguyễn Duy Kiên. Cả ba endpoint đều do
+        // AuditLogMiddleware tự ghi (POST → Create, PUT → Update, DELETE → Delete); tên bảng suy
+        // từ đoạn tĩnh "pass-types" thành "PassTypes", POST lấy đoạn cuối, PUT/DELETE lấy đoạn
+        // trước {id}. Target của POST là id loại vé mới đọc từ body trả về.
+        ("POST",   "/api/pass-types",                             CachGhi.Middleware),
+        ("PUT",    "/api/pass-types/{id:guid}",                   CachGhi.Middleware),
+        ("DELETE", "/api/pass-types/{id:guid}",                   CachGhi.Middleware),
 
         // Gia hạn giữ chỗ — story 3, Trần Trung Hiếu. Middleware tự ghi (POST → Create) nhưng
         // Target chỉ là "Extend" chứ KHÔNG phải "SeatHolds:<mã phiên>": route dùng tham số
@@ -839,6 +856,83 @@ public class AuditLogCoverageTests
         Assert.NotEqual(veCu.Id, veMoi);
 
         await AssertMotBanGhiAsync(factory, AuditAction.Create, $"MonthlyPasses:{veMoi}", chuVe);
+    }
+
+    // ------------------------------------- Quản trị vé tháng — huỷ/mở lại (ngoài story 16)
+
+    // Nguyễn Duy Kiên: PATCH đổi trạng thái vé. Middleware tự ghi (PATCH → Update); {id} đặt tên
+    // đúng để tên bảng suy từ đoạn trước nó là "MonthlyPasses".
+    [Fact]
+    public async Task Patch_monthly_passes_status_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        var chuVe = await SeedUserAsync(factory, RoleIds.Passenger, RoleCodes.Passenger, phoneNumber: "0911111111");
+        var route = await SeedRouteAsync(factory, "01");
+        var passType = await SeedPassTypeAsync(factory, "OneMonth", durationMonths: 1, price: 200_000m);
+        var ve = await SeedMonthlyPassAsync(factory, chuVe.Id, route.Id, passType.Id);
+
+        var response = await client.PatchAsJsonAsync(
+            $"{MonthlyPassesUrl}/{ve.Id}/status", new { status = "Cancelled" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"MonthlyPasses:{ve.Id}", quanLy);
+    }
+
+    // ------------------------------------------------- CRUD loại vé tháng (ngoài story 16)
+
+    // Nguyễn Duy Kiên: danh mục loại vé tháng. Ba endpoint đều đi qua AuditLogMiddleware;
+    // policy ManagerOrAbove nên đăng nhập bằng tài khoản quản lý.
+
+    [Fact]
+    public async Task Post_pass_types_ghi_Create_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+
+        var response = await client.PostAsJsonAsync("/api/pass-types", new
+        {
+            code = "ThreeMonths",
+            name = "Vé tháng 3 tháng",
+            durationMonths = 3,
+            price = 550_000m,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Create, $"PassTypes:{await IdOfAsync(response)}", quanLy);
+    }
+
+    [Fact]
+    public async Task Put_pass_types_ghi_Update_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        var passType = await SeedPassTypeAsync(factory, "OneMonth", durationMonths: 1, price: 200_000m);
+
+        var response = await client.PutAsJsonAsync(
+            $"/api/pass-types/{passType.Id}",
+            new { name = "Vé tháng 1 tháng (mới)", durationMonths = 1, price = 220_000m });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Update, $"PassTypes:{passType.Id}", quanLy);
+    }
+
+    [Fact]
+    public async Task Delete_pass_types_ghi_Delete_dung_ban_ghi()
+    {
+        using var factory = new TestAppFactory();
+        var (client, quanLy) = await SignInAsManagerAsync(factory);
+        // Loại vé chưa có vé tháng nào tham chiếu — xoá được (loại đang dùng trả 409).
+        var passType = await SeedPassTypeAsync(factory, "SixMonths", durationMonths: 6, price: 1_000_000m);
+
+        var response = await client.DeleteAsync($"/api/pass-types/{passType.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await AssertMotBanGhiAsync(factory, AuditAction.Delete, $"PassTypes:{passType.Id}", quanLy);
     }
 
     // ------------------------------------------------------- Giữ chỗ — gia hạn (story 3)
