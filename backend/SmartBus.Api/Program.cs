@@ -514,6 +514,16 @@ builder.Services.AddScoped<IMyTicketsService, MyTicketsService>();
 // doanh thu, cũng của Hiếu) đang thêm dòng.
 builder.Services.AddScoped<IPeakHoursReportService, PeakHoursReportService>();
 
+// Đề xuất tăng/giảm tần suất chạy xe theo dữ liệu: GET /api/reports/frequency-proposals (US 20
+// "Tỷ lệ lấp đầy", Sprint 4). Task "API đề xuất tăng/giảm tần suất chạy xe theo dữ liệu" — Phùng
+// Duy Hoàng. File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Service KHÔNG tự truy vấn Tickets/Trips: nó gọi IPeakHoursReportService (đăng ký ngay trên) rồi
+// quy đổi mật độ từng giờ thành số chuyến nên chạy. Nhờ vậy mọi quy tắc nền của báo cáo gốc (vé
+// Paid/Used, giờ Việt Nam, mặc định 30 ngày, trần 366 ngày, kiểm tra tuyến) chỉ nằm một chỗ. Đặt
+// liền sau dòng đăng ký báo cáo gốc để thứ tự phụ thuộc đọc được ngay tại chỗ; không ghi dữ liệu,
+// không migration.
+builder.Services.AddScoped<IFrequencyProposalService, FrequencyProposalService>();
+
 // Đồng bộ trạng thái ghế realtime giữa các phiên (US 2): hub SignalR /hubs/seat-map + cổng phát
 // sự kiện cho ba chỗ làm đổi trạng thái ghế (giữ ghế, nhả ghế, quét hết hạn).
 // Task "Đồng bộ trạng thái ghế realtime giữa các phiên (SignalR)" (dòng 11 Sprint 3) — Hoàng Văn Thịnh.
@@ -687,6 +697,15 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 // Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
 // vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
 builder.Services.AddScoped<IMyNotificationsService, MyNotificationsService>();
+
+// Màn quản lý mẫu thông báo (US 10, Sprint 5 dòng 24) — GET/PUT /api/notification-templates.
+// Task "Màn hình Admin quản lý mẫu thông báo" — Dương Thị Hạnh.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR (cùng lối các khối Sprint 5 ngay trên).
+// Mẫu là phần GHI ĐÈ của câu mặc định (docs/37 §2.1): bảng NotificationTemplates đã dựng từ
+// 20261014164805_Sprint4_NotificationTemplates_Subscriptions, không cần migration mới.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không
+// chèn vào đúng khe mà các nhánh Sprint 5 khác đang thêm dòng.
+builder.Services.AddScoped<INotificationTemplateService, NotificationTemplateService>();
 
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);

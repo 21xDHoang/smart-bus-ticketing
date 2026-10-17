@@ -5583,8 +5583,175 @@ Query — **mọi tham số bỏ trống được**:
 > khác hẳn (phần trăm), đừng đổi ngữ nghĩa của `passengers` ở đây, mở endpoint riêng trên bề mặt
 > `/reports` (ví dụ `GET /reports/fill-rate`).
 >
-> **Cho task "API đề xuất tăng/giảm tần suất" (Hoàng):** đọc thẳng `peakHours` của mục này —
-> giờ cao điểm là giờ nên tăng chuyến, không cần dựng lại nền tính.
+> **Đề xuất tần suất:** đã có endpoint riêng — xem mục
+> **"Đề xuất tần suất chạy xe — /reports/frequency-proposals"** ngay dưới. Endpoint đó đọc thẳng
+> `peakHours` của mục này, không dựng lại nền tính.
+
+## Đề xuất tần suất chạy xe — `/reports/frequency-proposals`
+
+> Story 20 *"Tỷ lệ lấp đầy"*. ✅ Backend đã có (`FrequencyProposalController` — Phùng Duy Hoàng,
+> task *"API đề xuất tăng/giảm tần suất chạy xe theo dữ liệu"*, Sprint 4 dòng 68). Mục này biến
+> báo cáo khung giờ cao điểm thành **đề xuất tăng/giảm số chuyến theo từng giờ**; nó **không** thay
+> đổi báo cáo gốc và **không** tự đổi lịch chạy — quản lý xem rồi tự quyết định.
+>
+> **Endpoint yêu cầu vai trò `Admin` hoặc `Manager`** (như báo cáo gốc). Thiếu token → 401; vai trò
+> khác → 403.
+
+### `GET /reports/frequency-proposals` — đề xuất tần suất theo dữ liệu
+
+Query — **mọi tham số bỏ trống được**, cùng ngữ nghĩa với `/reports/peak-hours`:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `from` | 29 ngày trước `to` | Ngày bắt đầu (lịch Việt Nam, `yyyy-MM-dd`), TÍNH CẢ |
+| `to` | hôm nay (giờ VN) | Ngày kết thúc (lịch Việt Nam), TÍNH CẢ |
+| `routeId` | — | Chỉ tính các chuyến thuộc tuyến này; bỏ trống = toàn công ty |
+
+```json
+// FrequencyProposal — ví dụ kỳ 1 ngày, toàn công ty
+{
+  "from": "2026-10-17",
+  "to": "2026-10-17",
+  "periodDays": 1,
+  "hasEnoughData": true,
+  "totalPassengers": 100,
+  "totalTrips": 20,
+  "averagePassengersPerTrip": 5,
+  "increaseHours": [17],
+  "decreaseHours": [3, 11, 22],
+  "hours": [
+    {
+      "hour": 3,
+      "passengers": 0,
+      "trips": 2,
+      "averagePassengersPerTrip": 0,
+      "isPeak": false,
+      "currentTripsPerDay": 2,
+      "currentFrequencyMinutes": 30,
+      "suggestedTripsInPeriod": 0,
+      "suggestedTripsPerDay": 0,
+      "suggestedFrequencyMinutes": null,
+      "changePercent": -100,
+      "action": "Decrease"
+    },
+    {
+      "hour": 6,
+      "passengers": 30,
+      "trips": 6,
+      "averagePassengersPerTrip": 5,
+      "isPeak": true,
+      "currentTripsPerDay": 6,
+      "currentFrequencyMinutes": 10,
+      "suggestedTripsInPeriod": 6,
+      "suggestedTripsPerDay": 6,
+      "suggestedFrequencyMinutes": 10,
+      "changePercent": 0,
+      "action": "Keep"
+    },
+    {
+      "hour": 11,
+      "passengers": 10,
+      "trips": 4,
+      "averagePassengersPerTrip": 2.5,
+      "isPeak": false,
+      "currentTripsPerDay": 4,
+      "currentFrequencyMinutes": 15,
+      "suggestedTripsInPeriod": 2,
+      "suggestedTripsPerDay": 2,
+      "suggestedFrequencyMinutes": 30,
+      "changePercent": -50,
+      "action": "Decrease"
+    },
+    {
+      "hour": 17,
+      "passengers": 60,
+      "trips": 4,
+      "averagePassengersPerTrip": 15,
+      "isPeak": true,
+      "currentTripsPerDay": 4,
+      "currentFrequencyMinutes": 15,
+      "suggestedTripsInPeriod": 12,
+      "suggestedTripsPerDay": 12,
+      "suggestedFrequencyMinutes": 5,
+      "changePercent": 200,
+      "action": "Increase"
+    },
+    {
+      "hour": 22,
+      "passengers": 0,
+      "trips": 4,
+      "averagePassengersPerTrip": 0,
+      "isPeak": false,
+      "currentTripsPerDay": 4,
+      "currentFrequencyMinutes": 15,
+      "suggestedTripsInPeriod": 0,
+      "suggestedTripsPerDay": 0,
+      "suggestedFrequencyMinutes": null,
+      "changePercent": -100,
+      "action": "Decrease"
+    }
+    // … đủ 24 giờ; giờ không có chuyến: action "NoService", các trường đề xuất null …
+  ]
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `from` / `to` | Khoảng ngày **đã áp mặc định**, lặp lại từ báo cáo gốc (lịch Việt Nam) |
+| `periodDays` | Số ngày lịch trong kỳ, tính cả hai đầu |
+| `hasEnoughData` | `false` khi kỳ không có chuyến, không có khách, hoặc mật độ trung bình làm tròn bằng 0 — khi đó **không đề xuất gì** |
+| `totalPassengers` / `totalTrips` / `averagePassengersPerTrip` | Ba số gốc, **giống hệt** `/reports/peak-hours` cùng tham số |
+| `increaseHours` / `decreaseHours` | Giờ có `action` tương ứng, tăng dần — lọc nhanh cho FE |
+| `hours[]` | **Đủ 24 phần tử** (giờ 0–23, tăng dần), cùng trục với báo cáo gốc |
+| `hours[].passengers` / `trips` / `averagePassengersPerTrip` / `isPeak` | Bốn số gốc của giờ đó, không tính lại |
+| `hours[].currentTripsPerDay` | `trips / periodDays`, làm tròn 2 chữ số — tần suất hiện tại theo số chuyến/ngày |
+| `hours[].currentFrequencyMinutes` | `60 / currentTripsPerDay`, làm tròn phút; **null khi < 1 chuyến/ngày** (không có giãn cách trong giờ để nói) |
+| `hours[].suggestedTripsInPeriod` | Số chuyến đề xuất cho **cả kỳ** (số nguyên) — xem quy tắc bên dưới |
+| `hours[].suggestedTripsPerDay` | `suggestedTripsInPeriod / periodDays`, làm tròn 2 chữ số |
+| `hours[].suggestedFrequencyMinutes` | `60 / suggestedTripsPerDay`, làm tròn phút; **null khi suggestion = 0 hoặc < 1 chuyến/ngày** |
+| `hours[].changePercent` | `(suggestedTripsInPeriod - trips) / trips × 100`, làm tròn 2 chữ số; `0` khi Keep; null khi NoService/NoData |
+| `hours[].action` | `Increase` · `Decrease` · `Keep` · `NoService` · `NoData` |
+
+**Quy tắc đề xuất — mục tiêu là kéo mọi giờ về mật độ trung bình của kỳ:**
+
+- **Đọc thẳng báo cáo khung giờ cao điểm**, không truy vấn lại `Tickets`/`Trips`: cùng tham số thì
+  `passengers`, `trips`, `averagePassengersPerTrip`, `isPeak` và ba số tổng **khớp từng con số** với
+  `/reports/peak-hours`. Mọi thay đổi nền số liệu (ví dụ có tính vé huỷ hay không) chỉ sửa một chỗ ở
+  báo cáo gốc, endpoint này tự theo.
+- **Mật độ mục tiêu = `averagePassengersPerTrip` của cả kỳ.** Số chuyến đề xuất cho một giờ là
+  `round(passengers / mật độ mục tiêu)`: giờ có mật độ cao hơn trung bình cần **nhiều chuyến hơn**
+  để hạ tải mỗi xe; giờ thưa khách cần **ít chuyến hơn**. Không dùng một tỷ lệ tăng/giảm cố định
+  (ví dụ ±20%) — tỷ lệ đó không đến từ dữ liệu và sẽ sai khác nhau ở mỗi tuyến.
+- **Không mâu thuẫn với `isPeak`:** giờ cao điểm không bao giờ bị đề xuất giảm; giờ không cao điểm
+  không bao giờ được đề xuất tăng. Con số làm tròn có thể rơi đúng bằng hiện tại — khi đó là `Keep`,
+  không phải tăng/giảm 0%.
+- **Giờ có chuyến nhưng không có khách:** mật độ 0 → đề xuất **0 chuyến** (`Decrease`, `-100%`).
+  Đây là tín hiệu để quản lý cân nhắc bỏ khung giờ; API không tự bỏ.
+- **Giờ không có chuyến:** `NoService`, không đề xuất — không có chuyến thì không có dữ liệu khách
+  để nói nên tăng hay giảm. Muốn mở giờ mới phải dựa vào dữ liệu khác, ngoài phạm vi endpoint này.
+- **Kỳ không đủ dữ liệu** (`hasEnoughData = false`): giờ có chuyến nhận `NoData`, giờ rỗng nhận
+  `NoService`; mọi trường đề xuất (kể cả `changePercent`) là null. Cố ý không đề xuất giảm sạch khi
+  cả kỳ chưa có khách — dữ liệu mới hoặc seeder rỗng không phải bằng chứng để cắt chuyến.
+- **Làm tròn:** mọi phép chia làm tròn **2 chữ số**, `MidpointRounding.AwayFromZero`; số chuyến đề
+  xuất là số nguyên. `currentTripsPerDay`/`suggestedTripsPerDay` có thể lẻ vì kỳ nhiều ngày; phút
+  chỉ được quy đổi khi tần suất đạt ít nhất 1 chuyến/ngày trong giờ đó.
+- **Chỉ đọc, không ghi:** không sửa chuyến, không tạo lịch, không migration. Đề xuất là con số tham
+  khảo; quản lý áp dụng bằng màn hình quản lý chuyến hiện có.
+
+**Lỗi** — giống hệt báo cáo gốc vì endpoint gọi thẳng service của báo cáo:
+
+| Tình huống | Mã | Ghi chú |
+|---|---|---|
+| Không gửi token | 401 | middleware xác thực |
+| Không phải Admin/Quản lý | 403 | policy `ManagerOrAbove` |
+| `from` sau `to` | 400 | lỗi gắn vào **cả** `errors.from` và `errors.to` |
+| Khoảng quá 366 ngày | 400 | cùng trần với báo cáo gốc |
+| `routeId` không tồn tại | 404 | `Không tìm thấy tuyến đường.` |
+
+> **Bàn giao:** frontend đọc `hours[].action` để tô màu tăng/giảm và `suggestedFrequencyMinutes`
+> (null → hiển thị `—`) để gợi ý giãn cách. `NoService`/`NoData` cần trạng thái rỗng, đừng hiển thị
+> 0 phút. Endpoint không có task UI riêng trong sprint — màn hình nào dùng thì nối tại chỗ.
+
 ## Theo dõi thông báo — `/subscriptions`
 
 > Story 10 *"Thông báo trạm"*. 🟢 **Bảng `Subscriptions` — migration ĐÃ SINH, ĐÃ SOÁT** (nhánh
@@ -5719,3 +5886,120 @@ lượt theo dõi nào đang tồn tại.
 > **Cho task "API lịch sử thông báo đã nhận" (dòng 19 — Dăm):** endpoint `GET /notifications/me`
 > mà `frontend/src/api/notificationApi.ts` đã draft KHÔNG thuộc mục này — bề mặt `/subscriptions`
 > chỉ trả lời *"đang theo dõi gì"*, không trả lời *"đã nhận những gì"*.
+
+## Màn quản lý mẫu thông báo — `/notification-templates`
+
+> Story 10 *"Thông báo trạm"*. 🟢 **Bảng `NotificationTemplates` — migration ĐÃ SINH, ĐÃ SOÁT**
+> (nhánh `feature/8-migrate-notification-templates-subscriptions`, Vàng Thị Dăm — task *"Migrate
+> bảng Notifications, NotificationTemplates, Subscriptions"*, Sprint 5 dòng 14). Chi tiết CSDL:
+> `docs/37-csdl-mau-thong-bao-va-theo-doi.md` (bảng này **không** nằm trong A9 — nhóm cần bổ sung).
+>
+> Mục này chốt bề mặt REST của task *"Màn hình Admin quản lý mẫu thông báo"* (Sprint 5 dòng 24 —
+> Dương Thị Hạnh): quản trị viên soạn câu chữ cho từng loại thông báo. **Mẫu là phần GHI ĐÈ, không
+> phải điều kiện để gửi** (docs/37 §2.1): loại chưa có mẫu, hoặc mẫu đang tắt, thì tầng notifier
+> dùng câu mặc định trong code — bảng này không phải nguồn duy nhất của nội dung thông báo.
+
+### Phân quyền
+
+Cả hai endpoint yêu cầu vai trò **Admin hoặc Manager** (`[Authorize(Policy = ManagerOrAbove)]`) —
+sửa câu chữ thông báo là việc của vận hành, cùng quyền màn quản lý voucher (`/vouchers`).
+
+### Hình dạng `NotificationTemplate`
+
+```json
+{
+  "id": "8f2b1d64-0000-0000-0000-000000000000",
+  "type": "CancellationApproved",
+  "title": "Đã duyệt yêu cầu huỷ vé",
+  "body": "Yêu cầu huỷ vé của bạn đã được duyệt.",
+  "isActive": true,
+  "createdAt": "2026-10-17T02:00:00Z",
+  "updatedAt": "2026-10-17T03:00:00Z"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | string (GUID) | khoá chính |
+| `type` | string | một trong **tám** loại — bảng "Tám loại thông báo" ở mục `/notifications` |
+| `title` | string | dòng tiêu đề, tối đa 200 ký tự |
+| `body` | string | nội dung đầy đủ, **xuống dòng tự do**, không đặt trần độ dài |
+| `isActive` | boolean | mẫu đang dùng; tắt = quay về câu mặc định (docs/37 §2.2) |
+| `createdAt` | string (ISO 8601, UTC) | thời điểm tạo mẫu |
+| `updatedAt` | string (ISO 8601, UTC) `\|` null | thời điểm sửa gần nhất; null với dòng chưa sửa lần nào |
+
+| Method | Endpoint | Trạng thái |
+|---|---|---|
+| GET | `/notification-templates` | ✅ đã làm (dòng 24) |
+| PUT | `/notification-templates/{type}` | ✅ đã làm (dòng 24) |
+
+### `GET /notification-templates` — danh sách mẫu
+
+```json
+// 200 — mảng trần, sắp theo thứ tự khai báo enum NotificationType
+[
+  { "id": "…", "type": "CancellationApproved", "title": "…", "body": "…",
+    "isActive": true, "createdAt": "…", "updatedAt": "…" }
+]
+```
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Luôn trả về — chưa soạn mẫu nào thì mảng rỗng |
+| 401 | Không có token |
+| 403 | Đã đăng nhập nhưng không phải Admin/Manager |
+
+- **Chỉ trả các dòng GHI ĐÈ đã soạn** — loại chưa có mẫu KHÔNG xuất hiện. Màn hình tự vẽ đủ tám
+  loại rồi ghép dòng đã soạn vào; loại không có dòng hiển thị *"dùng câu mặc định"*.
+- **Không phân trang** — bảng mỗi loại tối đa một mẫu (chỉ mục duy nhất trên `Type`), nên tối đa
+  tám dòng.
+
+### `PUT /notification-templates/{type}` — soạn hoặc sửa mẫu
+
+Upsert theo `{type}` (tên enum, đúng chữ hoa thường): chưa có mẫu cho loại đó thì tạo, có rồi thì
+sửa `title`/`body`/`isActive`.
+
+```json
+// Request
+{ "title": "Đã duyệt yêu cầu huỷ vé", "body": "Yêu cầu huỷ vé của bạn đã được duyệt.", "isActive": true }
+```
+
+```json
+// 200 — trả nguyên dòng vừa lưu (hình dạng NotificationTemplate ở trên)
+{ "id": "…", "type": "CancellationApproved", "title": "…", "body": "…",
+  "isActive": true, "createdAt": "…", "updatedAt": "…" }
+```
+
+```json
+// 400 — chỗ trống không hợp lệ (xem "Chỗ trống trong mẫu")
+{ "message": "Chỗ trống trong mẫu không hợp lệ.",
+  "errors": { "body": ["Chỗ trống {StopName} không được dùng cho loại thông báo này."] } }
+```
+
+| Mã | Khi nào |
+|---|---|
+| 200 | Đã tạo hoặc sửa mẫu |
+| 400 | Thiếu `title`/`body`, `title` quá 200 ký tự, hoặc chỗ trống không hợp lệ (`errors.title`/`errors.body`) |
+| 401 | Không có token |
+| 403 | Không phải Admin/Manager |
+| 404 | `type` không phải một trong tám loại |
+| 409 | Hai lượt soạn cùng loại song song — làm mới danh sách rồi thử lại |
+
+- **Không có DELETE**: tắt mẫu (`isActive = false`) là đủ để quay về câu mặc định mà vẫn giữ phần
+  chữ đã soạn (docs/37 §2.2); xoá dòng là mất chữ vĩnh viễn, nên không mở endpoint xoá.
+- Ghi nhật ký: `PUT` đi qua `AuditLogMiddleware` (Update). Vì khoá trên đường dẫn là `{type}` chứ
+  không phải `{id}`, Target ghi `NotificationTemplates` không kèm id — đủ biết *"có người sửa mẫu
+  lúc nào"*, chấp nhận được.
+
+### Chỗ trống trong mẫu
+
+Mẫu có thể chứa chỗ trống để điền dữ liệu lúc gửi, viết trong cặp ngoặc nhọn `{Tên}` — ví dụ
+`"Chuyến xe tuyến {RouteName} bị trễ."`. Quy ước này do docs/37 §6.1 **ĐỀ XUẤT, nhóm chưa chốt**;
+endpoint lưu mẫu kiểm ngay từ bây giờ để một chỗ trống gõ sai tên không bao giờ đi thẳng ra thông
+báo của khách.
+
+| Loại | Chỗ trống dùng được |
+|---|---|
+| `CancellationRejected`, `TicketChangeRejected` | `{RejectReason}` — lý do từ chối do quản lý nhập |
+| `TripDelayed`, `TripScheduleChanged` | `{RouteName}`, `{OldDepartureTime}`, `{NewDepartureTime}`, `{OldArrivalTime}`, `{NewArrivalTime}` |
+| còn lại | *(không dùng chỗ trống nào — số tiền bị cấm trong nội dung thông báo)* |
