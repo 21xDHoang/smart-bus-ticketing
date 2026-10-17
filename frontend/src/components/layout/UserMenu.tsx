@@ -1,6 +1,6 @@
 import { Avatar, Dropdown, message } from 'antd';
 import type { MenuProps } from 'antd';
-import { LogoutOutlined, QrcodeOutlined, UserOutlined } from '@ant-design/icons';
+import { BellOutlined, LogoutOutlined, QrcodeOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { BRAND } from '../ui/theme';
 import { useAuth } from '../../contexts';
@@ -17,6 +17,14 @@ export default function UserMenu() {
       label: 'Hồ sơ cá nhân',
       icon: <UserOutlined />,
       onClick: () => navigate('/profile'),
+    },
+    // Cài đặt thông báo Web Push (US 10, Sprint 4 dòng 42). Đặt trong thực đơn tài khoản thay
+    // vì menu chính: đây là cài đặt riêng của từng người/trình duyệt, không phải màn nghiệp vụ.
+    {
+      key: 'notification-settings',
+      label: 'Cài đặt thông báo',
+      icon: <BellOutlined />,
+      onClick: () => navigate('/notification-settings'),
     },
     // "Vé của tôi" trỏ đúng màn danh sách vé (/my-tickets), không phải vé tháng.
     ...(laHanhKhach

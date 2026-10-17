@@ -7209,3 +7209,123 @@ dạng API** — phải bàn ở nhóm rồi sửa mục này trước khi code 
 > ⚠️ **Bề mặt này đã có một đoạn literal `statistics`.** Khi dựng `GET /discount-requests/{id}` cho
 > màn hình duyệt (dòng 52), route chi tiết **PHẢI** giữ ràng buộc `{id:guid}` — nới thành `{id}`
 > trần là `statistics` bị route chi tiết nuốt mất, cùng lối `export` của `/audit-logs/export`.
+
+## Web Push (PWA) — `/web-push`
+
+> Story 10 *"Thông báo trạm"*, task *"Tích hợp Web Push (PWA) để nhận thông báo trên trình duyệt"*
+> (Sprint 4 dòng 42 — Trần Trung Hiếu). ✅ **Backend đã làm** (`WebPushController`), ✅ **Frontend
+> đã làm** (màn `/notification-settings`, service worker `/sw.js`).
+>
+> Quy ước A8.5 ghi *"không email/SMS/Web Push"*; task Sprint 4 dòng 42 yêu cầu ngược lại và nhóm
+> chốt làm theo task — Web Push là **kênh phụ trợ**, mọi tin vẫn lưu bảng `Notifications` và hiện
+> trong ứng dụng qua SignalR. Luồng đầy đủ, cách sinh khoá và việc còn lại: `docs/54-tich-hop-web-push-pwa.md`.
+>
+> ⚠️ **Lưu trữ tạm trong bộ nhớ**: `InMemoryWebPushSubscriptionStore` giữ thiết bị theo tiến trình
+> API — khởi động lại là mất, chưa có bảng CSDL. Bảng `WebPushSubscriptions` là việc của Dăm
+> (docs/54 §6); interface `IWebPushSubscriptionStore` đã tách sẵn để thay bằng store EF mà không
+> đổi controller/service.
+
+Cả năm endpoint **yêu cầu đăng nhập** (`[Authorize]` trần, không policy vai trò — nhận thông báo
+trình duyệt là tính năng của hành khách) và **chỉ chạm thiết bị của chính người gọi**. Ca "của
+người khác" trả **404** chứ không phải 403 — không để lộ thiết bị nào đang đăng ký (cùng lối
+`/subscriptions`, `/refunds`).
+
+| Method | Endpoint | Mô tả | Trả về |
+|---|---|---|---|
+| GET | `/web-push/vapid-public-key` | Khoá công khai VAPID của máy chủ | `{ publicKey }` |
+| GET | `/web-push/devices` | Thiết bị đã đăng ký của tôi, mới nhất trước | `WebPushDevice[]` |
+| POST | `/web-push/devices` | Đăng ký / đăng ký lại một thiết bị | `WebPushDevice` (201 mới, 200 ghi đè) |
+| POST | `/web-push/devices/{id:guid}/test` | Gửi tin thử tới đúng thiết bị | 204 |
+| DELETE | `/web-push/devices/{id:guid}` | Gỡ thiết bị (XOÁ dòng) | 204 |
+
+### Hình dạng `WebPushDevice`
+
+```json
+// Một thiết bị đã đăng ký — p256dh/auth KHÔNG trả ra ngoài
+{
+  "id": "9d5f1e2c-0000-0000-0000-000000000000",
+  "endpoint": "https://fcm.googleapis.com/fcm/send/…",
+  "expirationTime": null,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) …",
+  "createdAt": "2026-10-17T09:00:00Z"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | string (GUID) | khoá của lượt đăng ký — dùng cho gửi thử và `DELETE` |
+| `endpoint` | string | push endpoint do trình duyệt cấp; dài ~150 ký tự, frontend chỉ hiện host |
+| `expirationTime` | string (ISO 8601) `\|` null | trình duyệt hẹn hết hạn; `null` = không hẹn giờ |
+| `userAgent` | string | User-Agent lúc đăng ký để phân biệt thiết bị |
+| `createdAt` | string (ISO 8601 UTC) | thời điểm đăng ký/đăng ký lại gần nhất |
+
+- **Không trả `p256dh`/`auth`**: máy chủ cần hai khoá này để mã hoá RFC 8291, trình duyệt đã có
+  sẵn — trả ra chỉ thêm bề mặt lộ khoá.
+- **`endpoint` là khoá nghiệp vụ của push service**, không phải URL để người dùng bấm. Đăng ký lại
+  đúng endpoint (trình duyệt gọi lại mỗi lần mở app) **ghi đè** dòng cũ, giữ nguyên `id` và
+  `createdAt` cũ → không sinh dòng trùng.
+
+#### `GET /web-push/vapid-public-key` — khoá công khai VAPID
+
+```json
+// 200 — cùng một khoá cho mọi thiết bị của mọi người dùng
+{ "publicKey": "BP0zY80sefgcqSwW4HRox3bo_t1vNoPkTqc8GVBvUhIyBJGIZwqNMOGsksS41X9jwsMiaC-eijhkFmo7v7ZwwKw" }
+```
+
+- Frontend truyền nguyên chuỗi vào `PushManager.subscribe({ applicationServerKey })` sau khi giải
+  base64url thành **65 byte** (điểm P-256 uncompressed). Sai định dạng → trình duyệt ném
+  `InvalidAccessError`.
+- Khoá này **không phải bí mật**; chỉ khoá riêng (cấu hình `WebPush:PrivateKey`) mới là bí mật.
+
+#### `POST /web-push/devices` — đăng ký thiết bị
+
+```json
+// Request — nguyên hình PushSubscription.toJSON() của trình duyệt
+{
+  "endpoint": "https://fcm.googleapis.com/fcm/send/…",
+  "p256Dh": "BKOtatI8ZS2MqSjG3PlfrDb3rYwHAI2qHRO1LuT_fkrr8fFARpPU8B8Rpv44Uvc4BuHY7Ow5oiPCZPYXcQOXDp4",
+  "auth": "AAECAwQFBgcICQoLDA0ODw",
+  "expirationTime": null
+}
+```
+
+| Mã | Khi nào |
+|---|---|
+| 201 | Thiết bị mới — trả dòng vừa tạo |
+| 200 | Đăng ký lại đúng `endpoint` đã có — trả dòng đã ghi đè (không phải lỗi trùng) |
+| 400 | Thiếu trường, `endpoint` không phải URL https tuyệt đối, `p256Dh` không phải điểm 65 byte, `auth` không phải 16 byte — lỗi gắn đúng `errors.endpoint` / `errors.p256Dh` / `errors.auth` |
+| 401 | Không có token |
+
+- `p256Dh`/`auth` là base64url do trình duyệt sinh; backend kiểm **độ dài sau khi giải mã** chứ
+  không so chuỗi — cùng lối kiểm khoá VAPID lúc khởi động.
+- Thiết bị được lưu theo **UserId của token**, không có tham số nào để đăng ký hộ người khác.
+
+#### `POST /web-push/devices/{id:guid}/test` — gửi tin thử
+
+| Mã | Khi nào |
+|---|---|
+| 204 | Đã chuyển tin cho push service — **không hứa** thông báo đã hiện (người dùng có thể đang tắt máy) |
+| 401 | Không có token |
+| 404 | Thiết bị không tồn tại **hoặc** của người khác — cùng một câu |
+
+- Nội dung tin thử: tiêu đề có chữ *"thử"*, `url` mở `/notifications`, tag `smartbus-test`. Tin
+  thử đi qua `IWebPushSender` với hợp đồng **không bao giờ ném lỗi** — 204 nghĩa là kênh gửi đã
+  nhận, không phải bằng chứng thiết bị đã bật thông báo.
+
+#### `DELETE /web-push/devices/{id:guid}` — gỡ thiết bị
+
+| Mã | Khi nào |
+|---|---|
+| 204 | Đã xoá dòng |
+| 401 | Không có token |
+| 404 | Thiết bị không tồn tại **hoặc** của người khác — cùng một câu |
+
+- Gọi lại cùng id lần nữa → **404** (không idempotent, cùng lối `DELETE /subscriptions/{id}`).
+- Frontend cũng gọi `pushSubscription.unsubscribe()` phía trình duyệt khi gỡ đúng thiết bị đang
+  mở — backend không làm hộ được.
+
+### Ghi nhật ký kiểm toán
+
+`POST /web-push/devices`, `POST /web-push/devices/{id}/test` và `DELETE /web-push/devices/{id}` đi
+qua `AuditLogMiddleware` (POST → Create, DELETE → Delete; Target `Devices:{id}`). Target `Devices`
+là tên bảng **dự kiến** — store tạm trong bộ nhớ chưa có bảng (docs/54 §6).

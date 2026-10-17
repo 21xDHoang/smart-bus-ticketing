@@ -8,9 +8,10 @@
 //   2. xin quyền — luôn gọi từ một thao tác bấm của người dùng;
 //   3. theo dõi quyền đổi từ bên ngoài (người dùng sửa cài đặt trang web).
 //
-// ⚠️ Quyền này KHÔNG phải "đăng ký nhận Web Push". Đẩy thông báo thật vẫn đi qua
-// SignalR + bảng Notifications (quyết định A8.5); quyền trình duyệt chỉ là điều kiện
-// cần nếu sau này màn hình muốn hiện thông báo hệ điều hành (docs/46 §2).
+// ⚠️ Quyền này chỉ là "được phép hiện thông báo hệ điều hành" — CHƯA phải đăng ký nhận
+// Web Push. Từ Sprint 4 dòng 42, màn Cài đặt thông báo dùng chung quyền này rồi mới gọi
+// PushManager.subscribe + POST /api/web-push/devices (docs/54); kênh trong ứng dụng vẫn
+// là SignalR + bảng Notifications, Web Push chỉ là kênh phụ trợ (docs/46 §2).
 // -----------------------------------------------------------------------------
 
 /**

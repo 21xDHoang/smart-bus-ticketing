@@ -29,6 +29,14 @@
         }
       })();
     </script>
+    <!-- PWA: manifest + icon để "Thêm vào Màn hình chính"; cùng bộ icon với thông báo Web Push.
+         theme-color lấy đúng màu thương hiệu (PALETTE.primary trong components/ui/theme.ts). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0B5FFF" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Smart Bus" />
     <title>Smart Bus Ticket — Hệ thống đặt vé xe buýt</title>
   </head>
   <body>
