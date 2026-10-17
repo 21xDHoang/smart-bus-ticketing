@@ -480,7 +480,7 @@ const BusManagePage = () => {
     <div>
       <PageHeader
         title="Quản lý đội xe"
-        subtitle="Tra cứu xe theo biển số, loại xe và trạng thái — kèm tuyến đang phụ trách, chuyến kế tiếp và tình trạng ghế."
+        subtitle="Tra cứu xe theo biển số, loại xe và trạng thái — kèm tuyến đang phụ trách, chuyến kế tiếp và tình trạng ghế. Xe đã ngừng khai thác vẫn được lưu để giữ lịch sử chuyến; chọn bộ lọc “Ngừng khai thác” khi cần xem lại."
       />
 
       <PageCard
@@ -510,15 +510,15 @@ const BusManagePage = () => {
             />
 
             <Select<BusStatus>
-              allowClear
-              // Hiện trạng thái đang lọc để bộ lọc mặc định "Đang khai thác" không bị ẩn —
-              // không có dòng này thì danh sách đã lọc mà ô chọn trông như chưa chọn gì.
+              // KHÔNG cho xoá trắng bộ lọc: trạng thái rỗng = lấy CẢ BA trạng thái, kéo theo
+              // xe đã ngừng khai thác (xoá mềm) hiện lại trong danh sách — đúng cái gây hiểu
+              // nhầm "xoá rồi mà vẫn còn". Muốn xem xe đã xoá thì chọn hẳn "Ngừng khai thác".
               value={status}
               placeholder="Trạng thái"
               style={{ width: 200 }}
               options={BUS_STATUS_OPTIONS}
               onChange={(value) => {
-                setStatus(value ?? undefined);
+                setStatus(value);
                 setPage(1);
               }}
             />
