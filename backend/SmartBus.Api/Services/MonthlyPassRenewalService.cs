@@ -23,6 +23,7 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
     private const string PassTypeNotFoundMessage = "Không tìm thấy loại vé";
     private const string RouteNotFoundMessage = "Không tìm thấy tuyến đường";
     private const string OverlapMessage = "Đã có vé tháng khác trên cùng tuyến trong khoảng thời gian này";
+    private const string CancelledMessage = "Vé tháng đã bị huỷ, không thể gia hạn";
     private const string CodeCollisionMessage = "Không sinh được mã vé tháng, vui lòng thử lại";
 
     /// <summary>Bộ ký tự sinh 6 ký tự cuối mã vé — trùng bộ ký tự frontend đang dùng (monthlyPassApi.ts).</summary>
@@ -56,6 +57,13 @@ public class MonthlyPassRenewalService : IMonthlyPassRenewalService
         if (pass is null)
         {
             return ServiceResult<MonthlyPassResponse>.NotFound(PassNotFoundMessage);
+        }
+
+        // Vé đã bị quản trị viên huỷ là chặn cứng (xem MonthlyPassStatus) — gia hạn nó sẽ hồi
+        // sinh một vé mà nhà xe cố ý thu hồi. Muốn gia hạn thì mở lại vé trước.
+        if (pass.Status == MonthlyPassStatus.Cancelled)
+        {
+            return ServiceResult<MonthlyPassResponse>.Conflict(CancelledMessage);
         }
 
         // Loại vé: bỏ trống mã = giữ nguyên loại của vé cũ. Tra lại từ bảng chứ không dùng

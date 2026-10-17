@@ -32,7 +32,12 @@ public class MonthlyPassLookupService : IMonthlyPassLookupService
         // kết quả, không cần kiểm quyền sở hữu ở tầng trên.
         var rows = await _db.MonthlyPasses
             .AsNoTracking()
-            .Where(p => p.UserId == userId && p.ValidFrom <= now && p.ValidTo >= now)
+            // Cancelled là CHẶN CỨNG (xem MonthlyPassStatus): vé quản trị viên đã huỷ không
+            // còn hiệu lực dù cặp mốc vẫn bao quanh "bây giờ". Đây là ngoại lệ duy nhất của
+            // luật "hiệu lực suy từ ValidFrom/ValidTo".
+            .Where(p => p.UserId == userId
+                && p.Status != MonthlyPassStatus.Cancelled
+                && p.ValidFrom <= now && p.ValidTo >= now)
             .OrderBy(p => p.ValidTo)
             .ThenBy(p => p.Code)
             .Select(p => new { Pass = p, PassTypeCode = p.PassType!.Code })

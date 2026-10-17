@@ -3462,12 +3462,26 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 - **Hiệu lực thật của vé suy từ `validFrom`/`validTo`, KHÔNG đọc cột `status`.** Cột `status` do
   job quét vé hết hạn lật (BackgroundService — Nguyễn Duy Kiên) nên LUÔN có độ trễ: giữa lúc
   `validTo` trôi qua và lúc job chạy, một vé đã hết hạn vẫn còn `status = "Active"`.
+- **`status = "Cancelled"` là ngoại lệ duy nhất của luật trên.** Đây là trạng thái do quản trị
+  viên đặt qua `PATCH /monthly-passes/{id}/status`, không suy ra được từ ngày tháng — nên nó
+  CHẶN CỨNG: vé đã huỷ không còn hiệu lực kể cả khi `validFrom <= bây giờ <= validTo`. Mọi
+  truy vấn hỏi "vé còn dùng được không" phải loại `Cancelled` ra; `GET /monthly-passes/me` đã làm
+  vậy. `Cancelled` không bị job hết hạn ghi đè (job chỉ lật `Active` → `Expired`).
 
 | Method | Endpoint | Mô tả | Body | Trả về |
 |---|---|---|---|---|
 | POST | `/monthly-passes` | Đăng ký vé tháng mới của chính người gọi: chọn tuyến + loại vé (thời hạn và giá theo loại) | `{ routeId, passTypeCode }` | `MonthlyPass` |
 | POST | `/monthly-passes/{id}/renew` | Gia hạn vé tháng của chính người gọi — ghi thêm một dòng mới, tính ngày hiệu lực kế tiếp | `{ passTypeCode? }` | `MonthlyPass` (dòng mới) |
 | GET | `/monthly-passes/me` | Vé tháng **đang hoạt động** của chính người gọi | — | `MonthlyPass[]` (mảng trần) |
+| GET | `/monthly-passes` | **Quản trị** — danh sách toàn bộ vé tháng, lọc + phân trang | — | `MonthlyPassListResponse` |
+| GET | `/monthly-passes/statistics` | **Quản trị** — số vé theo từng nhóm hiệu lực + doanh thu | — | `MonthlyPassStatisticsResponse` |
+| GET | `/monthly-passes/{id}` | **Quản trị** — chi tiết một vé bất kỳ | — | `MonthlyPassAdminResponse` |
+| PATCH | `/monthly-passes/{id}/status` | **Quản trị** — huỷ hoặc mở lại một vé | `{ status }` | `MonthlyPassAdminResponse` |
+
+> Bốn endpoint **Quản trị** đứng sau policy `ManagerOrAbove` (Admin và Quản lý) — khác ba
+> endpoint phía trên chỉ cần đăng nhập. Chúng dùng controller riêng
+> (`MonthlyPassAdminController`) trên cùng bề mặt `api/monthly-passes`; đoạn literal `statistics`
+> và ràng buộc `{id:guid}` không tranh chấp với `me` / `renew`.
 
 ### Entity `MonthlyPass`
 
@@ -3494,7 +3508,7 @@ Hai luật nền — đọc trước khi dùng bất cứ endpoint nào ở đâ
 | `passTypeCode` | string | Mã loại vé trong bảng `PassTypes` — quyết định thời hạn và giá gói |
 | `price` | number | Số tiền THỰC TRẢ lúc đăng ký/gia hạn — **ảnh chụp**, không tra lại bảng giá |
 | `validFrom` / `validTo` | ISO 8601 UTC | Khoảng hiệu lực, **tính cả hai mốc**. Nguồn sự thật về hiệu lực của vé |
-| `status` | string | `Active` / `Expired` — trạng thái LƯU, có độ trễ (xem trên) |
+| `status` | string | `Active` / `Expired` / `Cancelled` — trạng thái LƯU. `Active`/`Expired` có độ trễ (xem trên); `Cancelled` do quản trị viên đặt và là chặn cứng |
 | `createdAt` | ISO 8601 UTC | |
 
 #### `POST /monthly-passes` — đăng ký vé tháng mới
@@ -3639,6 +3653,221 @@ phụ theo `code` cho ổn định. Mỗi phần tử đúng hình dạng `Month
 
 > **Vì sao mảng trần mà không `{ items, total }` như các danh sách khác?** Một người chỉ có vài vé
 > đang hoạt động (mỗi tuyến một vé) — phân trang là nghi thức thừa, và màn hình chỉ cần đúng mảng.
+
+### Quản trị vé tháng
+
+Bốn endpoint dưới đây phục vụ màn hình "Quản lý vé tháng" của Admin/Quản lý. **Tất cả nằm sau
+policy `ManagerOrAbove`**; người đã đăng nhập nhưng không đủ quyền nhận **403** theo định dạng lỗi
+chung của dự án. Không có token → **401**.
+
+#### Entity `MonthlyPassAdminResponse`
+
+Bản mở rộng của `MonthlyPass` cho màn quản trị — thêm thông tin hành khách, tuyến và loại vé để
+bảng không phải ghép dữ liệu ở client:
+
+```json
+{
+  "id": "3f2a1b0c-0000-0000-0000-000000000000",
+  "code": "MP-01-A1B2C3",
+  "userId": "7c1d3e4f-0000-0000-0000-000000000000",
+  "userFullName": "Nguyễn Văn A",
+  "userPhoneNumber": "0901234567",
+  "routeId": "9d8c7b6a-0000-0000-0000-000000000000",
+  "routeCode": "01",
+  "routeName": "Bến Thành — Chợ Lớn",
+  "passTypeCode": "OneMonth",
+  "passTypeName": "Vé tháng 1 tháng",
+  "price": 200000,
+  "validFrom": "2026-10-01T00:00:00Z",
+  "validTo": "2026-11-01T00:00:00Z",
+  "status": "Active",
+  "createdAt": "2026-09-28T03:20:11Z",
+  "updatedAt": "2026-10-17T02:00:00Z"
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id`, `code`, `routeId`, `passTypeCode`, `price`, `validFrom`, `validTo`, `status`, `createdAt` | — | Cùng nghĩa với `MonthlyPass` ở trên |
+| `userId` | GUID | Hành khách sở hữu vé |
+| `userFullName` / `userPhoneNumber` | string | Họ tên và SĐT hành khách. Chuỗi rỗng nếu dữ liệu mồ côi (FK `Restrict` chặn xoá thật nên chỉ có ở dữ liệu hỏng) |
+| `routeCode` / `routeName` | string | Tuyến mà vé cho phép đi lại |
+| `passTypeName` | string | Tên hiển thị của loại vé |
+| `updatedAt` | ISO 8601 UTC \| null | Lần sửa gần nhất (job hết hạn hoặc quản trị viên huỷ/mở lại) |
+
+#### `GET /monthly-passes` — danh sách vé tháng
+
+Phân trang, **mới nhất trước** (`createdAt` giảm dần, phụ theo `code`).
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `search` | string ≤ 100 | — | Tìm không phân biệt hoa thường theo **mã vé**, **họ tên** hoặc **SĐT** hành khách |
+| `status` | string | — | `Active` / `Expired` / `Cancelled`. Giá trị không khớp mã nào trả **danh sách rỗng** — cùng lối `GET /buses`, không báo lỗi |
+| `routeId` | GUID | — | Chỉ lấy vé của một tuyến |
+| `passTypeCode` | string ≤ 20 | — | Chỉ lấy vé của một loại vé |
+| `page` | số nguyên ≥ 1 | `1` | Trang hiện tại |
+| `pageSize` | số nguyên 1..100 | `10` | Số dòng mỗi trang |
+
+```json
+// MonthlyPassListResponse
+{
+  "items": [ /* MonthlyPassAdminResponse */ ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+`total` là tổng số dòng KHỚP BỘ LỌC, không phải số dòng trong `items`.
+
+> **`status` lọc theo cột lưu, không theo hiệu lực thật.** `status=Active` có thể trả về vé vừa
+> quá `validTo` mà job chưa quét. Đây là bộ lọc TRA CỨU của quản trị viên nên trả đúng cột lưu —
+> khác `GET /monthly-passes/me`, nơi câu hỏi là "bây giờ tôi đi được tuyến nào". Muốn đếm vé còn
+> hiệu lực thật thì dùng `GET /monthly-passes/statistics`.
+
+#### `GET /monthly-passes/{id}` — chi tiết một vé
+
+Trả **200** kèm `MonthlyPassAdminResponse`. `{id}` không tồn tại hoặc sai định dạng GUID →
+**404** `"Không tìm thấy vé tháng"`. Không có nhánh "vé của người khác": quản trị viên xem được
+mọi vé.
+
+#### `PATCH /monthly-passes/{id}/status` — huỷ / mở lại vé
+
+```json
+// UpdateMonthlyPassStatusRequest
+{ "status": "Cancelled" }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `status` | ✅ | Chỉ nhận `"Cancelled"` hoặc `"Active"`. Giá trị khác → **400** `errors.status` |
+
+Luật chuyển trạng thái — mọi ca không nằm trong bảng đều **409**:
+
+| Từ | Sang | Điều kiện | Ghi chú |
+|---|---|---|---|
+| `Active` | `Cancelled` | `validTo >= bây giờ` | Huỷ vé trước khi hết hạn. Ghi `updatedAt = bây giờ` |
+| `Cancelled` | `Active` | `validTo >= bây giờ` | Mở lại vé bị huỷ nhầm. Vé đã quá hạn thì không mở lại được |
+| `Expired` | bất kỳ | — | **409** `"Vé tháng đã hết hạn"` — trạng thái do job quản lý |
+| Cùng trạng thái | — | — | **409** `"Vé tháng đã ở trạng thái …"` — không phải lỗi hệ thống, chỉ là thao tác thừa |
+
+`{id}` không tồn tại → **404** `"Không tìm thấy vé tháng"`. Thành công → **200** kèm
+`MonthlyPassAdminResponse` sau khi lưu (giao diện cập nhật thẳng, không phải gọi lại).
+
+Ghi chú:
+
+- **Huỷ vé KHÔNG hoàn tiền** — chưa có nghiệp vụ hoàn tiền vé tháng (A8.2), và endpoint này không
+  tạo giao dịch hoàn. Doanh thu vẫn ghi nhận số tiền đã thu.
+- **Huỷ không xoá dòng** — vé ở lại làm lịch sử; đổi trạng thái chứ không xoá cứng.
+- **Gia hạn vé đã huỷ bị chặn** — `POST /monthly-passes/{id}/renew` trên vé `Cancelled` trả **409**
+  `"Vé tháng đã bị huỷ, không thể gia hạn"`. Mở lại trước nếu muốn gia hạn.
+- **Nhật ký kiểm toán**: middleware ghi `Update`, `Target = MonthlyPasses:{id}`.
+
+#### `GET /monthly-passes/statistics` — thống kê
+
+Không tham số. Trả số vé theo từng nhóm hiệu lực và doanh thu:
+
+```json
+// MonthlyPassStatisticsResponse
+{
+  "totalCount": 120,
+  "activeCount": 84,
+  "upcomingCount": 6,
+  "expiredCount": 27,
+  "cancelledCount": 3,
+  "totalRevenue": 24000000,
+  "revenueThisMonth": 3600000
+}
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `totalCount` | Tổng số dòng vé tháng |
+| `activeCount` | `status != Cancelled` **và** `validFrom <= bây giờ <= validTo` — còn hiệu lực thật |
+| `upcomingCount` | `status != Cancelled` **và** `validFrom > bây giờ` — vé mua trước cho kỳ sau |
+| `expiredCount` | `status != Cancelled` **và** `validTo < bây giờ` |
+| `cancelledCount` | `status == Cancelled` |
+| `totalRevenue` | Tổng `price` của **mọi** vé đã bán — tính cả vé đã huỷ, vì huỷ không hoàn tiền |
+| `revenueThisMonth` | Tổng `price` của các vé có `createdAt` trong **tháng hiện tại theo UTC** |
+
+Bốn nhóm đầu **phân hoạch** đủ tập vé: mỗi vé rơi đúng một nhóm. `Expired` ở đây suy từ ngày
+tháng, không đọc cột `status` — nên khác con số khi lọc `status=Expired` trong lúc job chưa chạy.
+
+## Loại vé tháng — `/pass-types`
+
+> Bảng `PassTypes` (thời hạn + giá gói) đã có từ story 16 nhưng trước đây chỉ được **đọc** lúc
+> đăng ký/gia hạn: chưa có endpoint nào để quản trị viên xem hay sửa danh mục. Bốn endpoint dưới
+> đây bổ sung phần đó. **Tất cả sau policy `ManagerOrAbove`.**
+
+| Method | Endpoint | Mô tả | Body | Trả về |
+|---|---|---|---|---|
+| GET | `/pass-types` | Danh mục loại vé + số vé đang dùng mỗi loại | — | `PassTypeResponse[]` (mảng trần) |
+| POST | `/pass-types` | Thêm loại vé | `CreatePassTypeRequest` | `PassTypeResponse` (**201**) |
+| PUT | `/pass-types/{id}` | Sửa tên / thời hạn / giá | `UpdatePassTypeRequest` | `PassTypeResponse` |
+| DELETE | `/pass-types/{id}` | Xoá loại vé chưa từng được dùng | — | `PassTypeResponse` |
+
+### Entity `PassTypeResponse`
+
+```json
+{
+  "id": "5b7c8d9e-0000-0000-0000-000000000000",
+  "code": "OneMonth",
+  "name": "Vé tháng 1 tháng",
+  "durationMonths": 1,
+  "price": 200000,
+  "monthlyPassCount": 84,
+  "createdAt": "2026-09-01T00:00:00Z",
+  "updatedAt": null
+}
+```
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `id` | GUID | |
+| `code` | string | Khoá nghiệp vụ — nội dung ô `passTypeCode` của POST đăng ký/gia hạn. **Không sửa được sau khi tạo** |
+| `name` | string | Tên hiển thị cho hành khách |
+| `durationMonths` | số nguyên | Thời hạn tính bằng tháng lịch |
+| `price` | number | Giá gói cho toàn bộ thời hạn (VND) |
+| `monthlyPassCount` | số nguyên | Số vé tháng đang tham chiếu loại vé này — lớn hơn 0 thì không xoá được |
+| `createdAt` / `updatedAt` | ISO 8601 UTC | `updatedAt` null khi chưa sửa lần nào |
+
+Danh mục trả **mảng trần** (không phân trang): bảng chỉ vài dòng. Sắp theo `durationMonths` tăng
+dần rồi `code` cho ổn định.
+
+### `CreatePassTypeRequest` / `UpdatePassTypeRequest`
+
+```json
+// CreatePassTypeRequest
+{ "code": "OneMonth", "name": "Vé tháng 1 tháng", "durationMonths": 1, "price": 200000 }
+
+// UpdatePassTypeRequest — KHÔNG có code (khoá nghiệp vụ bất biến)
+{ "name": "Vé tháng 1 tháng", "durationMonths": 1, "price": 220000 }
+```
+
+| Trường | Bắt buộc | Ràng buộc |
+|---|---|---|
+| `code` | ✅ (chỉ khi tạo) | 1–20 ký tự, chỉ chữ và số (`^[A-Za-z0-9]+$`), **không phân biệt hoa thường khi kiểm trùng nhưng lưu nguyên chuỗi gửi lên**. Trùng mã → **409** |
+| `name` | ✅ | 1–100 ký tự |
+| `durationMonths` | ✅ | Số nguyên 1..120 |
+| `price` | ✅ | Số ≥ 0, tối đa `9 999 999 999.99` — khớp `numeric(12,2)` |
+
+Các ca lỗi:
+
+| Ca | Mã |
+|---|---|
+| Vi phạm ràng buộc trường | 400 — `errors.<field>` |
+| `{id}` không tồn tại | 404 `"Không tìm thấy loại vé"` |
+| Mã loại vé đã tồn tại (tạo mới) | 409 `"Mã loại vé đã tồn tại"` |
+| Xoá loại vé đã có vé tháng tham chiếu | 409 `"Loại vé đã được sử dụng, không thể xoá"` |
+
+Ghi chú:
+
+- **Đổi giá không làm vé đã bán nhảy theo** — `MonthlyPass.Price` là ảnh chụp lúc mua (xem entity
+  `MonthlyPass`). Sửa `price` chỉ ảnh hưởng các vé mua SAU đó.
+- **Không xoá cứng loại vé đang được dùng** — khoá ngoại `Restrict` chặn ở tầng CSDL; service
+  kiểm tra trước để trả 409 kèm câu giải thích thay vì lỗi 500.
+- **Nhật ký kiểm toán**: POST → `Create`, PUT → `Update`, DELETE → `Delete`,
+  `Target = PassTypes:{id}`.
 
 ## Nhật ký kiểm toán — `/audit-logs`
 
