@@ -478,6 +478,15 @@ builder.Services.AddScoped<IRevenueReportService>(provider => new CachedRevenueR
 // vào nó — nhìn danh sách đăng ký là thấy quan hệ.
 builder.Services.AddScoped<IRevenueComparisonService, RevenueComparisonService>();
 
+// Doanh thu theo tuyến / theo xe / theo phương thức thanh toán:
+// GET /api/reports/revenue/by-route, /by-bus, /by-payment-method (US 19 "Doanh thu", Sprint 4).
+// Task "API doanh thu theo tuyến, theo xe, theo phương thức thanh toán" — Nguyễn Duy Kiên.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR.
+// Cùng nền Payments Success + cùng trục giờ Việt Nam với báo cáo thời gian ở trên, nhưng controller
+// riêng (RevenueBreakdownController) và KHÔNG đi qua đệm — ba báo cáo này trả dòng theo nhóm, không
+// phải bucket thời gian, nên không dùng chung khoá đệm của RevenueReportCache.
+builder.Services.AddScoped<IRevenueBreakdownService, RevenueBreakdownService>();
+
 // Mã QR vé điện tử (US 4, Sprint 3): sinh mã DUY NHẤT + ký HMAC-SHA256 chống làm giả — mã chính là
 // cột Tickets.Code (unique toàn hệ thống; ngân sách 200 ký tự, docs/28 §2/§6).
 // Task "Service sinh mã QR duy nhất + ký số chống làm giả" — Nguyễn Duy Kiên.
