@@ -42,6 +42,7 @@ import AdminTicketRequestPage from './pages/AdminTicketRequestPage';
 import FillRateReportPage from './pages/FillRateReportPage';
 import RevenueDashboardPage from './pages/RevenueDashboardPage';
 import OverloadAlertPage from './pages/OverloadAlertPage';
+import TicketValidationStatsPage from './pages/TicketValidationStatsPage';
 import RouteGuard from './components/RouteGuard';
 import { AppLayout } from './components/layout';
 import { buildTheme } from './components/ui/theme';
@@ -417,6 +418,21 @@ function App() {
                 element={
                   <RouteGuard allowedRoles={['Admin', 'Manager']}>
                     <OverloadAlertPage />
+                  </RouteGuard>
+                }
+              />
+              {/* /ticket-validation-stats là màn hình thống kê lượt soát theo chuyến (US 15,
+                  Sprint 4, dòng 24, task của Dương Thị Hạnh): chọn một chuyến rồi xem lượt soát
+                  vé phân bố thế nào — tổng / hợp lệ / từng lý do từ chối. Báo cáo vận hành nên
+                  chỉ Admin và Manager vào được. Backend endpoint này chưa có nên màn hình đang
+                  chạy dữ liệu giả (ticketValidationStatsApi.ts). Dòng route này do Dương Thị
+                  Hạnh thêm hộ: màn hình cần đường vào, mà App.tsx là file dùng chung §E1 (của
+                  Nguyễn Đình Băng) — đã ghi rõ trong PR để Băng xem. */}
+              <Route
+                path="/ticket-validation-stats"
+                element={
+                  <RouteGuard allowedRoles={['Admin', 'Manager']}>
+                    <TicketValidationStatsPage />
                   </RouteGuard>
                 }
               />
