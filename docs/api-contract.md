@@ -2050,12 +2050,11 @@ Authorization: Bearer <JWT>
 > sở hữu kiểm bằng chính điều kiện truy vấn ở trên, mạnh hơn một policy vai trò vì nó chặt theo *từng
 > dòng* chứ không theo *loại tài khoản*.
 
-> ⚠️ **Frontend đang lệch so với backend — đã báo ở PR, KHÔNG tự sửa (`src/api/` là file của Băng).**
-> `NotificationType` trong `notificationApi.ts` mới khai **bốn** giá trị, thiếu `RefundSucceeded` và
-> `RefundFailed`; `NotificationTarget` mới khai **hai**, thiếu `Refund`. Backend phát đủ sáu loại và
-> ba target (hai loại `Refund…` do `RefundResultNotifier` phát — mục trên), nên gặp thông báo hoàn
-> tiền là union của TypeScript không phủ. Ngoài ra `USE_MOCK_DATA` còn `true`: đổi thành `false` là
-> màn thông báo chạy thật.
+> ✅ **Frontend đã khớp (Băng đồng ý cho sửa `src/api/notificationApi.ts`).**
+> `NotificationType` khai đủ **sáu** giá trị (thêm `RefundSucceeded`, `RefundFailed`),
+> `NotificationTarget` đủ **ba** (thêm `Refund`), và `notificationApi.listMine()` gọi thẳng
+> `GET /notifications/me` — `USE_MOCK_DATA` cùng nhánh dữ liệu giả đã bỏ. `NotificationBell` xếp
+> `RefundSucceeded` vào nhóm "thành công" để thông báo hoàn tiền thành công không hiện dấu đỏ.
 
 ## Xe buýt — `/buses`
 
