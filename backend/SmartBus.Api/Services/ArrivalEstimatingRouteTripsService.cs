@@ -11,8 +11,9 @@ namespace SmartBus.Api.Services;
 ///
 /// <para>
 /// Vì sao bọc thay vì sửa <see cref="RouteTripsService"/>: file đó của Hiếu (luật E1). Lớp bọc này
-/// nằm giữa <see cref="NotifyingRouteTripsService"/> và lớp trần, chỉ can thiệp DUY NHẤT vào
-/// <see cref="GenerateAsync"/>; năm lượt còn lại chuyển tiếp nguyên vẹn.
+/// nằm giữa <see cref="NotifyingRouteTripsService"/> và <see cref="FleetAwareRouteTripsService"/>,
+/// chỉ can thiệp DUY NHẤT vào <see cref="GenerateAsync"/>; năm lượt còn lại chuyển tiếp nguyên vẹn
+/// (lượt <c>CreateAsync</c> đi tiếp xuống lớp hiểu đội xe nhiều chiếc).
 /// </para>
 ///
 /// <para>

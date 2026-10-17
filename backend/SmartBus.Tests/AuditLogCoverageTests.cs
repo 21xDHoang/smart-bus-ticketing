@@ -84,6 +84,14 @@ public class AuditLogCoverageTests
         ("DELETE", "/api/routes/{routeId:guid}/trips/{id:guid}", CachGhi.Middleware),
         ("POST",   "/api/routes/{routeId:guid}/trips/generate",  CachGhi.Middleware),
 
+        // Sinh chuyến cho CẢ ĐỘI XE — nợ của đợt mở rộng đội xe 17/10/2026, Phùng Duy Hoàng. Cũng
+        // do AuditLogMiddleware tự ghi (POST → Create). Route có tham số {routeId} nhưng không có
+        // {id}, nên tên bảng suy từ đoạn tĩnh đầu tiên sau tham số cuối là "Trips". Response
+        // (GenerateFleetTripsResponse) không có trường "id" ở nóc — id từng chuyến nằm trong
+        // "items" — nên Target chỉ còn tên bảng, cùng giới hạn đã ghi ở
+        // PATCH .../trips/driver-assignment; test Phần 2 ghim sự thật đó.
+        ("POST",   "/api/routes/{routeId:guid}/trips/generate-fleet", CachGhi.Middleware),
+
         // Giờ đến từng trạm — story 13, Phùng Duy Hoàng. Middleware tự ghi (PUT → Update); tên
         // bảng suy từ đoạn ngay trước {id} là "Trips", Target "Trips:{id}". Đánh đổi đã biết:
         // dòng bị ghi thật là TripStopTimeOverrides, nhưng id chuyến trong Target tra ngược được
@@ -771,6 +779,34 @@ public class AuditLogCoverageTests
         // thân request nên middleware không đọc được — cùng giới hạn đã ghi nhận ở
         // PUT .../stops/order. Test này ghim sự thật đó lại để lần sau có ai đổi hình dạng
         // response thì thấy ngay nhật ký đổi theo.
+        Assert.Equal("Trips", log.Target);
+    }
+
+    // Sinh chuyến cho cả đội xe (nợ của đợt mở rộng đội xe 17/10/2026 — Phùng Duy Hoàng).
+    // Endpoint mới nhưng vẫn đi qua middleware như mọi POST khác; ca này chứng minh điều đó và
+    // ghim luôn giới hạn Target: route không có {id}, còn response không có trường "id" ở nóc
+    // (id từng chuyến nằm trong "items"), nên nhật ký chỉ ghi được tên bảng "Trips".
+    [Fact]
+    public async Task Post_route_trips_generate_fleet_ghi_Create_voi_ten_bang_Trips()
+    {
+        using var factory = new TestAppFactory();
+        var (client, admin) = await SignInAsAdminAsync(factory);
+        var route = await SeedRouteAsync(factory, "01");
+        var bus = await SeedBusAsync(factory, "29B-123.45");
+
+        var response = await client.PostAsJsonAsync(
+            $"{RouteTripsUrl(route.Id)}/generate-fleet",
+            new
+            {
+                busIds = new[] { bus.Id },
+                startTime = "2026-10-17T06:00:00Z",
+                endTime = "2026-10-17T06:15:00Z",
+                frequencyMinutes = 15,
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var log = await AssertMotBanGhiAsync(factory, AuditAction.Create, target: null, admin);
         Assert.Equal("Trips", log.Target);
     }
 
