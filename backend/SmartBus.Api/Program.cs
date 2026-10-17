@@ -813,6 +813,19 @@ builder.Services.AddScoped<IExportJobNotifier, ExportJobNotifier>();
 builder.Services.AddScoped<IExportJobProcessor, ExportJobProcessor>();
 builder.Services.AddHostedService<ExportJobBackgroundService>();
 
+// Thống kê số lượng hồ sơ ưu đãi theo trạng thái (US 17, Sprint 4 dòng 55):
+// GET /api/discount-requests/statistics.
+// Task "API thống kê số lượng hồ sơ ưu đãi theo trạng thái" — Vàng Thị Dăm.
+// File này của Hoàng nên nhờ Hoàng xem qua trong PR (Hoàng đã đồng ý cho sửa trong phiên này).
+// Bảng DiscountRequests đã dựng từ Sprint 2 dưới tên gộp theo A9 #13 (xem
+// AppDbContext.DiscountRequest.cs); service CHỈ ĐỌC nên không có migration kèm theo.
+// Hai endpoint còn lại của bề mặt api/discount-requests chưa dựng và không thuộc task này: gửi hồ sơ
+// + tải ảnh minh chứng (Hiếu, dòng 51), duyệt/từ chối hồ sơ (Kiên, dòng 52) — chưa có dòng đăng ký
+// nào ở đây vì chưa có service.
+// Đặt ở CUỐI danh sách đăng ký (sau khối SignalR, trước phần hạ tầng JWT/RBAC/CORS) để không chèn
+// vào đúng khe mà các nhánh khác đang thêm dòng.
+builder.Services.AddScoped<IDiscountRequestStatisticsService, DiscountRequestStatisticsService>();
+
 // Xác thực JWT Bearer — cấu hình nằm ở Services/JwtMiddleware.cs
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
