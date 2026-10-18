@@ -30,9 +30,12 @@ type Outcome =
 
 // Màn hình chọn phương thức thanh toán (User Story 6 "Cổng thanh toán", Sprint 4 — task của
 // Dương Thị Hạnh). Là bước tiếp theo của luồng tra cứu tuyến → kết quả tìm kiếm chuyến →
-// sơ đồ ghế: hành khách xem lại tóm tắt đặt vé và chọn kênh thanh toán. Bảng Payments đã
-// migrate nhưng endpoint thanh toán chưa có (chờ controller của Hiếu/Kiên) nên bước trả tiền
-// còn dùng dữ liệu giả (paymentApi.ts).
+// sơ đồ ghế: hành khách xem lại tóm tắt đặt vé và chọn kênh thanh toán.
+//
+// Bấm "Thanh toán" là TẠO GIAO DỊCH THẬT (POST /payments) rồi chuyển CẢ TRANG sang `payUrl`
+// của cổng. Cổng trả khách về /payment-waiting?paymentCode=… để màn chờ poll trạng thái; vé
+// chỉ được phát hành khi giao dịch Success (xem paymentApi.ts). Vì vậy màn này KHÔNG chuyển
+// thẳng tới "Vé của tôi" — lúc đó vé chưa tồn tại.
 //
 // Nhận ngữ cảnh qua query string, cùng lối SeatMapPage: `tripId` (bắt buộc) + `routeName`,
 // `departureTime`, `busType`, `seats` (số ghế cách nhau bằng dấu phẩy) và `total` (tổng tiền
@@ -184,22 +187,40 @@ export default function PaymentMethodPage() {
     session !== null && holdInfo !== null && !expiryDismissed && holdInfo.phase !== 'Holding';
 
   const handlePay = async () => {
-    if (!selectedCode) return;
+    if (!selectedCode || paying) return;
+
+    // Thiếu tổng tiền thì server trả 400 (total không khớp giá ghế) — chặn ngay ở đây để
+    // khách hiểu vì sao không đi tiếp thay vì nhận một lỗi khó đọc.
+    if (!hasTotal) {
+      message.warning('Chưa xác định được tổng tiền của chuyến. Hãy quay lại chọn ghế.');
+      return;
+    }
 
     setPaying(true);
     try {
-      await paymentApi.pay({
+      // Chỉ mã voucher ĐÃ kiểm tra hợp lệ mới gửi lên: server kiểm lại từ đầu và trả 409 nếu
+      // mã không dùng được, nên gửi mã đang gõ dở chỉ làm khách ăn lỗi vô ích.
+      const result = await paymentApi.pay({
         methodCode: selectedCode,
         tripId,
         seatNumbers,
-        total: hasTotal ? totalPrice : 0,
+        total: totalPrice,
+        voucherCode: validation?.valid ? (validation.code ?? undefined) : undefined,
       });
-      message.success('Thanh toán thành công. Vé của bạn đã được ghi nhận.');
-      navigate('/my-tickets');
+
+      if (!result.payUrl) {
+        message.error('Cổng thanh toán không trả về đường dẫn thanh toán. Vui lòng thử lại.');
+        setPaying(false);
+        return;
+      }
+
+      // Cả trang sang cổng thanh toán. Cổng sẽ trả khách về /payment-waiting?paymentCode=…
+      // (ReturnUrl do backend dựng), nơi màn chờ poll trạng thái giao dịch. Không điều hướng
+      // bằng router: đích là tên miền ngoài, không phải route của ứng dụng.
+      window.location.assign(result.payUrl);
     } catch (err) {
       const appError = err as AppError;
-      message.error(appError.customMessage || 'Không thể hoàn tất thanh toán. Vui lòng thử lại.');
-    } finally {
+      message.error(appError.customMessage || 'Không thể tạo giao dịch thanh toán. Vui lòng thử lại.');
       setPaying(false);
     }
   };

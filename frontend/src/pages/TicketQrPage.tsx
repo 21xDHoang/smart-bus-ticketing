@@ -202,8 +202,9 @@ export default function TicketQrPage() {
   const infoItems = [
     { label: 'Khởi hành', value: formatDateTime(ticket.departureTime) },
     { label: 'Ghế', value: ticket.seatNumber },
-    { label: 'Lên tại', value: ticket.boardingStopName },
-    { label: 'Xuống tại', value: ticket.alightingStopName },
+    // Vé không gắn trạm cụ thể thì backend trả null — hiện dấu gạch thay vì chữ "null".
+    { label: 'Lên tại', value: ticket.boardingStopName ?? '—' },
+    { label: 'Xuống tại', value: ticket.alightingStopName ?? '—' },
   ];
 
   return (

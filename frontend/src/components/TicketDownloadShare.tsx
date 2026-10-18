@@ -45,7 +45,7 @@ export function buildTicketShareText(ticket: Ticket): string {
   return [
     `Vé xe buýt ${ticket.routeCode} — ${ticket.routeName}`,
     `Khởi hành: ${formatDateTime(ticket.departureTime)}`,
-    `Lên xe tại: ${ticket.boardingStopName}`,
+    `Lên xe tại: ${ticket.boardingStopName ?? '—'}`,
     `Ghế: ${ticket.seatNumber}`,
     `Giá: ${formatVnd(ticket.price)}`,
     `Mã vé (trình khi lên xe): ${ticket.code}`,
