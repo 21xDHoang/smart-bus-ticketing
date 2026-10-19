@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Alert, Button, Result, Space, Spin, Typography } from 'antd';
-import { HomeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { HomeOutlined, QrcodeOutlined, ReloadOutlined } from '@ant-design/icons';
 import paymentApi from '../api/paymentApi';
 import type { PaymentMethod, PaymentStatusResult } from '../api/paymentApi';
 import type { AppError } from '../api/axiosClient';
@@ -195,12 +195,24 @@ export default function PaymentWaitingPage() {
                     })}
                   </Text>
                 )}
+                <Text type="secondary">
+                  Mã QR của vé nằm trong mục "Vé của tôi".
+                </Text>
               </Space>
             }
             extra={
-              <Button type="primary" icon={<HomeOutlined />} onClick={() => navigate('/')}>
-                Về trang chủ
-              </Button>
+              <Space wrap>
+                <Button
+                  type="primary"
+                  icon={<QrcodeOutlined />}
+                  onClick={() => navigate('/my-tickets')}
+                >
+                  Xem vé của tôi
+                </Button>
+                <Button icon={<HomeOutlined />} onClick={() => navigate('/')}>
+                  Về trang chủ
+                </Button>
+              </Space>
             }
           />
         )}
@@ -244,6 +256,9 @@ export default function PaymentWaitingPage() {
               <Space wrap>
                 <Button icon={<ReloadOutlined />} onClick={restart}>
                   Kiểm tra lại
+                </Button>
+                <Button icon={<QrcodeOutlined />} onClick={() => navigate('/my-tickets')}>
+                  Xem vé của tôi
                 </Button>
                 <Button type="primary" icon={<HomeOutlined />} onClick={() => navigate('/')}>
                   Về trang chủ
